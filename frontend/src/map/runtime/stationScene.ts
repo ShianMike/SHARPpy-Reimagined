@@ -63,7 +63,11 @@ export class StationScene {
   matchesField(request: FrameRequest): boolean {
     const frame = this.data.field?.frame;
     return frame?.product === request.product && frame.runTime === request.runTime && frame.forecastHour === request.forecastHour
-      && this.data.previousField === null && this.renderedLayers.every((layer) => layer.isLoaded);
+      && this.readyForCapture();
+  }
+
+  readyForCapture(): boolean {
+    return this.data.previousField === null && this.renderedLayers.every((layer) => layer.isLoaded);
   }
 
   constructor(

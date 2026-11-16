@@ -123,7 +123,6 @@ HANDLER_VALIDATED = frozenset({
     "soundings.inspect_wrf",
     "soundings.open_wrf",
     "soundings.analysis",
-    "soundings.trends",
     "soundings.render",
     "soundings.view",
     "map.catalog",

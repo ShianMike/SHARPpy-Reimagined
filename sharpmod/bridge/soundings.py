@@ -18,7 +18,7 @@ from typing import Any
 
 from sharpmod.bridge import params as p
 from sharpmod.bridge.errors import BridgeError
-from sharpmod.bridge.sounding_analysis import analysis, trends
+from sharpmod.bridge.sounding_analysis import analysis
 from sharpmod.bridge.sounding_cache import cache
 from sharpmod.bridge.sounding_open import (
     open_era5, open_file, open_model, open_observed,
@@ -198,7 +198,6 @@ HANDLERS = {
     "soundings.inspect_wrf": inspect_wrf,
     "soundings.open_wrf": open_wrf,
     "soundings.analysis": analysis,
-    "soundings.trends": trends,
     "soundings.render": render,
     "soundings.view": render_view,
 }

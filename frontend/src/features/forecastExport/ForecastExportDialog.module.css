@@ -32,8 +32,8 @@
 .stages li > span { display: grid; place-items: center; width: var(--control-h-xs); height: var(--control-h-xs); border-radius: var(--radius-round); background: var(--control-fill); }
 .stages li[data-active="true"] { color: var(--accent-bright); }
 .stages li[data-active="true"] > span { background: var(--accent-subtle); }
-.footer { display: flex; flex: none; align-items: center; gap: var(--space-2); padding: var(--space-4); border-top: var(--hairline) solid var(--border-subtle); }
-.status { display: flex; flex: 1; flex-direction: column; gap: var(--space-1); min-width: 0; font-size: var(--font-size-caption); color: var(--text-secondary); }
+.footer { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-4); border-top: var(--hairline) solid var(--border-subtle); }
+.status { display: flex; flex: 1 1 12rem; flex-direction: column; gap: var(--space-1); min-width: 0; font-size: var(--font-size-caption); color: var(--text-secondary); }
 .status progress { width: 100%; height: var(--space-1); accent-color: var(--accent-bright); }
 .save { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-h-md); padding-inline: var(--space-3); border-radius: var(--radius-pill); background: var(--accent-subtle); color: var(--accent-bright); font-size: var(--font-size-small); font-weight: var(--font-weight-semibold); text-decoration: none; }
 @media (max-width: 760px) {

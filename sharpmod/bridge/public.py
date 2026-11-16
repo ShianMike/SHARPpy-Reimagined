@@ -35,7 +35,6 @@ COMMANDS = {
     "get_place_labels": "places.labels",
     "get_station_availability": "stations.availability",
     "get_sounding_analysis": "soundings.analysis",
-    "get_sounding_trends": "soundings.trends",
     "render_sounding": "soundings.render",
     "render_sounding_view": "soundings.view",
     "get_threshold_metrics": "thresholds.metrics",

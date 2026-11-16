@@ -1,9 +1,10 @@
-import { Download, Film, GripHorizontal, X } from "lucide-react";
+import { Copy, Download, Film, GripHorizontal, Image, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Popover } from "../../components/Popover";
 import { Notice } from "../../components/Notice";
 import { useBackendClient } from "../../lib/backend/BackendProvider";
+import { copyPngToClipboard } from "../../lib/imageClipboard";
 import { useMapStore, panelLayers } from "../../stores/mapStore";
 import { useForecastStore } from "../../stores/forecastStore";
 import { useUiStore } from "../../stores/uiStore";
@@ -13,23 +14,27 @@ import { compactUtc, forecastLabel } from "../sounding/soundingTime";
 import type { ForecastContext } from "../forecast/useForecast";
 import type { FieldProduct } from "../../types/map";
 import { exportForecast, forecastExportFilename, type ExportProgress, type ForecastExportOptions } from "./exportForecast";
+import { copyForecastGif } from "./forecastClipboard";
 import { useObjectUrl } from "../sounding/soundingQueries";
 import styles from "./ForecastExportDialog.module.css";
 
-const SIZES = [{ value: 960, label: "960 × 540 · Small" }, { value: 1280, label: "1280 × 720 · HD" }, { value: 1920, label: "1920 × 1080 · Full HD" }];
-const STAGES = { loading: "Loading selected hours", capturing: "Saving lossless frames", encoding: "Encoding GIF" };
+const SIZES = [{ value: 1280, label: "1280 × 720 · HD" }, { value: 1920, label: "1920 × 1080 · Full HD" },
+  { value: 2560, label: "2560 × 1440 · QHD" }, { value: 3840, label: "3840 × 2160 · UHD" }];
+const STAGES = { loading: "Loading forecast", capturing: "Capturing map", encoding: "Encoding GIF" };
 
 export function ForecastExportDialog({ anchor, context, product, panel, onClose }: {
   anchor: HTMLButtonElement; context: ForecastContext; product: FieldProduct; panel: number; onClose: () => void;
 }): ReactNode {
   const hours = context.hours.filter((hour) => hour >= product.minimumForecastHour);
   const [selected, setSelected] = useState(() => hours.slice(Math.max(0, hours.indexOf(context.hour)), Math.max(0, hours.indexOf(context.hour)) + 12));
-  const [width, setWidth] = useState(1280);
+  const [width, setWidth] = useState(1920);
   const [delay, setDelay] = useState(750);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<{ blob: Blob; filename: string } | null>(null);
+  const [result, setResult] = useState<{ blob: Blob; filename: string; format: "gif" | "png" } | null>(null);
+  const [activeFormat, setActiveFormat] = useState<"gif" | "png">("gif");
+  const [copy, setCopy] = useState<{ blob: Blob; state: "pending" | "copied" | "failed"; message?: string } | null>(null);
   const url = useObjectUrl(result?.blob);
   const controller = useRef<AbortController | null>(null);
   const preview = useRef<HTMLCanvasElement>(null);
@@ -38,37 +43,67 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
   const units = useUiStore((state) => state.units);
   const selectedHours = hours.filter((hour) => selected.includes(hour));
   const height = width * 9 / 16;
-  const resetResult = (): void => { setResult(null); setProgress(null); setError(""); };
+  const resetResult = (): void => { setResult(null); setProgress(null); setError(""); setCopy(null); };
   useEffect(() => {
     useForecastStore.getState().setPlaying(false);
     return () => { controller.current?.abort(); };
   }, []);
   const close = (): void => { controller.current?.abort(); onClose(); anchor.focus(); };
-  const start = (): void => {
+  const start = (format: "gif" | "png"): void => {
     if (busy || preview.current === null) return;
     const job = new AbortController();
     controller.current = job;
-    setBusy(true); setError(""); setResult(null); setProgress(null);
+    setBusy(true); setError(""); setResult(null); setProgress(null); setCopy(null); setActiveFormat(format);
     const options: ForecastExportOptions = { context, product, panel, model: context.model.label, run: context.run,
-      hours: selectedHours, width, height, delay, units };
+      hours: format === "gif" ? selectedHours : [context.hour], width, height, delay, units, format };
+    // Fixture builds may observe the existing callbacks without adding work to production exports.
+    const benchmark = import.meta.env.MODE === "fixture" && format === "gif" ? window.__SHARPPY_GIF_BENCHMARK__ : undefined;
+    benchmark?.start(options);
     void exportForecast(options, client, queryClient, job.signal, preview.current, (value) => {
+      benchmark?.progress(value);
       if (!job.signal.aborted) setProgress(value);
     }).then((blob) => {
-      if (!job.signal.aborted) setResult({ blob, filename: forecastExportFilename(options) });
+      benchmark?.finish(blob);
+      if (!job.signal.aborted) setResult({ blob, filename: forecastExportFilename(options), format });
     }, (failure: unknown) => {
+      benchmark?.fail(failure);
       if (!job.signal.aborted) setError(failure instanceof Error ? failure.message : "Export failed. Check the selected hours and try again.");
     }).finally(() => {
       if (controller.current === job) { controller.current = null; setBusy(false); }
     });
   };
+  const currentCopy = copy?.blob === result?.blob ? copy : null;
+  const copyGif = async (): Promise<void> => {
+    if (result?.format !== "gif" || currentCopy?.state === "pending") return;
+    const blob = result.blob;
+    setCopy({ blob, state: "pending" });
+    try {
+      await copyForecastGif(blob);
+      setCopy((current) => current?.blob === blob ? { blob, state: "copied" } : current);
+    } catch (failure) { setCopy((current) => current?.blob === blob ? { blob, state: "failed", message: failure instanceof Error && failure.message.startsWith("GIFs over")
+      ? failure.message : "This device or browser could not copy the GIF. Save the GIF instead." } : current); }
+  };
+  const copyPng = async (): Promise<void> => {
+    if (result?.format !== "png" || currentCopy?.state === "pending") return;
+    const blob = result.blob;
+    setCopy({ blob, state: "pending" });
+    try {
+      await copyPngToClipboard(blob);
+      setCopy((current) => current?.blob === blob ? { blob, state: "copied" } : current);
+    } catch {
+      setCopy((current) => current?.blob === blob ? { blob, state: "failed", message: "This device or browser could not copy the PNG. Save the PNG instead." } : current);
+    }
+  };
+  const copyFormat = result?.format === "png" ? "PNG" : "GIF";
   const status = busy && progress !== null ? `${STAGES[progress.phase]} · ${String(progress.done)} / ${String(progress.total)} · ${forecastLabel(progress.hour)}`
-    : busy ? "Preparing export…" : result !== null ? `GIF ready · ${(result.blob.size / 1024 ** 2).toFixed(2)} MiB`
+    : busy ? "Preparing export…" : currentCopy?.state === "pending" ? `Copying ${copyFormat}…` : currentCopy?.state === "copied" ? `${copyFormat} copied`
+    : result !== null ? `${result.format.toUpperCase()} ready · ${(result.blob.size / 1024 ** 2).toFixed(2)} MiB`
     : progress !== null && error === "" ? "Export cancelled. You can try again."
-    : selectedHours.length < 2 ? "Select at least two forecast hours." : "Ready to export";
-  return <Popover id="forecast-gif-export" open anchor={anchor} onClose={close} role="dialog" label="Export forecast GIF" initialFocus="container" movable backdrop className={styles.dialog}>
+    : selectedHours.length < 2 ? "Select at least two hours for a GIF, or export the current hour as PNG." : "Ready to export";
+  return <Popover id="forecast-gif-export" open anchor={anchor} onClose={close} role="dialog" label="Export forecast" initialFocus="container" movable backdrop className={styles.dialog}>
     <header className={styles.header} data-popover-drag>
       <IconAction icon={GripHorizontal} size="sm" label="Move export screen" data-popover-move />
-      <div><h2>Export forecast GIF</h2><p>{context.model.label} · Run {compactUtc(context.run)} UTC</p></div>
+      <div><h2>Export forecast</h2><p>{context.model.label} · Run {compactUtc(context.run)} UTC</p></div>
       <IconAction icon={X} size="sm" label="Close export screen" onClick={close} />
     </header>
     <div className={styles.body}>
@@ -85,28 +120,32 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
           </label>)}</div>
         </fieldset>
         <div className={styles.choices}>
-          <SourceSelect label="GIF resolution" value={width} options={SIZES} disabled={busy} onChange={(value) => { resetResult(); setWidth(value); }} />
+          <SourceSelect label="Export resolution" value={width} options={SIZES} disabled={busy} onChange={(value) => { resetResult(); setWidth(value); }} />
           <SourceSelect label="Time per forecast hour" value={delay} disabled={busy} options={[{ value: 250, label: "0.25 seconds" }, { value: 500, label: "0.5 seconds" }, { value: 750, label: "0.75 seconds" }, { value: 1000, label: "1 second" }]} onChange={(value) => { resetResult(); setDelay(value); }} />
         </div>
       </div>
-      <section className={styles.previewSection} aria-label="GIF preview">
+      <section className={styles.previewSection} aria-label="Forecast export preview">
         <div className={styles.preview} data-empty={progress === null && result === null}>
-          {url !== null ? <img src={url} alt={`${context.model.label} ${product.label} exported forecast animation`} /> : null}
+          {url !== null ? <img src={url} alt={`${context.model.label} ${product.label} exported forecast ${result?.format === "png" ? "image" : "animation"}`} /> : null}
           <canvas ref={preview} hidden={url !== null || progress === null || progress.phase === "loading"} aria-label="Export frame preview" />
-          {url === null && (progress === null || progress.phase === "loading") ? <div className={styles.placeholder}><Film aria-hidden="true" /><strong>{busy ? "Loading every selected hour" : "Your forecast animation"}</strong><p>{busy ? "Capture begins after the complete selection is ready." : "Choose hours, then create a GIF to preview and save."}</p></div> : null}
+          {url === null && (progress === null || progress.phase === "loading") ? <div className={styles.placeholder}><Film aria-hidden="true" /><strong>{busy ? activeFormat === "gif" ? "Loading every selected hour" : "Loading forecast hour" : "Your forecast export"}</strong><p>{busy ? "Capture begins after the complete selection is ready." : "Choose hours for a GIF, or create a PNG of the current hour."}</p></div> : null}
         </div>
-        <div className={styles.previewCaption}><span>{width} × {height}</span><span>{selectedHours.length} hours · {(selectedHours.length * delay / 1000).toFixed(2)} s</span></div>
-        <ol className={styles.stages} aria-label="Export stages">{(["loading", "capturing", "encoding"] as const).map((stage, index) => <li key={stage} data-active={busy && progress?.phase === stage}><span>{index + 1}</span>{stage === "loading" ? "Load all hours" : stage === "capturing" ? "Capture PNGs" : "Encode GIF"}</li>)}</ol>
-        <p className={styles.help}>Frames are captured at the export resolution and stored as lossless PNGs before GIF encoding. GIF supports up to 256 colors.</p>
-        {error === "" ? null : <Notice tone="danger" role="alert" title="GIF export failed" message={error} />}
+        <div className={styles.previewCaption}><span>{width} × {height}</span><span>{activeFormat === "png" ? forecastLabel(context.hour) : `${String(selectedHours.length)} hours · ${(selectedHours.length * delay / 1000).toFixed(2)} s`}</span></div>
+        <ol className={styles.stages} aria-label="Export stages">{(activeFormat === "gif" ? ["loading", "capturing", "encoding"] as const : ["loading", "capturing"] as const).map((stage, index) => <li key={stage} data-active={busy && progress?.phase === stage}><span>{index + 1}</span>{stage === "loading" ? "Load hours" : stage === "capturing" ? "Capture map" : "Encode GIF"}</li>)}</ol>
+        <p className={styles.help}>PNG captures the current hour; GIF loops the selected hours. Desktop GIF copy supports up to 16 MiB; playback depends on the receiving app.</p>
+        {error === "" ? null : <Notice tone="danger" role="alert" title="Forecast export failed" message={error} />}
+        {currentCopy?.state === "failed" ? <Notice tone="danger" role="alert" title={`${copyFormat} copy unavailable`} message={currentCopy.message ?? `Save the ${copyFormat} instead.`} /> : null}
       </section>
     </div>
     <footer className={styles.footer}>
-      <div className={styles.status} role="status" aria-live="polite" aria-busy={busy}><span>{status}</span>{busy && progress !== null ? <progress aria-label={STAGES[progress.phase]} value={progress.done} max={progress.total} /> : null}</div>
+      <div className={styles.status} role="status" aria-live="polite" aria-busy={busy || currentCopy?.state === "pending"}><span>{status}</span>{busy && progress !== null ? <progress aria-label={STAGES[progress.phase]} value={progress.done} max={progress.total} /> : null}</div>
       {busy ? <Action onClick={() => { controller.current?.abort(); }}>Cancel export</Action> : <>
         <Action onClick={close}>Close</Action>
-        {url !== null && result !== null ? <a className={styles.save} href={url} download={result.filename}><Download className="icon-sm" aria-hidden="true" />Save GIF</a> : null}
-        <Action tone="accent" disabled={selectedHours.length < 2 || !panelLayers(useMapStore.getState(), panel)["model-field"].visible} onClick={start}><Film className="icon-sm" aria-hidden="true" />{result === null ? "Create GIF" : "Create again"}</Action>
+        {url !== null && result !== null ? <a className={styles.save} href={url} download={result.filename}><Download className="icon-sm" aria-hidden="true" />Save {result.format.toUpperCase()}</a> : null}
+        {result?.format === "gif" ? <Action disabled={currentCopy?.state === "pending"} onClick={() => { void copyGif(); }}><Copy className="icon-sm" aria-hidden="true" />Copy GIF</Action> : null}
+        {result?.format === "png" ? <Action disabled={currentCopy?.state === "pending"} onClick={() => { void copyPng(); }}><Copy className="icon-sm" aria-hidden="true" />Copy PNG</Action> : null}
+        <Action disabled={!panelLayers(useMapStore.getState(), panel)["model-field"].visible || !hours.includes(context.hour)} onClick={() => { start("png"); }}><Image className="icon-sm" aria-hidden="true" />Create PNG</Action>
+        <Action tone="accent" disabled={selectedHours.length < 2 || !panelLayers(useMapStore.getState(), panel)["model-field"].visible} onClick={() => { start("gif"); }}><Film className="icon-sm" aria-hidden="true" />Create GIF</Action>
       </>}
     </footer>
   </Popover>;

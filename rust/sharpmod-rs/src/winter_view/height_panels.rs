@@ -56,7 +56,7 @@ pub(super) fn mount(
         .into_pyarray(py);
     let charts: [ChartDefinition<'_>; 4] = [
         (
-            "T / Wet bulb",
+            "T / Wet Bulb",
             "Temperature (°C)",
             &[
                 ("t", "T", &palette.temp, |l| l.t),
@@ -98,7 +98,7 @@ pub(super) fn mount(
         chart.setattr("MAX_HEIGHT_KM", 3.)?;
         chart.setattr("X_MIN", min)?;
         chart.setattr("X_MAX", max)?;
-        chart.setattr("ZERO_LINE", title == "T / Wet bulb")?;
+        chart.setattr("ZERO_LINE", title == "T / Wet Bulb")?;
         let prefs = PyDict::new(py);
         prefs.set_item("bg_color", &palette.bg)?;
         prefs.set_item("fg_color", &palette.fg)?;

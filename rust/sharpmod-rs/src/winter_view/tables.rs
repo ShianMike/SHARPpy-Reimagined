@@ -110,6 +110,99 @@ fn check(
     let _ = write!(svg, "<text x=\"1190\" y=\"{y}\" font-size=\"11\" text-anchor=\"end\" fill=\"{color}\">{status}</text>");
 }
 
+fn footer(svg: &mut String, p: &Palette, renderer: &Bound<'_, PyAny>) -> PyResult<()> {
+    let notes: [(f64, f64, f64, &[&str]); 4] = [
+        (
+            10.,
+            300.,
+            1.,
+            &[
+                "Base / top / depth: m AGL; Tw: °C",
+                "Tw: warm-layer max / cold-layer min",
+                "Energy: signed J/kg below source",
+            ],
+        ),
+        (
+            320.,
+            550.,
+            1.,
+            &[
+                "DGZ: −12 to −18 °C",
+                "Negative omega / OPRH: ascent",
+                "SLR: snow at surface only; not a snowfall forecast.",
+            ],
+        ),
+        (
+            570.,
+            840.,
+            0.72,
+            &[
+                "PBL context: Sczepanski et al. (2024)",
+                "Snow squalls: Banacos et al. (2014)",
+            ],
+        ),
+        (
+            860.,
+            1190.,
+            0.72,
+            &[
+                "Drizzle: Huffman & Norman (1988)",
+                "Rauber et al. (2000); McDonough et al. (2004)",
+            ],
+        ),
+    ];
+    let py = renderer.py();
+    let byte_array = PyModule::import(py, "qtpy.QtCore")?.getattr("QByteArray")?;
+    for (column, (left, right, opacity, notes)) in notes.into_iter().enumerate() {
+        let mut lines = Vec::new();
+        for note in notes {
+            let mut current = String::new();
+            for word in note.split_whitespace() {
+                let candidate = if current.is_empty() {
+                    word.to_owned()
+                } else {
+                    format!("{current} {word}")
+                };
+                // Use the same SVG family, size and Qt font fallback as the
+                // capture. Character counts miss proportional glyph widths.
+                let mut measure = canvas(1200, HEIGHT, p);
+                let _ = write!(
+                    measure,
+                    "<text id=\"note\" x=\"0\" y=\"20\" font-size=\"11\">{}</text></g></svg>",
+                    escape(&candidate)
+                );
+                let bytes =
+                    byte_array.call1((pyo3::types::PyBytes::new(py, measure.as_bytes()),))?;
+                renderer.call_method1("load", (bytes,))?;
+                let width: f64 = renderer
+                    .call_method1("boundsOnElement", ("note",))?
+                    .call_method0("width")?
+                    .extract()?;
+                // Both text edges stay 10 SVG units inside their column.
+                if !current.is_empty() && width > right - left {
+                    lines.push(current);
+                    current = word.to_owned();
+                } else {
+                    current = candidate;
+                }
+            }
+            lines.push(current);
+        }
+        // Fill opacity preserves vector glyphs at capture resolution. Each
+        // column ends on the same baseline, regardless of its wrapped height.
+        let _ = write!(
+            svg,
+            "<g id=\"winter-footer-{column}\" fill-opacity=\"{opacity}\">"
+        );
+        let first = f64::from(HEIGHT) - 12. - 18. * (lines.len() - 1) as f64;
+        for (i, label) in lines.iter().enumerate() {
+            text(svg, left, first + i as f64 * 18., 11, label, &p.fg);
+        }
+        svg.push_str("</g>");
+    }
+    Ok(())
+}
+
 pub(super) fn diagnostics(
     data: &WinterProfile,
     d: &WinterDiagnostics,
@@ -145,7 +238,7 @@ pub(super) fn diagnostics(
         10.,
         48.,
         12,
-        "Wet-bulb melting / refreezing",
+        "Wet-bulb Melting / Refreezing",
         &p.fg,
     );
     text(&mut svg, 10., 76., 12, "Layer", &p.fg);
@@ -163,10 +256,10 @@ pub(super) fn diagnostics(
         let y = 106. + i as f64 * 29.;
         let warm = layer.energy > 0.;
         let label = match (warm, layer.bottom.z <= 1.) {
-            (true, true) => "Sfc warm",
-            (false, true) => "Sfc cold",
-            (true, false) => "Warm aloft",
-            (false, false) => "Cold aloft",
+            (true, true) => "SFC Warm",
+            (false, true) => "SFC Cold",
+            (true, false) => "Warm Aloft",
+            (false, false) => "Cold Aloft",
         };
         text(
             &mut svg,
@@ -244,7 +337,7 @@ pub(super) fn diagnostics(
     let dgz_rows = [
         ("Lowest DGZ", bounds, p.fg.clone()),
         (
-            "Layers / depth",
+            "Layers / Depth",
             if data.dgz.is_empty() {
                 "None".into()
             } else {
@@ -318,7 +411,7 @@ pub(super) fn diagnostics(
     split_row(
         &mut svg,
         [570., 840., 53.],
-        "Surface T / Tw",
+        "Surface T / TW",
         &[
             (
                 number(sfc.t, 1, ""),
@@ -335,27 +428,27 @@ pub(super) fn diagnostics(
     )?;
     for (i, (label, value, color)) in [
         (
-            "Wind chill",
+            "Wind Chill",
             chill,
             colors.color(Scale::WindChill, chill_value),
         ),
         (
-            "PBL gust",
+            "PBL Gust",
             number(d.gust, 0, " kt"),
             colors.color(Scale::Wind, d.gust),
         ),
         (
-            "PBL depth",
+            "PBL Depth",
             d.pbl.map_or_else(|| "N/A".into(), |l| number(l.z, 0, " m")),
             p.fg.clone(),
         ),
         (
-            "PBL lapse rate",
+            "PBL Lapse Rate",
             number(lapse, 1, " °C/km"),
             colors.color(Scale::LapseRate, lapse),
         ),
         (
-            "Snow-squall",
+            "Snow Squall",
             number(d.squall, 2, ""),
             colors.color(Scale::SnowSquall, d.squall),
         ),
@@ -382,12 +475,12 @@ pub(super) fn diagnostics(
             colors.color(Scale::Wind, d.wind10.map_or(f64::NAN, Level::speed)),
         ),
         (
-            "PBL mean",
+            "PBL Mean",
             wind(d.pbl_wind[0], d.pbl_wind[1]),
             colors.color(Scale::Wind, d.pbl_wind[0].hypot(d.pbl_wind[1])),
         ),
         (
-            "DGZ mean",
+            "DGZ Mean",
             wind(d.dgz_wind[0], d.dgz_wind[1]),
             colors.color(Scale::Wind, d.dgz_wind[0].hypot(d.dgz_wind[1])),
         ),
@@ -439,11 +532,11 @@ pub(super) fn diagnostics(
         ("Surface T < 0 °C", number(sfc.t, 1, " °C")),
         ("Surface RH ≥95%", number(sfc.rh, 0, "%")),
         (
-            "10 m wind ≤6 kt",
+            "10m Wind ≤6 kt",
             d.wind10
                 .map_or_else(|| "N/A".into(), |l| number(l.speed(), 0, " kt")),
         ),
-        ("Sfc inversion >0.5 °C", inv),
+        ("SFC IVRN > 0.5 °C", inv),
     ]
     .iter()
     .enumerate()
@@ -473,18 +566,18 @@ pub(super) fn diagnostics(
     text(&mut svg, 860., 225., 13, &count(&d.drizzle), &p.fg);
     let cloud = d.clouds.iter().find(|l| l.bottom.z <= 2000.);
     for (i, (label, value)) in [
-        ("Surface Tw ≤0 °C", number(sfc.tw, 1, " °C")),
+        ("Surface TW ≤ 0 °C", number(sfc.tw, 1, " °C")),
         (
-            "Cloud top >−10 °C",
+            "Cloud Top > −10 °C",
             cloud.map_or_else(|| "N/A".into(), |l| number(l.top.t, 1, " °C")),
         ),
-        ("1 km above: RHi ≤75%", number(d.rh_above, 0, "%")),
+        ("1km Above: RHi ≤75%", number(d.rh_above, 0, "%")),
         (
-            "Cloud depth ≥500 m",
+            "Cloud Depth ≥500 m",
             cloud.map_or_else(|| "N/A".into(), |l| number(l.depth(), 0, " m")),
         ),
         (
-            "Lift in cloud: omega <0",
+            "Lift in Cloud: Omega < 0",
             number(d.cloud_omega, 1, " µbar/s"),
         ),
     ]
@@ -506,66 +599,69 @@ pub(super) fn diagnostics(
         860.,
         1190.,
         380.,
-        "Icing screen",
+        "Icing Screen",
         (
             &format!(
                 "{} layers · {:.0} m",
                 data.icing.len(),
-                data.icing.iter().map(Layer::depth).sum::<f64>()
+                data.icing.iter().map(Layer::depth).sum::<f64>().max(0.)
             ),
             &p.fg,
         ),
         p,
     );
-    // Keep notes and source references on the same bottom-aligned baselines.
     // Context citations describe the ingredients, not calibrated hazard scores.
-    let notes: [(f64, f64, &[&str]); 4] = [
-        (
-            10.,
-            1.,
-            &[
-                "Base / top / depth: m AGL; Tw: °C",
-                "Tw: warm-layer max / cold-layer min",
-                "Energy: signed J/kg below source",
-            ],
-        ),
-        (
-            320.,
-            1.,
-            &[
-                "DGZ: −12 to −18 °C",
-                "Negative omega / OPRH: ascent",
-                "SLR is conditional on snow reaching",
-                "the surface; not a snowfall forecast.",
-            ],
-        ),
-        (
-            570.,
-            0.72,
-            &[
-                "PBL context: Sczepanski et al. (2024)",
-                "Snow squalls: Banacos et al. (2014)",
-            ],
-        ),
-        (
-            860.,
-            0.72,
-            &[
-                "Drizzle: Huffman & Norman (1988)",
-                "Rauber et al. (2000); McDonough et al. (2004)",
-            ],
-        ),
-    ];
-    for (x, opacity, lines) in notes {
-        // Fill opacity keeps glyphs vector-rendered at the capture resolution;
-        // group opacity makes Qt composite a lower-resolution intermediate.
-        let _ = write!(svg, "<g fill-opacity=\"{opacity}\">");
-        let first = f64::from(HEIGHT) - 12. - 18. * (lines.len() - 1) as f64;
-        for (i, label) in lines.iter().enumerate() {
-            text(&mut svg, x, first + i as f64 * 18., 11, label, &p.fg);
-        }
-        svg.push_str("</g>");
-    }
+    footer(&mut svg, p, &value_renderer)?;
     svg.push_str("</g></svg>");
     Ok(svg)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires the pinned offscreen Qt environment"]
+    fn winter_footer_stays_within_its_column_and_bottom_padding() {
+        std::env::set_var("QT_QPA_PLATFORM", "offscreen");
+        Python::initialize();
+        Python::attach(|py| -> PyResult<()> {
+            let app_type = PyModule::import(py, "qtpy.QtWidgets")?.getattr("QApplication")?;
+            let existing = app_type.call_method0("instance")?;
+            let _app = if existing.is_none() {
+                app_type.call1((pyo3::types::PyList::empty(py),))?
+            } else {
+                existing
+            };
+            let renderer = PyModule::import(py, "qtpy.QtSvg")?
+                .getattr("QSvgRenderer")?
+                .call0()?;
+            let palette = Palette {
+                bg: "#000000".into(),
+                fg: "#ffffff".into(),
+                temp: "#ff0000".into(),
+                dew: "#00ff00".into(),
+                wet: "#00ffff".into(),
+            };
+            let mut svg = canvas(1200, HEIGHT, &palette);
+            footer(&mut svg, &palette, &renderer)?;
+            svg.push_str("</g></svg>");
+            let bytes = PyModule::import(py, "qtpy.QtCore")?
+                .getattr("QByteArray")?
+                .call1((pyo3::types::PyBytes::new(py, svg.as_bytes()),))?;
+            assert!(renderer.call_method1("load", (bytes,))?.extract::<bool>()?);
+            for (column, (left, right)) in [(10., 300.), (320., 550.), (570., 840.), (860., 1190.)]
+                .into_iter()
+                .enumerate()
+            {
+                let bounds = renderer
+                    .call_method1("boundsOnElement", (format!("winter-footer-{column}"),))?;
+                assert!(bounds.call_method0("left")?.extract::<f64>()? >= left - 1.);
+                assert!(bounds.call_method0("right")?.extract::<f64>()? <= right + 1.);
+                assert!(bounds.call_method0("bottom")?.extract::<f64>()? <= f64::from(HEIGHT) - 5.);
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
 }

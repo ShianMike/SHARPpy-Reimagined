@@ -1,4 +1,33 @@
 {
+  "3.8.2": {
+    "summary": "Save sharper forecast animations and lossless PNGs, see the location on sounding maps, and keep exports and cache cleanup reliable.",
+    "highlights": [
+      {
+        "title": "Save or copy forecast PNGs",
+        "description": "Create a lossless PNG of the current forecast hour at up to UHD resolution, with the map, parameter scale, times and displayed layers. Save the file or copy the image."
+      },
+      {
+        "title": "Clearer forecast animations",
+        "description": "Choose HD through UHD GIFs. Every selected hour loads and is captured before encoding, with one color palette drawn from the whole animation. Copy GIFs up to 16 MiB in the Windows app, or save them; animation after pasting depends on the receiving app."
+      },
+      {
+        "title": "Your map inside the sounding",
+        "description": "Sounding images can include a locator zoomed to 6.4 times the visible Model Viewer scale. The location name appears in the sounding header above the map. A fresh capture keeps the weather layers, marker and color scale clear when you view, save or copy the sounding."
+      },
+      {
+        "title": "Clearer sounding annotations",
+        "description": "Hodograph wind labels leave the rings and traces visible. The Skew-T inflow and lapse-rate annotations keep their positions when omega bars cross them. Winter diagnostics use consistent labels and units, with DGZ notes fitted inside their own column."
+      },
+      {
+        "title": "Safer Ensemble CSV exports",
+        "description": "Ensemble CSVs keep their columns and member statuses. A failed export preserves the previous file, and replacing a private CSV keeps its permissions on Linux and macOS. The unused sounding Compare and Trends code has been retired."
+      },
+      {
+        "title": "More reliable exports and cache",
+        "description": "Keep fractional color scales readable and map/weather layers aligned when the view moves or resizes. Failed hours, map captures and GIF encoders release the export controls. Copying an older sounding no longer blocks a replacement image or overwrites its copy status. Malformed optional cache metadata no longer blocks Storage. Invalid cache timestamps preserve pins, and cleanup checks active use again before removal."
+      }
+    ]
+  },
   "3.8.1": {
     "summary": "Restore Winter sounding images in the Windows app and extend hodograph speed rings.",
     "highlights": [

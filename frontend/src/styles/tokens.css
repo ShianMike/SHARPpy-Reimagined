@@ -109,6 +109,8 @@
 
   /* Sounding and responsive viewer dimensions */
   --sounding-side-w: 252px;
+  --sounding-name-on-light: #111111;
+  --sounding-name-on-dark: #f5f5f5;
   --field-label-w: 75.6px;
   --side-panel-min-h: 198px;
   --workspace-min-h: 324px;

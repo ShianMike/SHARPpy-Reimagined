@@ -2,7 +2,7 @@ import catalog from "@contracts/public/map/catalog.json";
 import { describe, expect, it, vi } from "vitest";
 import { parseMapCatalog } from "../../lib/contracts/map";
 import type { FieldFrame, Palette } from "../../types/map";
-import { buildLut, cellColours, colourize, drawnRangeNote, formatValue, LUT_SIZE, sampleAt } from "./colourize";
+import { buildLut, cellColours, colourize, drawnRangeNote, formatScaleTick, formatValue, LUT_SIZE, sampleAt } from "./colourize";
 
 const products = parseMapCatalog(catalog).products;
 const palette = (key: string): Palette => {
@@ -207,5 +207,15 @@ describe("field colouring", () => {
     expect(formatValue(-0.0003)).toBe("0.00");
     expect(formatValue(Number.NaN)).toBe("\u2014");
     expect(formatValue(Number.POSITIVE_INFINITY)).toBe("\u2014");
+  });
+
+  it("preserves fractional scale ticks, narrow offsets and scientific notation", () => {
+    expect([0, 0.1, 0.2, 0.3, 0.4].map((value) => formatScaleTick(value, 0.4))).toEqual(["0", "0.1", "0.2", "0.3", "0.4"]);
+    expect(formatScaleTick(-0, 1)).toBe("0");
+    expect(formatScaleTick(-0.0002, 0.0008)).toBe("-0.0002");
+    expect(formatScaleTick(0.0000001, 0.0000004)).toBe("1e-7");
+    const ticks = [0, 1, 2, 3, 4].map((i) => 1e9 + i * 0.0000025);
+    expect(ticks.map((value) => Number(formatScaleTick(value, 0.00001)))).toEqual(ticks);
+    expect(formatScaleTick(Number.NaN, 1)).toBe("—");
   });
 });

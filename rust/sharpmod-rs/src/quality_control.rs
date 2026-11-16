@@ -36,6 +36,17 @@ pub fn basic_sounding_qc(
     wspd: &[f64],
     missing: Option<f64>,
 ) -> Result<QualityControlResult, String> {
+    profile_qc([pres, hght, tmpc, dwpc, wdir, wspd], missing, true)
+}
+
+/// Shared scan; portable archives intentionally retain their existing range
+/// checks rather than inheriting the stricter absolute-zero checks.
+pub(crate) fn profile_qc(
+    columns: [&[f64]; 6],
+    missing: Option<f64>,
+    check_absolute_zero: bool,
+) -> Result<QualityControlResult, String> {
+    let [pres, hght, tmpc, dwpc, wdir, wspd] = columns;
     let expected = pres.len();
     let lengths = [
         expected,
@@ -52,88 +63,69 @@ pub fn basic_sounding_qc(
         ));
     }
 
-    let valid_level_count = pres
-        .iter()
-        .zip(hght)
-        .filter(|(pressure, height)| {
-            !is_missing(**pressure, missing) && !is_missing(**height, missing)
-        })
-        .count();
+    let mut valid_level_count = 0;
+    let mut pressure_count = 0;
+    let mut height_count = 0;
+    let mut previous_pressure = None;
+    let mut previous_height = None;
+    let mut nonpositive_pressure = false;
+    let mut unordered_pressure = false;
+    let mut unordered_height = false;
+    let mut absolute_temperature = false;
+    let mut absolute_dewpoint = false;
+    let mut warm_dewpoint = false;
+    let mut invalid_direction = false;
+    let mut negative_speed = false;
 
-    let valid_pressure: Vec<f64> = pres
-        .iter()
-        .copied()
-        .filter(|&value| !is_missing(value, missing))
-        .collect();
-    let mut issues = Vec::new();
-
-    if valid_pressure.len() < 2 {
-        issues.push("too_few_levels".to_owned());
-    }
-    if valid_pressure.len() != expected {
-        issues.push("missing_pressure".to_owned());
-    }
-    if valid_pressure.iter().any(|&value| value <= 0.0) {
-        issues.push("nonpositive_pressure".to_owned());
-    }
-    if valid_pressure.windows(2).any(|pair| pair[0] <= pair[1]) {
-        issues.push("pressure_not_strictly_decreasing".to_owned());
-    }
-
-    let valid_height: Vec<f64> = hght
-        .iter()
-        .copied()
-        .filter(|&value| !is_missing(value, missing))
-        .collect();
-    if valid_height.len() < 2 {
-        issues.push("insufficient_height".to_owned());
-    } else if valid_height.windows(2).any(|pair| pair[0] >= pair[1]) {
-        issues.push("height_not_strictly_increasing".to_owned());
+    for i in 0..expected {
+        let pressure = pres[i];
+        let height = hght[i];
+        let pressure_valid = !is_missing(pressure, missing);
+        let height_valid = !is_missing(height, missing);
+        valid_level_count += usize::from(pressure_valid && height_valid);
+        if pressure_valid {
+            pressure_count += 1;
+            nonpositive_pressure |= pressure <= 0.0;
+            unordered_pressure |= previous_pressure.is_some_and(|previous| previous <= pressure);
+            previous_pressure = Some(pressure);
+        }
+        if height_valid {
+            height_count += 1;
+            unordered_height |= previous_height.is_some_and(|previous| previous >= height);
+            previous_height = Some(height);
+        }
+        let temperature_valid = !is_missing(tmpc[i], missing);
+        let dewpoint_valid = !is_missing(dwpc[i], missing);
+        absolute_temperature |= temperature_valid && tmpc[i] <= -273.15;
+        absolute_dewpoint |= dewpoint_valid && dwpc[i] <= -273.15;
+        warm_dewpoint |= temperature_valid && dewpoint_valid && dwpc[i] > tmpc[i];
+        invalid_direction |= !is_missing(wdir[i], missing) && !(0.0..=360.0).contains(&wdir[i]);
+        negative_speed |= !is_missing(wspd[i], missing) && wspd[i] < 0.0;
     }
 
-    if tmpc
-        .iter()
-        .copied()
-        .filter(|&value| !is_missing(value, missing))
-        .any(|value| value <= -273.15)
-    {
-        issues.push("temperature_below_absolute_zero".to_owned());
-    }
-    if dwpc
-        .iter()
-        .copied()
-        .filter(|&value| !is_missing(value, missing))
-        .any(|value| value <= -273.15)
-    {
-        issues.push("dewpoint_below_absolute_zero".to_owned());
-    }
-    if tmpc
-        .iter()
-        .copied()
-        .zip(dwpc.iter().copied())
-        .filter(|(temperature, dewpoint)| {
-            !is_missing(*temperature, missing) && !is_missing(*dewpoint, missing)
-        })
-        .any(|(temperature, dewpoint)| dewpoint > temperature)
-    {
-        issues.push("dewpoint_above_temperature".to_owned());
-    }
-    if wdir
-        .iter()
-        .copied()
-        .filter(|&value| !is_missing(value, missing))
-        .any(|value| !(0.0..=360.0).contains(&value))
-    {
-        issues.push("wind_direction_out_of_range".to_owned());
-    }
-    if wspd
-        .iter()
-        .copied()
-        .filter(|&value| !is_missing(value, missing))
-        .any(|value| value < 0.0)
-    {
-        issues.push("negative_wind_speed".to_owned());
-    }
+    let issues: Vec<String> = [
+        (pressure_count < 2, "too_few_levels"),
+        (pressure_count != expected, "missing_pressure"),
+        (nonpositive_pressure, "nonpositive_pressure"),
+        (unordered_pressure, "pressure_not_strictly_decreasing"),
+        (height_count < 2, "insufficient_height"),
+        (unordered_height, "height_not_strictly_increasing"),
+        (
+            check_absolute_zero && absolute_temperature,
+            "temperature_below_absolute_zero",
+        ),
+        (
+            check_absolute_zero && absolute_dewpoint,
+            "dewpoint_below_absolute_zero",
+        ),
+        (warm_dewpoint, "dewpoint_above_temperature"),
+        (invalid_direction, "wind_direction_out_of_range"),
+        (negative_speed, "negative_wind_speed"),
+    ]
+    .into_iter()
+    .filter(|(failed, _)| *failed)
+    .map(|(_, code)| code.to_owned())
+    .collect();
 
     Ok(QualityControlResult {
         valid: issues.is_empty(),

@@ -111,6 +111,16 @@ def fatal_issues(issues) -> tuple[str, ...]:
 
 def _physical_profile_issues(columns) -> tuple[str, ...]:
     """Return stable physical issue codes for a structurally safe profile."""
+    from sharpmod import backends
+    try:
+        use_rust = backends.get_backend().name == "rust"
+    except (backends.BackendUnavailableError, ValueError):
+        use_rust = False
+    if use_rust:
+        import sharpmod_rs
+        native = getattr(sharpmod_rs, "portable_profile_issues", None)
+        if native is not None:
+            return native(columns)
     values = {
         name: np.asarray(column, dtype=float)
         for name, column in columns.items()

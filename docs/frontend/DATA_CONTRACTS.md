@@ -27,7 +27,6 @@ unknown keys too, so drift fails a test instead of passing silently.
 | `get_sounding_progress` | command, `commands/soundings.rs` | `progressId` (1 to 64 ASCII letters or digits) | `stage` (`waiting`, `downloading`, `processing`), `downloadedBytes`, `bytesPerSecond` | `INVALID_ARGUMENT`, the bridge codes, `INTERNAL` | `allow-get-sounding-progress` |
 | `inspect_wrf` | command, `commands/soundings.rs` | `filePath` (absolute local path) | `WrfFile` (path, name, UTC times, domain centre) | `INVALID_ARGUMENT`, `SOUNDING_INVALID`, the bridge codes, `INTERNAL` | `allow-inspect-wrf` |
 | `get_sounding_analysis` | command, `commands/soundings.rs` | `soundingId` | `SoundingAnalysis` | `INVALID_ARGUMENT`, `SOUNDING_NOT_FOUND`, `SOUNDING_INVALID`, the bridge codes, `INTERNAL` | `allow-get-sounding-analysis` |
-| `get_sounding_trends` | command, `commands/soundings.rs` | `soundingId` | `SoundingTrends` | `INVALID_ARGUMENT`, `SOUNDING_NOT_FOUND`, the bridge codes, `INTERNAL` | `allow-get-sounding-trends` |
 | `get_threshold_metrics` | command, `commands/soundings.rs` | none | `ThresholdMetrics` (every registry diagnostic with its control bounds, the comparison rules in order, and the starting diagnostics) | the bridge codes, `INTERNAL` | `allow-get-threshold-metrics` |
 | `evaluate_threshold` | command, `commands/soundings.rs` | `model`, `latitude`, `longitude`, `forecastHour` (0 to 1000), `runTime?`, `location?`, `members` (2 to 32 labels), `definition: ThresholdDefinitionInput` (a name and 1 to 3 conditions) | `ThresholdEvaluation` (the classification counts with their denominators and one row per member) | `INVALID_ARGUMENT`, `SOUNDING_FETCH_FAILED`, the bridge codes, `INTERNAL` | `allow-evaluate-threshold` |
 | `export_threshold_csv` | command, `commands/soundings.rs` | the `evaluate_threshold` arguments | `ThresholdCsv` (`fileName`, `csv` — the rows `export_threshold_csv` writes) | `INVALID_ARGUMENT`, `SOUNDING_FETCH_FAILED`, the bridge codes, `INTERNAL` | `allow-export-threshold-csv` |
@@ -55,7 +54,7 @@ The frontend sees these only as `BackendClient` methods
 (`frontend/src/lib/backend/client.ts`): `getBackendHealth()`,
 `getStationCatalog()`, `restartBackend()`, `onBridgeStatus(handler)`,
 `getModelCatalog()`, `openSounding(request)`, `getSoundingAnalysis(id)`,
-`getSoundingTrends(id)`, `renderSounding(id, ascent, imageMode)` (which checks
+`renderSounding(id, ascent, imageMode)` (which checks
 the PNG signature and resolves with a `Blob`), `getMapCatalog()`,
 `getWeatherField(product, runTime, forecastHour)`,
 `getSpcOutlook(product, validTime)`, `getRadarFrame(product)`,
@@ -240,12 +239,6 @@ export interface SoundingAnalysis {
   groups: { name: string; parameters: { key: string; label: string; units: string;
             decimals: number; notable: "high" | "low"; value: number | null }[] }[];
 }
-export interface SoundingTrends {         // ProfileMetricsEngine.timeline(DEFAULT_METRIC_KEYS)
-  soundingId: string; title: string;
-  columns: DataTable["columns"];
-  points: { time: string | null; values: (number | null)[]; note: string | null }[];
-  truncated: boolean;
-}
 export interface ModelCatalog {
   models: { key: string; label: string; domain: string;
             soundingsAvailable: boolean; // false for map-only AIGFS
@@ -301,9 +294,10 @@ export interface ThresholdCsv { fileName: string; csv: string }
   `png_base64` in the JSON reply (protocol 1 has no binary body); Rust decodes
   it, checks the PNG signature, the stated length, and the sounding id, and
   hands JavaScript raw bytes.
-- **Multi-time files.** `timeCount > 1` (BUFKIT) means the summary, the
-  parameters, and the image describe the first valid time; `get_sounding_trends`
-  covers every time.
+- **Multi-time files.** For a BUFKIT forecast, `times` lists each valid time in
+  order and `timeCount` is the number of times. The default image and analysis
+  use the first time. Pass `view.timeIndex` to `render_sounding_view` to draw a
+  different time.
 
 ### Map data
 
@@ -530,7 +524,6 @@ three outcomes:
 | `soundings.progress` | `progress_id` | `stage`, `downloaded_bytes`, `bytes_per_second`; active requests only, zero counters otherwise |
 | `soundings.open_file` | `file_name`, `content_base64` (at most 5 MiB of data) | the sounding summary |
 | `soundings.analysis` | `sounding_id` | the parameters (snake_case `SoundingAnalysis`) |
-| `soundings.trends` | `sounding_id` | the Trends (snake_case `SoundingTrends`) |
 | `thresholds.metrics` | `{}` | the registry diagnostics with their control bounds (`analysis.metric_controls.control_for`), the `operators` in control order, and the `default_metrics` (`sharpmod/bridge/thresholds.py`) |
 | `thresholds.evaluate` | `model`, `latitude`, `longitude`, `forecast_hour`, `members` (2 to 32 labels), optional `run_time` and `location`, plus `definition` (`name` and 1 to 3 `conditions` of `metric`, `operator`, `value`, optional `upper`) | the evaluator's own `as_dict`: the definition with its registry units, the counts and their denominators, and one `members` row per requested member (`sharpmod/bridge/thresholds.py`) |
 | `thresholds.export_csv` | the `thresholds.evaluate` fields | `file_name` and `csv`, the rows `analysis.ensemble_thresholds.export_threshold_csv` writes |
@@ -629,7 +622,7 @@ the payload):
 ### Request phases and timeouts
 
 A request's deadline (catalogue 15 s, health 20 s, models 30 s, open observed
-90 s, open model 300 s, open file 60 s, parameters 60 s, Trends 180 s, image
+90 s, open model 300 s, open file 60 s, parameters 60 s, image
 200 s, map catalogue 30 s, field 120 s, outlook 60 s, radar 60 s, places 30 s,
 availability 35 s) covers its whole wait.
 `details.phase` names the phase it was in when the deadline passed:

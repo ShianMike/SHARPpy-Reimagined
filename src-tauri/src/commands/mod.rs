@@ -2,6 +2,7 @@
 //! `BackendError`, which Tauri serializes as the rejection value.
 
 pub mod backend;
+pub mod clipboard;
 pub mod map;
 pub mod soundings;
 pub mod stations;

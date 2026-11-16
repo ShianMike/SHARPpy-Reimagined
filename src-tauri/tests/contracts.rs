@@ -199,13 +199,8 @@ fn sounding_fixtures_convert_from_bridge_to_public_form() {
         "public/soundings/summary.multi-time.json",
     );
     multi.validate().unwrap();
-    let trends: sharppy_reimagined_lib::dto::analysis::SoundingTrends = bridge_to_public(
-        "bridge/soundings/trends.result.example.json",
-        "public/soundings/trends.example.json",
-    );
-    trends.validate().unwrap();
-    assert_eq!(trends.points.len(), multi.time_count as usize);
-    assert!(trends.points.iter().all(|p| p.time.is_some()));
+    assert_eq!(multi.times.len(), multi.time_count as usize);
+    assert_eq!(multi.times.first().unwrap(), &multi.valid_time);
 }
 
 #[test]

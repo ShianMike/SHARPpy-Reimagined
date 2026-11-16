@@ -29,3 +29,14 @@ it("writes one global color table, looping metadata and exactly the selected fra
   expect(delays).toEqual([750, 500]);
   expect(at).toBe(bytes.length - 1);
 });
+
+it("uses the supplied whole-animation sample for the shared color table", () => {
+  const encode = createGifEncoder();
+  const first = new Uint8Array([0, 0, 255, 255]);
+  const allHours = new Uint8Array([0, 0, 255, 255, 255, 0, 0, 255]);
+  const bytes = Buffer.from(encode({ rgba: first.buffer, width: 1, height: 1, delay: 750, paletteSample: allHours }));
+  const count = 2 ** (((bytes[10] ?? 0) & 7) + 1);
+  const colors = Array.from({ length: count }, (_, index) => [...bytes.subarray(13 + index * 3, 16 + index * 3)]);
+  expect(colors.some(([red, , blue]) => (red ?? 0) > 200 && (blue ?? 255) < 30)).toBe(true);
+  expect(colors.some(([red, , blue]) => (blue ?? 0) > 200 && (red ?? 255) < 30)).toBe(true);
+});

@@ -44,6 +44,22 @@ it.each([false, true])("waits for a complete field and fresh map/overlay renders
   expect(unsubscribe).toHaveBeenCalledOnce(); expect(handlers.has("render")).toBe(false);
 });
 
+it("renders both map layers at the density needed by the inset and copies only its pixels", async () => {
+  const { map, overlay, state, handlers } = setup();
+  const drawImage = vi.fn();
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage } as unknown as CanvasRenderingContext2D);
+  let overlayRendered = (): void => undefined;
+  const job = captureMapFrame(map, overlay, () => true, (render) => { overlayRendered = render; return () => undefined; },
+    new AbortController().signal, { width: 400, height: 320, crop: { left: 0.5, top: 0.25, width: 0.25, height: 0.25 } });
+  expect(state.setPixelRatio).toHaveBeenCalledWith(3.2);
+  handlers.get("render")?.(); overlayRendered();
+  const captured = await job;
+  expect([captured.width, captured.height]).toEqual([400, 320]);
+  expect(drawImage).toHaveBeenCalledWith(map.getCanvas(), 800, 320, 400, 320, 0, 0, 400, 320);
+  expect(drawImage).toHaveBeenCalledWith(overlay.getCanvas(), 800, 320, 400, 320, 0, 0, 400, 320);
+  expect(state.setPixelRatio).toHaveBeenLastCalledWith(1);
+});
+
 it("waits for a new overlay render after the camera stops moving", async () => {
   const { map, overlay, handlers, state } = setup();
   let overlayRendered: () => void = () => undefined;
@@ -60,6 +76,22 @@ it("waits for a new overlay render after the camera stops moving", async () => {
   expect(unsubscribe).toHaveBeenCalledOnce();
 });
 
+it.each([["movestart", "weather"], ["movestart", "base"], ["resize", "weather"], ["resize", "base"]])(
+  "discards both captured buffers after %s with the old %s buffer ready", async (event, first) => {
+  const { map, overlay, handlers } = setup();
+  let overlayRendered: () => void = () => undefined;
+  const unsubscribe = vi.fn();
+  const job = captureMapFrame(map, overlay, () => true, (callback) => { overlayRendered = callback; return unsubscribe; },
+    new AbortController().signal, { width: 960, height: 540 });
+  if (first === "weather") overlayRendered(); else handlers.get("render")?.();
+  handlers.get(event)?.();
+  if (first === "weather") handlers.get("render")?.(); else overlayRendered();
+  expect(unsubscribe).not.toHaveBeenCalled();
+  if (first === "weather") overlayRendered(); else handlers.get("render")?.();
+  await job;
+  expect(unsubscribe).toHaveBeenCalledOnce(); expect(handlers.size).toBe(0);
+});
+
 it("aborts a pending capture and restores render density", async () => {
   const { map, overlay, state, handlers } = setup();
   const controller = new AbortController(), unsubscribe = vi.fn();
@@ -67,6 +99,31 @@ it("aborts a pending capture and restores render density", async () => {
   const rejected = expect(job).rejects.toMatchObject({ name: "AbortError" });
   controller.abort(); await rejected;
   expect(state.setPixelRatio).toHaveBeenLastCalledWith(1); expect(unsubscribe).toHaveBeenCalledOnce(); expect(handlers.has("render")).toBe(false);
+});
+
+it("rejects a hidden map before requesting an infinite pixel ratio", async () => {
+  const { map, overlay, state, props, handlers } = setup();
+  vi.spyOn(map, "getCanvas").mockReturnValue(document.createElement("canvas"));
+  const controller = new AbortController(), unsubscribe = vi.fn();
+  const job = captureMapFrame(map, overlay, () => false, () => unsubscribe, controller.signal, { width: 1920, height: 1080 });
+  const rejected = expect(job).rejects.toThrow("visible size");
+  controller.abort(); await rejected;
+  expect(state.setPixelRatio).not.toHaveBeenCalled();
+  expect(props).not.toHaveBeenCalled(); expect(handlers.size).toBe(0);
+});
+
+it("rejects draw errors immediately and releases render listeners", async () => {
+  const { map, overlay, handlers, state } = setup();
+  const context = { drawImage: () => { throw new Error("Drawing buffer lost"); }, clearRect: () => undefined };
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as unknown as CanvasRenderingContext2D);
+  const controller = new AbortController(), unsubscribe = vi.fn();
+  const job = captureMapFrame(map, overlay, () => true, () => unsubscribe, controller.signal, { width: 1920, height: 1080 });
+  const rejected = expect(job).rejects.toThrow("Drawing buffer lost");
+  try { expect(() => { handlers.get("render")?.(); }).not.toThrow(); }
+  finally { controller.abort(); }
+  await rejected;
+  expect(state.setPixelRatio).toHaveBeenLastCalledWith(1);
+  expect(unsubscribe).toHaveBeenCalledOnce(); expect(handlers.size).toBe(0);
 });
 
 it("does not let removal of an old map unregister its replacement", () => {

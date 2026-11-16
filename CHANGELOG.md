@@ -7,6 +7,110 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v3.8.2] - Pending release
+
+### Added
+
+- Export the current forecast hour as a lossless PNG alongside selected-hour
+  GIFs. Offer HD, Full HD, QHD and UHD output, with the full map, color scale,
+  forecast times, displayed overlays and source credits. Copy completed PNGs
+  and, on Windows, animated GIFs, with a save fallback when clipboard access
+  is unavailable. Keep native GIF copy bounded to 16 MiB.
+- Compose an OpenStreetMap-based locator from the displayed Model Viewer
+  map into sounding images. Zoom to 6.4 times the displayed map scale and render
+  a fresh crop at a density suited to the selected sounding resolution. Make the
+  inset 20% taller at the same width, and fill it with the map, selected point,
+  displayed layers and parameter scale. Put the location name in the sounding
+  header above the map, using coordinates when a name is unavailable. Include the
+  locator in displayed, copied and saved PNGs. Omit mismatched forecast
+  times and points outside the map; retain the normal image when capture is unavailable.
+
+### Changed
+
+- Move cache-pruning order, expiration decisions and exact byte-budget accounting
+  into Rust. Retain stable LRU ties, pinned/protected entries, failed-deletion
+  accounting and the existing second-pass retry. Keep filesystem removal with
+  the cache owner and retain optional-extension/Python compatibility.
+- Move portable-sounding physical quality checks and model-cache entry assembly
+  into Rust behind the existing public adapters. Share a single-pass QC scan
+  without filtered coordinate arrays; preserve issue order, missing sentinels,
+  portable advisory handling, array conversion and the stricter basic-QC checks.
+  Retain cache result objects, stable newest-first order, pins/protection and
+  optional-extension/Python compatibility. Keep file discovery, archive
+  validation and deletion with their existing owners. Keep inspection and
+  portable validation available without a working scientific backend.
+- Move custom pressure-weighted and unweighted wind means, and custom-layer
+  storm-relative helicity, into owned Rust workspaces. Retain exact fractional
+  layer-top sampling, pressure interpolation, separate component masks,
+  storm-motion subtraction, signed helicity and the existing knot conversion.
+  Keep standard-layer caches and the optional-extension/Python fallback; stream
+  mean-wind samples instead of materializing interpolation grids. Add an opt-in
+  paired public-adapter benchmark with raw samples, source hashes and local
+  timing limits.
+- Move Ensemble CSV assembly into Rust, retaining field order, missing-value
+  blanks, timestamps, quoting and member outcome and denominator rules. Stream
+  formatted rows in bounded batches and keep the existing Python fallback.
+- Fingerprint profile metric cache inputs in Rust from immutable data/mask
+  snapshots, including shape, dtype and revision. Detect in-place edits while
+  retaining read-only, masked, strided and nonnumeric-column compatibility.
+- Move provider surface-row filtering, saturation checks and aligned column
+  assembly into Rust. Share the verified ground-row contract with the native
+  GRIB decoder; preserve provider result objects, units, level order and the
+  explicit Python fallback.
+- Reduce MMP wind endpoint pairs in Rust without allocating a matrix or
+  changing the existing interpolation, regression coefficients, knot-to-m/s
+  conversion or missing/overflow behavior. Retain Python-science compatibility.
+- Sample every captured forecast hour and its scientific color ramp for one
+  stable 256-color GIF palette. Capture every selected hour at the requested
+  resolution before encoding; retain smooth pixels and discrete looping frames.
+- Add opt-in Rust sounding-render and browser GIF-export benchmarks with
+  source and environment metadata, raw phase samples and decoded-output checks.
+  Identify older measurements as historical and keep active test budgets separate.
+
+### Fixed
+
+- Draw hodograph motion, mean wind and ring labels without background plates
+  so the traces and rings behind them remain visible.
+- Keep the Skew-T SFC label, inflow heights and helicity values, and the
+  lapse-rate bracket and label in place when omega bars cross them.
+- Preserve pin/provenance metadata when a cache access timestamp is malformed
+  or non-finite; use the metadata file's modification time for retention instead
+  of discarding the entry's metadata. Recheck active leases at the removal
+  boundary so a lease acquired after a prune/clear scan blocks deletion.
+- Keep cache listings and Storage available when optional metadata contains
+  list/dictionary values or a null source-field list. Preserve pinned cache
+  payloads and source metadata. Native entry presentation also normalizes
+  non-finite access times and ignores non-iterable source-field metadata.
+- Retain GIF worker startup, message and encoding errors so later frame writes
+  fail instead of waiting forever. Release failed workers and queued chunks,
+  avoid creating a worker for an already cancelled operation, and start the
+  encoder only after all selected lossless map captures are ready.
+- Invalidate both captured map buffers when the camera moves or the map resizes,
+  preventing a new basemap from being combined with an older weather overlay.
+- Keep fractional and small scientific color-scale labels distinct in forecast
+  PNG/GIF exports and sounding map locators. Omit locator points with invalid
+  projected coordinates.
+- Cancel sibling forecast preloads when a selected hour fails, report map-capture
+  draw errors promptly, and release render listeners and temporary pixel-density
+  changes on failure or cancellation. Reject hidden maps before resizing them.
+- Keep a pending sounding copy scoped to its image, so a replacement image can
+  be saved or copied and older completions cannot overwrite its export status.
+- Stage native Ensemble CSV exports beside the destination, flush and sync
+  the completed file, and replace the saved file only after success. Preserve
+  existing exports on formatting, write or replacement failure and clean up
+  unfinished temporary files. Preserve the existing POSIX access mode when
+  replacing a CSV, including private exports.
+- Capitalize Winter diagnostic captions consistently, use ≥, ≤ and °C in
+  ingredient labels, and wrap the DGZ notes within their own column using Qt's
+  measured text widths. Keep all diagnostic footers aligned at the bottom and
+  display an empty icing layer's depth as 0 m.
+
+### Removed
+
+- Retire unused sounding Compare and Trends code, including the
+  `get_sounding_trends` command and its browser API route. Forecast playback,
+  multi-time soundings and Ensemble threshold tools remain available.
+
 ## [v3.8.1] - 2026-11-15
 
 ### Fixed

@@ -1195,19 +1195,15 @@ impl RecordAssembler {
             .zip(surface_dewpoint)
             .zip(surface_u)
             .zip(surface_v)
-            .map(|(((((pressure, height), temperature), dewpoint), u), v)| {
-                (pressure, height, temperature, dewpoint, u, v)
-            })
-            .filter(|(pressure, height, temperature, dewpoint, u, v)| {
-                (100.0..=1100.0).contains(pressure)
-                    && (-1000.0..=10_000.0).contains(height)
-                    && (-120.0..=70.0).contains(temperature)
-                    && (-150.0..=*temperature + 0.5).contains(dewpoint)
-                    && u.abs() <= 200.0
-                    && v.abs() <= 200.0
-            })
-            // Match the established verified-surface contract's rounding tolerance.
-            .map(|(p, z, t, td, u, v)| (p, z, t, td.min(t), u, v));
+            .and_then(|(((((pressure, height), temperature), dewpoint), u), v)| {
+                crate::model_surface::GroundLevel::verified(
+                    [pressure, height, temperature, dewpoint, u, v],
+                    // Raw GRIB sentinels were removed before converting units
+                    // and rotating winds. A converted physical value may equal
+                    // that sentinel (for example 0 C when missing is 0).
+                    None,
+                )
+            });
         // Preserve a vorticity sample that is exactly coincident with the
         // verified ground. The profile row at that pressure is replaced by
         // the 2 m/10 m merge, but the pressure-level vorticity is still the
@@ -1238,8 +1234,9 @@ impl RecordAssembler {
             .map(|absolute| absolute - coriolis_parameter(selected.latitude))
         });
         let original_level_count = self.levels.len();
-        if let Some((pressure, _, _, _, _, _)) = surface {
-            self.levels.retain(|record| record.pressure < pressure);
+        if let Some(ground) = surface {
+            self.levels
+                .retain(|record| record.pressure < ground.pressure());
         }
         let below_ground_levels_removed = original_level_count - self.levels.len();
         let surface_merged = surface.is_some();
@@ -1247,17 +1244,10 @@ impl RecordAssembler {
         let level_count = self.levels.len() + profile_offset;
         let mut matrix = vec![output_missing; COLUMN_COUNT * level_count];
 
-        if let Some((pressure, height, temperature, dewpoint, u, v)) = surface {
-            let direction = (270.0 - v.atan2(u).to_degrees()).rem_euclid(360.0);
-            let speed = u.hypot(v) * MPS_TO_KNOTS;
-            matrix[0] = pressure;
-            matrix[level_count] = height;
-            matrix[2 * level_count] = temperature;
-            matrix[3 * level_count] = dewpoint;
-            matrix[4 * level_count] = direction;
-            matrix[5 * level_count] = speed;
-            matrix[7 * level_count] = u;
-            matrix[8 * level_count] = v;
+        if let Some(ground) = surface {
+            for (field, value) in ground.row(output_missing).into_iter().enumerate() {
+                matrix[field * level_count] = value;
+            }
         }
 
         for (index, record) in self.levels.iter().enumerate() {

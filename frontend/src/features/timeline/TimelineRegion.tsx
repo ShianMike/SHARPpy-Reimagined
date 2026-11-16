@@ -76,7 +76,7 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
       <IconAction className={cx(styles.option, styles.mode)} size="sm" icon={Zap} alternateIcon={{ icon: Blend, active: smooth }}
         label="Smooth Playback" hintSide="top" hintText={smooth ? "Smooth · Blend Between Frames" : "Fast · Switch Frames Instantly"}
         aria-pressed={smooth} onClick={() => { useUiStore.getState().setSmoothPlayback(!smooth); }} />
-      <IconAction className={styles.mode} size="sm" icon={Film} label="Export forecast GIF" hintSide="top"
+      <IconAction className={styles.mode} size="sm" icon={Film} label="Export forecast" hintSide="top"
         aria-haspopup="dialog" aria-expanded={exportSelection !== null}
         disabled={context === null || !context.fieldsAvailable || field.product === null || field.blocked !== null}
         onClick={(event) => {

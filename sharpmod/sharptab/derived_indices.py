@@ -178,14 +178,24 @@ def _mmp_linear_predictor(sp):
     lower_u, lower_v = sp_interp.components(sp, pbots)
     upper_u, upper_v = sp_interp.components(sp, ptops)
 
-    max_shear = None
-    # Reuse endpoint winds; reduce one upper layer at a time to keep storage linear.
-    for u_bot, v_bot in zip(np.atleast_1d(lower_u), np.atleast_1d(lower_v)):
-        magnitudes = np.ma.masked_invalid(
-            sp_utils.mag(upper_u - u_bot, upper_v - v_bot))
-        mag = _api._finite_or_none(np.ma.max(magnitudes))
-        if mag is not None and (max_shear is None or mag > max_shear):
-            max_shear = mag
+    from sharpmod.backends import get_backend
+
+    native_shear = None
+    if get_backend().name == "rust":
+        import sharpmod_rs
+
+        native_shear = getattr(sharpmod_rs, "mmp_maximum_bulk_shear", None)
+    if native_shear is not None:
+        max_shear = native_shear(lower_u, lower_v, upper_u, upper_v)
+    else:
+        max_shear = None
+        # Reuse endpoint winds; reduce one upper layer at a time to keep storage linear.
+        for u_bot, v_bot in zip(np.atleast_1d(lower_u), np.atleast_1d(lower_v)):
+            magnitudes = np.ma.masked_invalid(
+                sp_utils.mag(upper_u - u_bot, upper_v - v_bot))
+            mag = _api._finite_or_none(np.ma.max(magnitudes))
+            if mag is not None and (max_shear is None or mag > max_shear):
+                max_shear = mag
     if max_shear is None:
         return None
     max_bulk_shear = float(sp_utils.KTS2MS(max_shear))  # m/s

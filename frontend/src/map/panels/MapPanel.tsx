@@ -2,7 +2,7 @@
 // and its chip, scale and cursor value. With two or four panels the chip opens
 // the parameter picker for that panel.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cx } from "../../lib/cx";
 import { Notice } from "../../components/Notice";
 import { Action } from "../../ui/Controls";
@@ -24,6 +24,7 @@ import { RadarTooltip } from "../hover/RadarTooltip";
 import type { PanelField } from "../panelField";
 import { usePanelScene } from "../panelScene";
 import { MapRuntime } from "../runtime/MapRuntime";
+import { registerSoundingMapContext } from "../runtime/soundingLocator";
 import styles from "./MapPanel.module.css";
 
 export const MAP_HINT_ID = "map-keyboard-hint";
@@ -129,7 +130,24 @@ export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode
   const active = useMapStore((state) => state.activePanel === panel);
   const projection = useMapStore(mapProjection);
   const field = usePanelScene(runtime, panel);
+  const context = useForecastContext();
   const rendererError = useGraphicsStore((state) => state.panelErrors[panel]);
+  const fieldVisible = useMapStore((state) => panelLayers(state, panel)["model-field"].visible);
+  const basemapVisible = useMapStore((state) => panelLayers(state, panel).basemap.visible);
+  const label = context?.model.label;
+  const model = field.request?.model, productKey = field.request?.product;
+  const runTime = field.request?.runTime, forecastHour = field.request?.forecastHour;
+  const product = field.product, frame = field.frame.data;
+  const locatorContext = useMemo(() => {
+    if (runtime?.map == null || rendererError !== undefined || !basemapVisible) return null;
+    if (!fieldVisible) return { panel, request: null, product: null, model: null, frame: null };
+    if (label === undefined || model === undefined || productKey === undefined || runTime === undefined
+      || forecastHour === undefined || product === null || frame === undefined || frame.product !== productKey
+      || frame.runTime !== runTime || frame.forecastHour !== forecastHour) return null;
+    return { panel, request: { model, product: productKey, runTime, forecastHour }, product, model: label,
+      frame: { runTime: frame.runTime, forecastHour: frame.forecastHour, validTime: frame.validTime, attribution: frame.attribution } };
+  }, [runtime, rendererError, basemapVisible, fieldVisible, panel, label, model, productKey, runTime, forecastHour, product, frame]);
+  useEffect(() => locatorContext === null ? undefined : registerSoundingMapContext(locatorContext), [locatorContext]);
 
   useEffect(() => {
     const container = containerRef.current;

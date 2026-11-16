@@ -2,7 +2,7 @@
 
 use crate::{
     profile_input::{column, masked_number},
-    wind_layers::{Vector, WindProfile},
+    wind_layers::{maximum_bulk_shear, Vector, WindProfile},
 };
 use pyo3::{
     exceptions::PyValueError,
@@ -284,7 +284,77 @@ pub(crate) fn profile_wind_layers<'py>(
     Ok(result)
 }
 
+#[pyfunction]
+fn mmp_maximum_bulk_shear(
+    py: Python<'_>,
+    lower_u: &Bound<'_, PyAny>,
+    lower_v: &Bound<'_, PyAny>,
+    upper_u: &Bound<'_, PyAny>,
+    upper_v: &Bound<'_, PyAny>,
+) -> PyResult<Option<f64>> {
+    let numpy = PyModule::import(py, "numpy")?;
+    let prepare = PyModule::import(py, "sharpmod.backends._common")?.getattr("prepare_1d")?;
+    let [lu, lv, uu, uv] = [lower_u, lower_v, upper_u, upper_v].map(|input| {
+        column(
+            &prepare,
+            &numpy.call_method1("atleast_1d", (input,))?,
+            "MMP wind",
+        )
+    });
+    let (lu, lv, uu, uv) = (lu?, lv?, uu?, uv?);
+    if lu.len() != lv.len() || uu.len() != uv.len() {
+        return Err(PyValueError::new_err("MMP wind component lengths differ"));
+    }
+    Ok(py.detach(move || maximum_bulk_shear([&lu, &lv], [&uu, &uv])))
+}
+
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(profile_wind_layers, module)?)?;
+    module.add_function(wrap_pyfunction!(mmp_maximum_bulk_shear, module)?)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pyo3::ffi::c_str;
+
+    #[test]
+    fn mmp_binding_matches_masked_numpy_pairs_and_owns_readonly_inputs() {
+        Python::initialize();
+        Python::attach(|py| {
+            let module = PyModule::new(py, "mmp_test").unwrap();
+            register(&module).unwrap();
+            let scope = PyDict::new(py);
+            scope.set_item("native", module).unwrap();
+            py.run(c_str!(r#"
+import numpy as np
+from sharppy.sharptab import utils
+state = np.random.default_rng(52)
+for nl, nu in [(1, 1), (5, 20), (50, 80), (0, 3), (3, 0)]:
+    columns = [np.ma.array((state.normal(size=n * 2) * 80.)[::2], mask=state.random(n) < .2) for n in [nl, nl, nu, nu]]
+    for values in columns:
+        values.setflags(write=False)
+        assert not values.flags.writeable
+    maximum = None
+    for u, v in zip(*columns[:2]):
+        magnitudes = np.ma.masked_invalid(utils.mag(columns[2] - u, columns[3] - v))
+        result = np.ma.max(magnitudes) if magnitudes.size else np.ma.masked
+        if not np.ma.is_masked(result) and np.isfinite(result):
+            maximum = float(result) if maximum is None else max(maximum, float(result))
+    actual = native.mmp_maximum_bulk_shear(*columns)
+    if maximum is None:
+        assert actual is None
+    else:
+        np.testing.assert_allclose(actual, maximum, rtol=1e-14)
+assert native.mmp_maximum_bulk_shear(0., 0., 3., 4.) == 5.
+try:
+    native.mmp_maximum_bulk_shear([0., 1.], [0.], [3.], [4.])
+except ValueError:
+    pass
+else:
+    raise AssertionError('component length mismatch was accepted')
+"#), Some(&scope), Some(&scope)).unwrap();
+        });
+    }
 }

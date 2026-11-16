@@ -4,6 +4,24 @@ use crate::interpolation::PreparedInterpolation;
 
 pub(crate) type Vector = [Option<f64>; 2];
 
+/// MMP compares every reported low-level endpoint with every upper endpoint.
+/// Retain the reference square/sum/sqrt arithmetic and reject overflowing
+/// magnitudes; hypot would silently change that missing-value behavior.
+pub(crate) fn maximum_bulk_shear(lower: [&[f64]; 2], upper: [&[f64]; 2]) -> Option<f64> {
+    let mut maximum = None;
+    for (&lower_u, &lower_v) in lower[0].iter().zip(lower[1]) {
+        for (&upper_u, &upper_v) in upper[0].iter().zip(upper[1]) {
+            let du = upper_u - lower_u;
+            let dv = upper_v - lower_v;
+            let magnitude = (du * du + dv * dv).sqrt();
+            if magnitude.is_finite() && maximum.is_none_or(|value| magnitude > value) {
+                maximum = Some(magnitude);
+            }
+        }
+    }
+    maximum
+}
+
 pub(crate) struct WindLayer {
     pub mean: Vector,
     pub shear: Vector,
@@ -93,6 +111,32 @@ impl WindProfile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maximum_shear_preserves_component_gaps_zero_and_overflow() {
+        assert_eq!(
+            maximum_bulk_shear([&[0., 10.], &[0., 20.]], [&[3., 40.], &[4., 60.]]),
+            Some(5200_f64.sqrt())
+        );
+        assert_eq!(maximum_bulk_shear([&[0.], &[0.]], [&[0.], &[0.]]), Some(0.));
+        assert_eq!(maximum_bulk_shear([&[], &[]], [&[1.], &[2.]]), None);
+        assert_eq!(
+            maximum_bulk_shear([&[f64::NAN], &[0.]], [&[1.], &[2.]]),
+            None
+        );
+        assert_eq!(
+            maximum_bulk_shear([&[0.], &[f64::INFINITY]], [&[1.], &[2.]]),
+            None
+        );
+        assert_eq!(
+            maximum_bulk_shear([&[0.], &[0.]], [&[1e200], &[1e200]]),
+            None
+        );
+        assert_eq!(
+            maximum_bulk_shear([&[0., 4.], &[0., f64::NAN]], [&[3., f64::NAN], &[4., 100.]]),
+            Some(5.)
+        );
+    }
 
     #[test]
     fn single_pressure_means_calm_and_missing_winds_keep_their_meanings() {

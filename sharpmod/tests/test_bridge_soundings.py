@@ -211,22 +211,12 @@ def test_analysis_is_cached_per_sounding(opened, analysis):
     assert soundings.analysis({"sounding_id": opened["sounding_id"]}) is analysis
 
 
-def test_trends_cover_every_time_of_a_forecast_file():
-    from sharpmod.analysis import profile_metrics
-
+def test_forecast_file_exposes_each_available_time_in_order():
     summary = soundings.open_file(_upload(BUFKIT))
-    assert summary["time_count"] == 49
-    trends = soundings.trends({"sounding_id": summary["sounding_id"]})
-    assert [c["key"] for c in trends["columns"]] == list(
-        profile_metrics.DEFAULT_METRIC_KEYS
-    )
-    assert len(trends["points"]) == 49 and trends["truncated"] is False
-    times = [point["time"] for point in trends["points"]]
-    assert times[0] == "2026-06-25T06:00:00Z" and times == sorted(times)
-    assert all(
-        len(point["values"]) == len(trends["columns"]) for point in trends["points"]
-    )
-    json.dumps(trends, allow_nan=False)
+    times = summary["times"]
+    assert len(times) == summary["time_count"] == 49
+    assert times[0] == summary["valid_time"] == "2026-06-25T06:00:00Z"
+    assert times == sorted(times)
 
 
 @pytest.mark.parametrize(

@@ -10,7 +10,7 @@ import {
   parseSoundingAnalysis,
   parseSoundingSummary,
   parseSoundingProgress,
-  parseSoundingTrends, parseWrfFile,
+  parseWrfFile,
 } from "../contracts/soundings";
 import { parseContourLines } from "../contracts/contours";
 import { parseFieldFrame, parseRadarFrame, parseRadarSiteFrame, parseSatelliteFrame } from "../contracts/frames";
@@ -31,7 +31,7 @@ import type {
   ThresholdMetrics,
 } from "../../types/thresholds";
 import type {
-  ImageMode, ModelCatalog, ModelStatus, OpenSoundingRequest, RenderChoice, SoundingAnalysis, SoundingSummary, SoundingTrends, SoundingProgress, SoundingColorStyle, WrfFile,
+  ImageMode, ModelCatalog, ModelStatus, OpenSoundingRequest, RenderChoice, SoundingAnalysis, SoundingSummary, SoundingProgress, SoundingColorStyle, WrfFile,
 } from "../../types/soundings";
 import { MARKS, markOnce } from "../metrics";
 import type { CacheClearResult, CacheTarget, StorageUsage } from "../../types/storage";
@@ -118,10 +118,6 @@ export class BackendClient {
   inspectWrf(filePath: string): Promise<WrfFile> { return this.request("inspect_wrf", parseWrfFile, { filePath }); }
   getSoundingAnalysis(soundingId: string): Promise<SoundingAnalysis> {
     return this.request("get_sounding_analysis", parseSoundingAnalysis, { soundingId });
-  }
-
-  getSoundingTrends(soundingId: string): Promise<SoundingTrends> {
-    return this.request("get_sounding_trends", parseSoundingTrends, { soundingId });
   }
 
   getThresholdMetrics(): Promise<ThresholdMetrics> { return this.request("get_threshold_metrics", parseThresholdMetrics); }

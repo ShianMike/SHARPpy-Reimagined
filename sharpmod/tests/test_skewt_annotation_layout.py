@@ -155,10 +155,6 @@ class _FakeWidget:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
-    def tmpc_to_pix(self, tmpc, _pres):
-        return 100.0 + (float(tmpc) + 50.0) * 5.0
-
-
 #: Right edge of the height-marker column for ``_FakeWidget``, whose fonts are
 #: absent so the measured fallback applies.
 _FAKE_HEIGHT_BAND_RIGHT = (
@@ -187,75 +183,6 @@ def test_the_longest_height_label_sets_the_column_width():
     assert len(render_mod.SKEWT_HEIGHT_LABELS) == 7
 
 
-def test_no_omega_band_when_the_meter_is_not_drawn():
-    """Observed soundings carry no vertical velocity, so no meter is drawn."""
-    assert render_mod._skewt_omega_band(_FakeWidget(plot_omega=False)) is None
-
-
-def test_the_omega_band_spans_the_meters_own_bounds():
-    band = render_mod._skewt_omega_band(_FakeWidget())
-
-    assert band == (105.0, 145.0)
-
-
-def test_a_non_finite_position_yields_no_band():
-    class _Broken(_FakeWidget):
-        def tmpc_to_pix(self, _tmpc, _pres):
-            return float("nan")
-
-    assert render_mod._skewt_omega_band(_Broken()) is None
-
-
-class _BarWidget(_FakeWidget):
-    """A widget whose omega bars overshoot the meter's own scale.
-
-    ``draw_omega_profile`` scales each bar by the value, so it does not clip at
-    the meter's bounds; ascent is drawn to the right, as here.
-    """
-
-    def __init__(self, omeg, pres=None):
-        import numpy as np
-        from types import SimpleNamespace
-
-        super().__init__()
-        count = len(omeg)
-        self.prof = SimpleNamespace(
-            omeg=np.ma.masked_invalid(np.ma.asarray(omeg, dtype=float)),
-            pres=np.ma.asarray(
-                pres if pres is not None else [1000.0] * count, dtype=float),
-        )
-
-    def omeg_to_pix(self, omeg):
-        return 125.0 - float(omeg) * 4.0
-
-
-def test_the_band_includes_bars_that_overshoot_the_meter_scale():
-    """The nominal bounds alone are not the meter's real footprint."""
-    nominal = render_mod._skewt_omega_band(_FakeWidget())
-    band = render_mod._skewt_omega_band(_BarWidget([-5.0]))
-
-    assert band[1] > nominal[1]
-    assert band[1] >= 125.0 + 5.0 * 10.0 * 4.0
-
-
-def test_levels_the_meter_does_not_draw_are_ignored():
-    """It skips anything above its own top, so those bars do not count."""
-    band = render_mod._skewt_omega_band(
-        _BarWidget([-5.0, -50.0], pres=[1000.0, 50.0]))
-
-    assert band[1] == pytest.approx(125.0 + 5.0 * 10.0 * 4.0)
-
-
-def test_a_profile_with_no_usable_omega_falls_back_to_the_bounds():
-    assert render_mod._skewt_omega_band(
-        _BarWidget([float("nan")])) == render_mod._skewt_omega_band(
-            _FakeWidget())
-
-
-def test_a_widget_without_a_profile_still_reports_its_bounds():
-    assert render_mod._skewt_omega_bar_extent(_FakeWidget()) is None
-
-
 def test_the_gutter_clears_the_height_markers_when_no_meter_is_drawn():
     """The regression: an observed sounding has no meter, only these markers.
 
@@ -270,12 +197,9 @@ def test_the_gutter_clears_the_height_markers_when_no_meter_is_drawn():
     assert gutter > _FakeWidget.lpad + render_mod.SKEWT_ANNOTATION_CLEARANCE
 
 
-def test_the_gutter_clears_the_meter_when_one_is_drawn():
-    """The meter is the wider obstacle, so it decides this case."""
-    gutter = render_mod._skewt_left_gutter(_FakeWidget())
-
-    assert gutter == 145.0 + render_mod.SKEWT_ANNOTATION_CLEARANCE
-    assert gutter > _FAKE_HEIGHT_BAND_RIGHT
+def test_the_gutter_ignores_the_meter():
+    assert render_mod._skewt_left_gutter(_FakeWidget()) == (
+        render_mod._skewt_left_gutter(_FakeWidget(plot_omega=False)))
 
 
 def test_the_gutter_never_starts_at_the_plot_border():
@@ -355,31 +279,19 @@ def test_the_lapse_rate_value_starts_at_the_gutter_or_right_of_it(
 
 
 @pytest.mark.parametrize("width,height", SIZES)
-def test_the_lapse_rate_value_never_overlaps_the_omega_meter(
-        skewt, qt_app, width, height):
+def test_the_lapse_rate_annotation_stays_put_with_omega(
+        skewt, qt_app, width, height, monkeypatch):
     _sized(skewt, qt_app, width, height)
-    band = render_mod._skewt_omega_band(skewt, QtGui)
-    if band is None:
-        pytest.skip("no omega meter on this profile")
+    monkeypatch.setattr(skewt, "plot_omega", False)
+    without = _lapse(skewt)
+    # Simulate long bars crossing the cold side of the plot.
+    monkeypatch.setattr(skewt, "omeg_to_pix", lambda _omega: skewt.brx - 2.0)
+    monkeypatch.setattr(skewt, "plot_omega", True)
+    with_meter = _lapse(skewt)
 
-    for text, box in _lapse(skewt).boxes():
-        assert box.x() >= band[1], \
-            f"{text!r} starts at {box.x():.1f}, inside the meter band {band}"
-
-
-@pytest.mark.parametrize("width,height", SIZES)
-def test_the_lapse_rate_bracket_never_overlaps_the_omega_meter(
-        skewt, qt_app, width, height):
-    _sized(skewt, qt_app, width, height)
-    band = render_mod._skewt_omega_band(skewt, QtGui)
-    if band is None:
-        pytest.skip("no omega meter on this profile")
-
-    lines = _lapse(skewt).lines
-    assert lines, "the bracket should still be drawn"
-    for x1, _y1, x2, _y2 in lines:
-        assert min(x1, x2) >= band[1], \
-            f"bracket at x={min(x1, x2):.1f} is inside the meter band {band}"
+    assert without.boxes() and without.lines
+    assert with_meter.boxes() == without.boxes()
+    assert with_meter.lines == without.lines
 
 
 @pytest.mark.parametrize("width,height", SIZES)
@@ -463,28 +375,14 @@ def test_the_lapse_rate_value_clears_every_effective_layer_label(
 
 
 @pytest.mark.parametrize("width,height", SIZES)
-def test_every_effective_layer_label_starts_at_the_gutter_or_right_of_it(
+def test_effective_layer_values_clear_the_height_markers(
         skewt, qt_app, width, height):
-    """The fixed -33 C column can fall inside the meter on a narrow plot."""
     _sized(skewt, qt_app, width, height)
     gutter = render_mod._skewt_left_gutter(skewt, QtGui)
 
     for text, box in _effective(skewt).boxes():
-        assert box.x() >= gutter - 0.6, \
-            f"{text!r} at {box.x():.1f} < {gutter:.1f}"
-
-
-@pytest.mark.parametrize("width,height", SIZES)
-def test_every_effective_layer_label_clears_the_omega_meter(
-        skewt, qt_app, width, height):
-    _sized(skewt, qt_app, width, height)
-    band = render_mod._skewt_omega_band(skewt, QtGui)
-    if band is None:
-        pytest.skip("no omega meter on this profile")
-
-    for text, box in _effective(skewt).boxes():
-        assert box.x() >= band[1], \
-            f"{text!r} starts at {box.x():.1f}, inside the meter band {band}"
+        if text != "SFC":
+            assert box.x() >= gutter - 0.6, text
 
 
 # --------------------------------------------------------------------------- #
@@ -678,27 +576,6 @@ def test_the_observed_bracket_also_clears_the_height_markers(
         skewt.plot_omega = True
 
 
-def test_an_observed_sounding_reclaims_the_meters_column(skewt, qt_app):
-    """No omega means no meter, so the gutter starts at the plot edge."""
-    _sized(skewt, qt_app, 900, 700)
-    with_meter = render_mod._skewt_left_gutter(skewt, QtGui)
-
-    skewt.plot_omega = False
-    try:
-        without_meter = render_mod._skewt_left_gutter(skewt, QtGui)
-        assert render_mod._skewt_omega_band(skewt, QtGui) is None
-        boxes = _lapse(skewt).boxes()
-    finally:
-        skewt.plot_omega = True
-
-    # The gutter itself reclaims the meter's column, which is what this is
-    # about. Where the value ends up is decided by the column right of the
-    # inflow annotation, so it is asserted separately.
-    assert without_meter < with_meter
-    assert boxes, "the value should still be drawn"
-    assert boxes[0][1].x() >= without_meter
-
-
 # --------------------------------------------------------------------------- #
 # The inflow layer's own three labels
 # --------------------------------------------------------------------------- #
@@ -773,8 +650,8 @@ def test_the_inflow_layers_own_labels_never_overlap(skewt, qt_app, case):
                     f"{first_text!r} overlaps {second_text!r}"
 
 
-def test_the_bottom_label_is_the_one_that_moves(skewt, qt_app):
-    """The top bound and the helicity keep their column; the base yields."""
+def test_the_surface_label_keeps_its_column_in_shallow_layers(skewt, qt_app):
+    """SFC stays at the surface while the other values clear it."""
     _sized(skewt, qt_app, 900, 700)
     surface = float(skewt.prof.pres[skewt.prof.sfc])
 
@@ -783,10 +660,9 @@ def test_the_bottom_label_is_the_one_that_moves(skewt, qt_app):
     with _InflowLayer(skewt, surface, surface):
         collided = _inflow_layout(skewt)
 
-    assert collided["rect_top"].x() == pytest.approx(settled["rect_top"].x())
-    assert collided["rect_esrh"].x() == pytest.approx(
-        settled["rect_esrh"].x())
-    assert collided["rect_bot"].x() > settled["rect_bot"].x()
+    assert collided["rect_bot"].x() == pytest.approx(settled["rect_bot"].x())
+    assert not collided["rect_bot"].intersects(collided["rect_top"])
+    assert not collided["rect_bot"].intersects(collided["rect_esrh"])
 
 
 def test_the_bottom_label_keeps_the_height_it_belongs_to(skewt, qt_app):
@@ -802,15 +678,21 @@ def test_the_bottom_label_keeps_the_height_it_belongs_to(skewt, qt_app):
     assert collided.y() == pytest.approx(settled.y())
 
 
-def test_a_settled_layer_keeps_its_labels_in_one_column(skewt, qt_app):
-    """Nothing moves when nothing collides."""
+def test_inflow_labels_keep_their_positions_when_omega_reaches_them(
+        skewt, qt_app, monkeypatch):
     _sized(skewt, qt_app, 900, 700)
     surface = float(skewt.prof.pres[skewt.prof.sfc])
 
     with _InflowLayer(skewt, surface, surface - 285.0):
-        layout = _inflow_layout(skewt)
+        monkeypatch.setattr(skewt, "plot_omega", False)
+        before = _inflow_layout(skewt)
+        monkeypatch.setattr(skewt, "omeg_to_pix", lambda _omega: skewt.brx - 2.0)
+        monkeypatch.setattr(skewt, "plot_omega", True)
+        after = _inflow_layout(skewt)
 
-    assert layout["rect_bot"].x() == pytest.approx(layout["rect_top"].x())
+    assert before["text_bot"] == "SFC"
+    for key in ("rect_bot", "rect_top", "rect_esrh"):
+        assert after[key] == before[key]
 
 
 def test_the_inflow_label_rects_are_sized_to_their_text(skewt, qt_app):

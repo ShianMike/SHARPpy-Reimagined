@@ -185,7 +185,14 @@ def configure_view(win, view, app, original):
         for field in point["values"]:
             field["original"] = (original["storm"][(0 if index == -1 else 2) + (field["key"] == "v")]
                                  if kind == "storm" else original[field["key"]][index])
+    from sharpmod.backends import get_backend
+    bounds = None
+    if get_backend().name == "rust":
+        import sharpmod_rs
+        locator_bounds = getattr(sharpmod_rs, "sounding_locator_bounds", None)
+        bounds = locator_bounds(sw) if locator_bounds else None
     return {"edits": edits, "points": points, "inspection": inspection(sw),
+            **({"locatorBounds": bounds} if bounds is not None else {}),
             "selection": {"chart": view["chart"], "panel": view["panel"]}, "options": [
         {"key": "chart", "label": "Height chart", "choices": [
             {"key": key, "label": label.replace("&&", "&")}

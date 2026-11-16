@@ -266,6 +266,11 @@ def mean_wind(prof, pbot, ptop, dp=-1, stu=0, stv=0):
             return layer.mean_u - float(stu), layer.mean_v - float(stv)
     if dp > 0:
         dp = -dp
+    if _backends.get_backend().name == "rust":
+        import sharpmod_rs
+        native = getattr(sharpmod_rs, "pressure_layer_mean_wind", None)
+        if native is not None:
+            return native(prof, pbot, ptop, dp, stu, stv, True)
     ps = _pressure_samples(pbot, ptop, dp)
     if ps.size == 0:
         return MISSING, MISSING
@@ -298,6 +303,11 @@ def mean_wind_npw(prof, pbot, ptop, dp=-1, stu=0, stv=0):
             )
     if dp > 0:
         dp = -dp
+    if _backends.get_backend().name == "rust":
+        import sharpmod_rs
+        native = getattr(sharpmod_rs, "pressure_layer_mean_wind", None)
+        if native is not None:
+            return native(prof, pbot, ptop, dp, stu, stv, False)
     ps = _pressure_samples(pbot, ptop, dp)
     if ps.size == 0:
         return MISSING, MISSING
@@ -359,6 +369,11 @@ def helicity(prof, lower, upper, stu=0, stv=0):
     ):
         return layer.srh_total, layer.srh_positive, layer.srh_negative
 
+    if _backends.get_backend().name == "rust":
+        import sharpmod_rs
+        native = getattr(sharpmod_rs, "profile_layer_helicity", None)
+        if native is not None:
+            return native(prof, lower, upper, stu, stv)
     lower_msl = interp.to_msl(prof, lower)
     upper_msl = interp.to_msl(prof, upper)
     plower = interp.pres(prof, lower_msl)

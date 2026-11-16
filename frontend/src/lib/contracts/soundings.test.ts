@@ -3,7 +3,6 @@ import modelCatalog from "@contracts/public/soundings/models.catalog.json";
 import summaryExample from "@contracts/public/soundings/summary.example.json";
 import summaryBox from "@contracts/public/soundings/summary.box.json";
 import summaryMultiTime from "@contracts/public/soundings/summary.multi-time.json";
-import trendsExample from "@contracts/public/soundings/trends.example.json";
 import { describe, expect, it } from "vitest";
 import { ContractError } from "./guards";
 import {
@@ -11,7 +10,6 @@ import {
   parsePng,
   parseSoundingAnalysis,
   parseSoundingSummary,
-  parseSoundingTrends,
 } from "./soundings";
 
 /** A deep copy that a test may change. */
@@ -28,7 +26,6 @@ describe("sounding contracts", () => {
     expect(parseSoundingSummary(summaryMultiTime)).toEqual(summaryMultiTime);
     expect(parseSoundingSummary(summaryBox)).toEqual(summaryBox);
     expect(parseSoundingAnalysis(analysisExample)).toEqual(analysisExample);
-    expect(parseSoundingTrends(trendsExample)).toEqual(trendsExample);
   });
 
   it("rejects malformed box metadata at the response boundary", () => {
@@ -47,8 +44,8 @@ describe("sounding contracts", () => {
         expect(row.values).toHaveLength(table.columns.length);
       }
     }
-    const trends = parseSoundingTrends(trendsExample);
-    expect(trends.points).toHaveLength(parseSoundingSummary(summaryMultiTime).timeCount);
+    const multi = parseSoundingSummary(summaryMultiTime);
+    expect(multi.times).toHaveLength(multi.timeCount);
     const hrrr = parseModelCatalog(modelCatalog).models.find((model) => model.key === "hrrr");
     expect(hrrr?.outline.length).toBeGreaterThan(100);
     expect(hrrr?.recentRuns).toContain(hrrr?.suggestedRun);
@@ -75,15 +72,6 @@ describe("sounding contracts", () => {
         const models = c.models as { maxForecastHours: unknown[] }[];
         models[0]?.maxForecastHours.splice(0, 1);
       })),
-    ],
-    [
-      "a trend point with a value too many",
-      () =>
-        parseSoundingTrends(
-          edit(trendsExample, (c) => {
-            (c.points as { values: unknown[] }[])[0]?.values.push(1);
-          }),
-        ),
     ],
     [
       "a model with no runs",

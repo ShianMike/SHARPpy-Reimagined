@@ -374,7 +374,7 @@ def _skewt_omega_band(widget, qtgui=None):
     soundings -- ``plotSkewT`` sets ``plot_omega`` from whether the collection is
     observed, and an observed sounding carries no vertical velocity.
 
-    The span is deliberately wider than the meter's own -49 to -41 bounds. Its
+    Winter markers use this span to avoid the omega meter. The span is wider than the meter's own -49 to -41 bounds. Its
     ``+10``/``-10`` scale labels are drawn from 5 px rectangles and so overhang
     both ends, and the bars themselves can reach further still.
     """
@@ -405,20 +405,9 @@ def _skewt_omega_band(widget, qtgui=None):
 
 
 def _skewt_left_gutter(widget, qtgui=None):
-    """Return the leftmost x a left-hand annotation may start at.
-
-    Clear of the height-marker column, which is always drawn, and of the omega
-    meter when there is one. The meter is the wider obstacle on a forecast
-    sounding and so usually decides this, but an observed sounding has no meter
-    at all -- and it was that case which put the maximum lapse rate hard against
-    the left border and straight through the height labels.
-    """
-    left = float(getattr(widget, "lpad", 0)) + SKEWT_ANNOTATION_CLEARANCE
-    for band in (_skewt_height_label_band(widget, qtgui),
-                 _skewt_omega_band(widget, qtgui)):
-        if band is not None:
-            left = max(left, band[1] + SKEWT_ANNOTATION_CLEARANCE)
-    return left
+    """Leave room for the height markers; omega bars may cross annotations."""
+    _, right = _skewt_height_label_band(widget, qtgui)
+    return right + SKEWT_ANNOTATION_CLEARANCE
 
 
 def _skewt_clear_of(rect, blockers, qtcore, right_limit=None,
@@ -526,7 +515,8 @@ def _skewt_effective_layer_labels(widget, qtcore, qtgui, tab):
     y2 = originy + widget.pres_to_pix(ptop) / scale
 
     surface = tab.interp.hght(prof, prof.pres[prof.sfc])
-    if prof.pres[prof.sfc] == pbot:
+    surface_based = prof.pres[prof.sfc] == pbot
+    if surface_based:
         text_bot = "SFC"
     else:
         text_bot = tab.utils.INT2STR(
@@ -552,9 +542,8 @@ def _skewt_effective_layer_labels(widget, qtcore, qtgui, tab):
         apart than the ink actually needs.
         """
         width = max(float(metrics.horizontalAdvance(str(text))) + 4.0, 12.0)
-        # Never start left of the gutter: on a narrow plot the fixed -33 C
-        # column can fall inside the omega meter or the height markers.
-        left = max(float(left), gutter)
+        # Keep SFC at its usual column even beside the height markers.
+        left = float(left) if text == "SFC" else max(float(left), gutter)
         return _fit_rect_to_skewt_plot(
             widget, qtcore, qtcore.QRectF(left, float(top), width, rect_h))
 
@@ -567,33 +556,21 @@ def _skewt_effective_layer_labels(widget, qtcore, qtgui, tab):
     if bottom_top + rect_h > bottom_limit:
         bottom_top = float(y1) - 4.0 - rect_h
 
-    # Only the top height label keeps its place unconditionally: it names the
-    # level the bracket's upper tick is drawn at, so its column is the one thing
-    # here that is not free to move.
-    #
-    # The helicity yields to it. Both sit on the same line -- ``y2 - rect_h`` --
-    # and were separated only by their columns being the -33 C and -20 C
-    # isotherms. That separation is geometric and shrinks with the plot, while the
-    # labels are text and do not: measured on the bundled example, the gap between
-    # the two columns falls from 88 px at 900x700 to 43 px at 560x460, 32 px at
-    # 470x400 and 25 px at 420x380, against the 39 px ``3300m`` alone needs and
-    # the ~60 px of a four-digit helicity. So from roughly 560 px down the two
-    # drew through each other and the layer-top height and the helicity value
-    # rendered as one unreadable smear on a single line.
-    #
-    # The bottom label then yields to both. It is the label with somewhere to go
-    # -- it already flips above its own line for a surface-based layer -- and
-    # that flip is what creates its collision: a layer both surface-based and
-    # shallow puts the flipped bottom label on the top label's line, in the same
-    # column, so a degenerate layer drew "SFC" straight through "0m".
+    # Preserve the surface label's column; the other values yield if a
+    # shallow layer puts them on the same row. An elevated base still yields.
     right_limit = float(getattr(widget, "brx", 0))
+    rect_bot = _rect(x2, bottom_top, text_bot)
     rect_top = _rect(x2, y2 - rect_h, text_top)
+    if surface_based:
+        rect_top = _skewt_clear_of(
+            rect_top, (rect_bot,), qtcore, right_limit=right_limit)
     rect_esrh = _skewt_clear_of(
-        _rect(x1 - 15.0, y2 - rect_h, text_esrh), (rect_top,), qtcore,
+        _rect(x1 - 15.0, y2 - rect_h, text_esrh),
+        (rect_top, rect_bot) if surface_based else (rect_top,), qtcore,
         right_limit=right_limit)
-    rect_bot = _skewt_clear_of(
-        _rect(x2, bottom_top, text_bot), (rect_top, rect_esrh), qtcore,
-        right_limit=right_limit)
+    if not surface_based:
+        rect_bot = _skewt_clear_of(
+            rect_bot, (rect_top, rect_esrh), qtcore, right_limit=right_limit)
 
     return {
         "x1": x1,

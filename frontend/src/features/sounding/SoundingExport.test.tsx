@@ -99,6 +99,40 @@ it("copies the prepared PNG once, disables concurrent exports, and keeps downloa
   expect(screen.getByRole("button", { name: "Export PNG" }).hasAttribute("disabled")).toBe(false);
 });
 
+it("does not prepare an annotated image when the clipboard is unavailable", async () => {
+  vi.stubGlobal("ClipboardItem", undefined);
+  const createImageBitmap = vi.fn();
+  vi.stubGlobal("createImageBitmap", createImageBitmap);
+  const image = parseSoundingView(response());
+  image.edits = [{ index: 0, values: { tmpc: 30 } }];
+  const field = image.points.find((point) => point.id === "tmpc:0")?.values[0];
+  if (field === undefined) throw new Error("The fixture needs an editable temperature");
+  field.value = 30;
+  render(<SoundingExport view={image} quality="uhd" onQualityChange={() => undefined} ready busy={false} filename="test.png" />);
+  fireEvent.click(screen.getByRole("button", { name: "Copy sounding image" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("Image copy unavailable");
+  expect(createImageBitmap).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "Export PNG again" })).toBeTruthy();
+});
+
+it("does not let an earlier image's pending copy block or overwrite the new image's status", async () => {
+  class TestClipboardItem { constructor(readonly data: Record<string, Blob>) {} }
+  const finish: (() => void)[] = [];
+  const write = vi.fn(() => new Promise<void>((resolve) => { finish.push(resolve); }));
+  vi.stubGlobal("navigator", { clipboard: { write } }); vi.stubGlobal("ClipboardItem", TestClipboardItem);
+  const first = parseSoundingView(response()), second = parseSoundingView(response(true));
+  const view = render(<SoundingExport view={first} quality="uhd" onQualityChange={() => undefined} ready busy={false} filename="first.png" />);
+  fireEvent.click(screen.getByRole("button", { name: "Copy sounding image" }));
+  view.rerender(<SoundingExport view={second} quality="hd" onQualityChange={() => undefined} ready busy={false} filename="second.png" />);
+  expect(screen.getByRole("button", { name: "Copy sounding image" }).hasAttribute("disabled")).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Copy sounding image" }));
+  expect(write).toHaveBeenCalledTimes(2);
+  await act(async () => { finish[0]?.(); await Promise.resolve(); });
+  expect(screen.getByRole("status", { name: "Sounding export status" }).textContent).toContain("Copying");
+  await act(async () => { finish[1]?.(); await Promise.resolve(); });
+  expect(screen.getByRole("status", { name: "Sounding export status" }).textContent).toContain("Copied");
+});
+
 it("clears readiness after an edit fails and restores it after a cached undo", async () => {
   const base = createTransport();
   let calls = 0;

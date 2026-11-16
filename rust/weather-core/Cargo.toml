@@ -16,6 +16,7 @@ flate2 = "=1.1.10"
 geographiclib-rs = { version = "=0.2.7", default-features = false }
 hdf5-reader = { version = "=0.12.1", default-features = false }
 log = "0.4.34"
+image-webp = "=0.2.4"
 png = "=0.18.1"
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider", "system-proxy"] }
 rustls = { version = "=0.23.46", default-features = false, features = ["ring"] }

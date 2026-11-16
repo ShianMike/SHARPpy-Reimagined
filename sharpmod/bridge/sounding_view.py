@@ -25,7 +25,7 @@ def _render_key(parcel, mode, view, color_style):
 def validate_view(value):
     if not isinstance(value, dict):
         raise p.invalid("view must be an object")
-    p.keys(value, ("edits",), ("chart", "panel", "drag", "timeIndex", "mode"))
+    p.keys(value, ("edits",), ("chart", "panel", "drag", "timeIndex", "mode", "animationRange"))
     p.choice(value, "mode", ("severe", "winter"), "severe")
     value = {"chart": "streamwiseness", "panel": "STP STATS", **value}
     p.choice(value, "chart", CHARTS, "streamwiseness")

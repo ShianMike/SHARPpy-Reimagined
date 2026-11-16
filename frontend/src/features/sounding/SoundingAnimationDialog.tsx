@@ -1,0 +1,138 @@
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Copy, Download, Film, GripHorizontal, Pause, Play, X } from "lucide-react";
+import { Popover } from "../../components/Popover";
+import { Notice } from "../../components/Notice";
+import { Action, IconAction } from "../../ui/Controls";
+import { useBackendClient } from "../../lib/backend/BackendProvider";
+import { useUiStore } from "../../stores/uiStore";
+import type { ImageMode, RenderChoice, SoundingSummary } from "../../types/soundings";
+import type { ViewRequest } from "../../types/soundingView";
+import { encodeAnimation, type AnimationFormat } from "../animation/encodeAnimation";
+import { copyForecastGif } from "../forecastExport/forecastClipboard";
+import { useModelCatalog, useObjectUrl } from "./soundingQueries";
+import { SourceSelect } from "./SourceFields";
+import { prepareSoundingAnimation, soundingFrameChoices, type PreparedSoundings, type SoundingAnimationProgress } from "./soundingAnimation";
+import styles from "../forecastExport/ForecastExportDialog.module.css";
+import local from "./SoundingAnimationDialog.module.css";
+
+const STAGES = { loading: "Loading profiles", scaling: "Measuring plot range", rendering: "Rendering soundings", encoding: "Encoding animation" };
+
+export function SoundingAnimationDialog({ anchor, summary, choice, quality, view, onClose }: {
+  anchor: HTMLButtonElement; summary: SoundingSummary; choice: RenderChoice; quality: ImageMode; view: ViewRequest; onClose: () => void;
+}) {
+  const client = useBackendClient();
+  const colorStyle = useUiStore((state) => state.soundingColorStyle);
+  const models = useModelCatalog();
+  const model = models.data?.models.find((item) => [item.key, item.label].some((name) => name.toLowerCase() === summary.model?.toLowerCase()));
+  const choices = soundingFrameChoices(summary, model);
+  const [selected, setSelected] = useState<number[] | null>(null);
+  const chosen = selected ?? choices.slice(Math.max(0, choices.findIndex((item) => item.value === (summary.forecastHour ?? 0))),
+    Math.max(0, choices.findIndex((item) => item.value === (summary.forecastHour ?? 0))) + 12).map((item) => item.value);
+  const [delay, setDelay] = useState(750);
+  const [prepared, setPrepared] = useState<PreparedSoundings | null>(null);
+  const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<SoundingAnimationProgress | null>(null);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [result, setResult] = useState<{ blob: Blob; filename: string; format: AnimationFormat } | null>(null);
+  const controller = useRef<AbortController | null>(null);
+  const preview = useRef<HTMLCanvasElement>(null);
+  const url = useObjectUrl(result?.blob ?? prepared?.frames[index]?.image);
+  useEffect(() => () => { controller.current?.abort(); }, []);
+  useEffect(() => {
+    if (!playing || prepared === null) return;
+    const timer = window.setInterval(() => { setIndex((current) => (current + 1) % prepared.frames.length); }, delay);
+    return () => { window.clearInterval(timer); };
+  }, [playing, prepared, delay]);
+  const close = (): void => { controller.current?.abort(); onClose(); anchor.focus(); };
+  const reset = (): void => { setPrepared(null); setResult(null); setProgress(null); setError(""); setCopied(false); setPlaying(false); setIndex(0); };
+  const start = (format?: AnimationFormat): void => {
+    if (busy || preview.current === null) return;
+    const canvas = preview.current, job = new AbortController();
+    controller.current = job; setBusy(true); setError(""); setResult(null); setCopied(false); setPlaying(false);
+    const run = async (): Promise<void> => {
+      const frames = prepared ?? await prepareSoundingAnimation({ summary, model, selected: choices.filter((item) => chosen.includes(item.value)),
+        choice, quality, colorStyle, view }, client, job.signal, (value) => { if (!job.signal.aborted) setProgress(value); });
+      job.signal.throwIfAborted(); setPrepared(frames); setIndex(0);
+      if (format === undefined) { setPlaying(true); return; }
+      setProgress({ phase: "encoding", done: 0, total: frames.frames.length });
+      const blob = await encodeAnimation(frames.frames, frames.width, frames.height, format, delay, client, job.signal,
+        (done) => { if (!job.signal.aborted) setProgress({ phase: "encoding", done, total: frames.frames.length }); }, canvas);
+      job.signal.throwIfAborted();
+      const label = (view.mode ?? "severe") === "winter" ? "winter" : "severe";
+      const range = [frames.frames[0]?.label, frames.frames.at(-1)?.label].join("-");
+      const filename = `sharppy-${summary.title}-${label}-${range}`.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 180) + `.${format}`;
+      setResult({ blob, filename, format });
+    };
+    void run().catch((failure: unknown) => {
+      if (!job.signal.aborted) setError(failure instanceof Error ? failure.message : "The sounding animation could not be prepared.");
+    }).finally(() => {
+      if (controller.current === job) { controller.current = null; setBusy(false); }
+    });
+  };
+  const copy = (): void => {
+    if (result?.format !== "gif" || copying) return;
+    setCopying(true);
+    void copyForecastGif(result.blob).then(() => { setCopied(true); }, () => { setError("This device could not copy the GIF. Save the GIF instead."); })
+      .finally(() => { setCopying(false); });
+  };
+  const valid = chosen.length >= 2 && chosen.length <= 12;
+  const status = busy ? progress === null ? "Preparing…" : `${STAGES[progress.phase]} · ${String(progress.done)} / ${String(progress.total)}`
+    : copied ? "GIF copied" : result !== null ? `${result.format.toUpperCase()} ready · ${(result.blob.size / 1024 ** 2).toFixed(2)} MiB`
+    : prepared !== null ? `${String(prepared.frames.length)} frames ready · ${String(prepared.width)} × ${String(prepared.height)}`
+    : "Choose 2–12 frames, then prepare playback or create an animation.";
+  return <Popover id="sounding-animation" open anchor={anchor} onClose={close} role="dialog" label="Animate sounding" initialFocus="container" movable backdrop className={styles.dialog}>
+    <header className={styles.header} data-popover-drag>
+      <IconAction icon={GripHorizontal} size="sm" label="Move sounding animation screen" data-popover-move />
+      <div><h2>Animate sounding</h2><p>{summary.location ?? summary.title} · {view.mode === "winter" ? "Winter" : "Severe"}</p></div>
+      <IconAction icon={X} size="sm" label="Close sounding animation" onClick={close} />
+    </header>
+    <div className={styles.body}>
+      <div className={styles.settings}>
+        <section className={styles.identity}><span>One location · One run</span><strong>{summary.title}</strong><p>Every selected profile loads before the images are rendered. Plot axes stay fixed throughout playback.</p></section>
+        <fieldset disabled={busy} className={styles.hoursSection}>
+          <legend>{summary.kind === "model" ? "Forecast hours" : "File profiles"} <span>{chosen.length} selected</span></legend>
+          <div className={styles.hourActions}><Action onClick={() => { reset(); setSelected(choices.slice(0, 12).map((item) => item.value)); }}>Select first 12</Action><Action onClick={() => { reset(); setSelected([]); }}>Clear</Action></div>
+          <div className={styles.hours} role="group" aria-label="Sounding frames to animate">{choices.map((item) => <label key={item.value}>
+            <input type="checkbox" aria-label={`Animate ${item.label}`} checked={chosen.includes(item.value)} onChange={(event) => {
+              reset(); setSelected(event.currentTarget.checked ? [...chosen, item.value] : chosen.filter((value) => value !== item.value));
+            }} /><span>{item.label}</span>
+          </label>)}</div>
+        </fieldset>
+        {summary.kind === "model" && models.isPending ? <p className={styles.help}>Loading available forecast hours…</p> : null}
+        {models.isError && summary.kind === "model" ? <Notice tone="danger" title="Forecast hours unavailable" message={models.error.message} /> : null}
+        <SourceSelect label="Time per sounding" value={delay} disabled={busy} options={[{ value: 250, label: "0.25 seconds" }, { value: 500, label: "0.5 seconds" }, { value: 750, label: "0.75 seconds" }, { value: 1000, label: "1 second" }]}
+          onChange={(value) => { setResult(null); setCopied(false); setDelay(value); }} />
+        <p className={styles.help}>{quality === "uhd" ? "UHD" : "HD"} · Original rendered PNG frames · Looping playback with discrete forecast hours.</p>
+      </div>
+      <section className={styles.previewSection} aria-label="Sounding animation preview">
+        <div className={[styles.preview, local.preview].join(" ")} style={{ "--animation-aspect": prepared === null ? "16 / 9" : `${String(prepared.width)} / ${String(prepared.height)}` } as CSSProperties}>
+          {url === null ? <div className={styles.placeholder}><Film aria-hidden="true" /><strong>Your sounding animation</strong><p>Prepare frames to play every selected hour.</p></div> : <img src={url} alt="Selected sounding animation frame" />}
+          <canvas ref={preview} hidden aria-label="Sounding encoding preview" />
+        </div>
+        {prepared === null || result !== null ? null : <div className={local.playback}>
+          <Action disabled={busy} onClick={() => { setPlaying(!playing); }}>{playing ? <Pause className="icon-sm" /> : <Play className="icon-sm" />}{playing ? "Pause" : "Play"}</Action>
+          <input aria-label="Sounding animation frame" type="range" min={0} max={prepared.frames.length - 1} value={index} disabled={busy}
+            onChange={(event) => { setPlaying(false); setIndex(Number(event.currentTarget.value)); }} />
+          <span>{prepared.frames[index]?.label}</span>
+        </div>}
+        <p className={styles.help}>WebP preserves the full colors without loss. GIF is available for sharing with apps that require it. Each hour uses its saved profile edits and the selected Severe or Winter layout.</p>
+        {error === "" ? null : <Notice tone="danger" role="alert" title="Sounding animation unavailable" message={error} />}
+      </section>
+    </div>
+    <footer className={styles.footer}>
+      <div className={styles.status} role="status" aria-live="polite" aria-busy={busy}><span>{status}</span>{busy && progress !== null ? <progress aria-label={STAGES[progress.phase]} value={progress.done} max={progress.total} /> : null}</div>
+      {busy ? <Action onClick={() => { controller.current?.abort(); }}>Cancel</Action> : <>
+        <Action onClick={close}>Close</Action>
+        {result === null || url === null ? null : <a className={styles.save} href={url} download={result.filename}><Download className="icon-sm" />Save {result.format.toUpperCase()}</a>}
+        {result?.format === "gif" ? <Action disabled={copying} onClick={copy}><Copy className="icon-sm" />{copying ? "Copying…" : "Copy GIF"}</Action> : null}
+        <Action disabled={!valid} onClick={() => { if (prepared === null) start(); else { setResult(null); setPlaying(true); } }}><Play className="icon-sm" />Prepare playback</Action>
+        <Action disabled={!valid} onClick={() => { start("gif"); }}>Create GIF</Action>
+        <Action tone="accent" disabled={!valid} onClick={() => { start("webp"); }}>Create WebP</Action>
+      </>}
+    </footer>
+  </Popover>;
+}

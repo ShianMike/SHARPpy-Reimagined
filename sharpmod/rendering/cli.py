@@ -783,6 +783,9 @@ def render(infile: str, outfile: str | None = None,
             from sharpmod.rendering.interactive import configure_view
             metadata = configure_view(win, view, app, original)
             _apply_render_parcel(win, parcel)
+            if "animationRange" in view:
+                from sharpmod_rs import apply_animation_axes
+                apply_animation_axes(win, view["animationRange"], metadata, view.get("mode", "severe"))
             for _ in range(3):
                 app.processEvents()
             if view_result is not None:

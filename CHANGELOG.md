@@ -7,6 +7,26 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Animate selected forecast hours or profiles in a multi-time file in the
+  Severe and Winter sounding layouts. Preload the complete selection, keep
+  plot axes fixed, and offer playback, scrubbing, GIF and animated WebP exports.
+  Keep each animation to 2–12 profiles and preserve open soundings and edits.
+- Export the complete two- or four-panel Model Viewer layout as one PNG, GIF
+  or animated WebP. Load every selected panel and hour before capture; keep
+  each panel's parameter scale, valid time, overlays and credits.
+- Add full-color, lossless animated WebP exports using the shared Rust
+  encoder in the desktop and browser backends. Capture original-resolution
+  PNG frames before encoding, with discrete frames and infinite looping.
+
+### Fixed
+
+- Anchor the Severe sounding's lapse-rate bracket and value at the −30 °C
+  bottom-axis position. Keep the annotation fixed across profiles, omega bars,
+  screen sizes and animation frames while retaining the layer's true depth.
+  Keep the SFC annotations in their existing −20 °C column.
+
 ## [v3.8.2] - 2026-11-16
 
 ### Added

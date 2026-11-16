@@ -100,122 +100,19 @@ class _RectSuppressingPainter:
 
 
 def _install_skewt_lapse_rate_label_placement():
-    """Move the max-lapse-rate annotation into the skew-T's left gutter.
+    """Use the Rust painter's fixed minus-30-degree display anchor."""
+    import sharppy.viz.skew as _skew
+    from sharpmod_rs import draw_fixed_lapse_layer
 
-    Upstream anchors it five degrees warm of the temperature trace, which is the
-    busiest part of the diagram: the parcel-level labels, the freezing level and
-    wet-bulb zero, the significant-level ticks and the wind barbs all sit on that
-    side. Measured on a real sounding the value lands at x 595-651 while
-    ``draw_temp_levels`` occupies 662-746, so it is crowded by construction
-    rather than by accident.
+    _cls = _skew.plotSkewT
+    if getattr(_cls, "_sharpmod_lapse_rate_label_placed", False):
+        return
 
-    The cold side is nearly empty, and the effective-inflow layer already
-    demonstrates the pattern -- a bracket in a fixed column with its value
-    beside it. The whole annotation moves there. The bracket keeps the two
-    heights it marks, which is the part that carries meaning; only the column
-    changes.
+    def draw_max_lapse_rate_layer(self, qp, bound=4.5):
+        return draw_fixed_lapse_layer(self, qp, bound)
 
-    The height and inflow labels keep their clearance. Omega bars may extend
-    behind the bracket and value without changing their positions.
-    """
-    try:
-        import sharppy.viz.skew as _skew
-
-        _cls = _skew.plotSkewT
-        if getattr(_cls, "_sharpmod_lapse_rate_label_placed", False):
-            return
-        _tab = _skew.tab
-        _QtGui = _skew.QtGui
-        _QtCore = _skew.QtCore
-        _orig = _cls.draw_max_lapse_rate_layer
-
-        #: Half-length of the tick marking each end of the layer, as upstream.
-        _tick = 10.0
-
-        def draw_max_lapse_rate_layer(self, qp, bound=4.5):
-            try:
-                layer = self.prof.max_lapse_rate_2_6
-                rate, pbot, ptop = layer[0], layer[1], layer[2]
-                if not (_tab.utils.QC(ptop) and _tab.utils.QC(pbot)):
-                    return
-                if not rate >= bound:
-                    return
-
-                scale = float(getattr(self, "scale", 1.0)) or 1.0
-                originy = float(getattr(self, "originy", 0.0))
-                y1 = originy + self.pres_to_pix(pbot) / scale
-                y2 = originy + self.pres_to_pix(ptop) / scale
-
-                text = _tab.utils.FLOAT2STR(rate, 1) + " C/km"
-                metrics = _QtGui.QFontMetrics(self.esrh_font)
-                rect_h = max(float(getattr(self, "esrh_height", 0)),
-                             float(metrics.height()) + 2.0)
-                width = float(metrics.horizontalAdvance(text)) + 4.0
-
-                layout = _render_api._skewt_effective_layer_labels(
-                    self, _QtCore, _QtGui, _tab)
-                blockers = () if layout is None else (
-                    layout["rect_bot"], layout["rect_top"],
-                    layout["rect_esrh"])
-
-                # Use the cold-side column next to the inflow labels when it fits.
-                column = _render_api._skewt_left_gutter(self, _QtGui)
-                if blockers:
-                    candidate = max(
-                        float(blocker.right()) for blocker in blockers
-                    ) + _render_api.SKEWT_ANNOTATION_CLEARANCE
-                    # That room ends at whichever trace comes first, and a dry
-                    # profile puts its dewpoint much further left than a
-                    # saturated one, so the limit is measured per sounding.
-                    limit = _render_api._skewt_trace_left_edge(self, _tab, pbot, ptop)
-                    if limit is None:
-                        limit = float(getattr(self, "brx", 0))
-                    limit -= _render_api.SKEWT_ANNOTATION_CLEARANCE
-                    if candidate + width + _render_api.SKEWT_LAPSE_COLUMN_SLACK <= limit:
-                        column = candidate
-
-                bracket_x = column + _tick
-                rect = _QtCore.QRectF(column, y2 - rect_h, width, rect_h)
-                # Kept as a net: when the right-hand column is refused for want
-                # of room, the label is back in the gutter beside the inflow
-                # labels and still has to clear them.
-                rect = _render_api._skewt_clear_of(
-                    rect, blockers, _QtCore,
-                    right_limit=float(getattr(self, "brx", 0)))
-                rect = _fit_rect_to_skewt_plot(self, _QtCore, rect)
-
-                if rate >= 8:
-                    color = self.alert_colors[5]
-                elif rate >= 7:
-                    color = self.alert_colors[4]
-                elif rate >= 6:
-                    color = self.alert_colors[1]
-                else:
-                    color = self.alert_colors[0]
-
-                qp.setClipping(True)
-                qp.setPen(_QtGui.QPen(color, 1.5, _QtCore.Qt.SolidLine))
-                qp.setFont(self.esrh_font)
-                qp.drawLine(bracket_x - _tick, y1, bracket_x + _tick, y1)
-                qp.drawLine(bracket_x - _tick, y2, bracket_x + _tick, y2)
-                qp.drawLine(bracket_x, y1, bracket_x, y2)
-                # No background plate, for the same reason the effective-inflow
-                # labels have none: it is filled with the colour already behind
-                # it, so it only cuts a hole in the isopleths.
-                qp.setClipping(False)
-                qp.drawText(
-                    rect,
-                    _QtCore.Qt.TextDontClip | _QtCore.Qt.AlignLeft
-                    | _QtCore.Qt.AlignVCenter,
-                    text)
-                qp.setClipping(True)
-            except Exception:  # pragma: no cover - fall back to upstream
-                _orig(self, qp, bound)
-
-        _cls.draw_max_lapse_rate_layer = draw_max_lapse_rate_layer
-        _cls._sharpmod_lapse_rate_label_placed = True
-    except Exception:  # pragma: no cover - registry reports install failure
-        raise
+    _cls.draw_max_lapse_rate_layer = draw_max_lapse_rate_layer
+    _cls._sharpmod_lapse_rate_label_placed = True
 
 
 def _install_skewt_lapse_rate_label_transparency():

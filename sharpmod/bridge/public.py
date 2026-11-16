@@ -11,6 +11,7 @@ from typing import Any
 from sharpmod.bridge import params as p
 
 COMMANDS = {
+    "encode_webp_frame": "animation.webp_frame",
     "get_sounding_progress": "soundings.progress",
     "get_storage_usage": "storage.usage",
     "clear_cache": "storage.clear",

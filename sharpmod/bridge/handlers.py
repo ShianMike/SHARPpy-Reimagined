@@ -173,6 +173,7 @@ def is_seed_catalog(records: list[dict[str, Any]], seed: dict[str, tuple]) -> bo
 
 
 HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
+    "animation.webp_frame": lambda params: __import__("sharpmod_rs").encode_webp_frame(params),
     "hello": hello,
     "health": health,
     "fields.cached": frame_cache.cached_hours,

@@ -1,6 +1,7 @@
 //! Weather fetching and processing shared by the desktop and Python extension.
 
 pub mod alerts;
+pub mod animation;
 pub mod australian_radar;
 pub mod dwd_radar;
 mod http;

@@ -3,6 +3,7 @@
 // fixtures in offline builds and tests. BackendClient validates every response.
 
 export type CommandName =
+  | "encode_webp_frame"
   | "get_storage_usage"
   | "clear_cache"
   | "cancel_request"

@@ -11,6 +11,7 @@ export type SoundingMode = "severe" | "winter";
 export interface ViewRequest extends ViewOptions {
   mode?: SoundingMode;
   timeIndex?: number;
+  animationRange?: number;
   edits: ViewEdit[];
   drag?: { target: string; x: number; y: number };
 }

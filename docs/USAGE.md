@@ -204,6 +204,37 @@ Windows app offers GIF bytes and a file-paste entry, with a 16 MiB copy limit.
 Browsers must support writing the GIF clipboard format; otherwise use
 **Save GIF**. The receiving application determines whether a paste stays animated.
 
+With a two- or four-panel layout, choose **Export area → Whole layout** to
+capture every visible forecast panel in one image or animation. The selected
+resolution applies to the entire output. Each panel keeps its parameter,
+color scale, valid time and displayed overlays. Every selected panel must have
+its model layer enabled, and every selected hour must be available in every
+panel. All selected fields load before capture; the original forecast hour
+and smoothing choices are restored on completion or cancellation.
+
+Choose **Create WebP** for a looping, full-color animation without GIF's
+256-color limit. Original-resolution PNG frames are encoded losslessly by
+the shared Rust backend, then combined into a standard animated WebP.
+Choose **Save WEBP** to download it. Clipboard animation support varies by app;
+GIF and PNG retain their existing copy actions. Individual lossless frame
+requests must fit within the backend's 8 MiB message limit; choose a smaller
+resolution if a particularly complex frame exceeds it. Stored PNG frames and
+the completed animation each have a 128 MiB limit.
+
+In **Soundings → Sounding controls**, choose **Animate sounding** for a
+deterministic point forecast or a file containing multiple profiles. Choose
+2–12 forecast hours from the same model run and location, or file profiles in
+collection order, and select **Prepare playback**. All profiles load before
+rendering. The plot range is measured across the complete selection and
+fixed for every frame. Use **Play / Pause** and the frame slider to inspect
+the sequence. **Create GIF** and **Create WebP** use the prepared images;
+neither adds transition frames. Both Severe and Winter layouts are supported,
+using the current image quality, theme and each hour's saved profile edits.
+The open-sounding list and currently displayed forecast hour are preserved.
+Observed or archive files with only one profile, and box-averaged forecasts,
+do not offer animation. A single currently displayed map crop is not reused
+across different sounding hours, because its weather overlays could be wrong.
+
 The forecast and sounding pickers omit retired **NAM** (including NAM 3 km),
 **SREF**, **HREF**, and **HiResW** models. **RRFS** and the offered **REFS**
 members remain available. Archived-data support in the backend is separate

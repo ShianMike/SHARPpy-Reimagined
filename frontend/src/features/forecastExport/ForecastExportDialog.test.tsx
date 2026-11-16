@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import catalog from "@contracts/public/map/catalog.json";
 import models from "@contracts/public/soundings/models.catalog.json";
-import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
 import { parseMapCatalog } from "../../lib/contracts/map";
@@ -10,12 +10,33 @@ import { renderWithBackend } from "../../test/backendHarness";
 import { resolveForecast } from "../forecast/useForecast";
 import { useMapStore } from "../../stores/mapStore";
 import { ForecastExportDialog } from "./ForecastExportDialog";
+import { defaultProductFor } from "../../map/panelField";
 
 const actions = vi.hoisted(() => ({ exportForecast: vi.fn(), copyGif: vi.fn() }));
 vi.mock("./exportForecast", async (original) => ({ ...await original<typeof import("./exportForecast")>(), exportForecast: actions.exportForecast }));
 vi.mock("./forecastClipboard", () => ({ copyForecastGif: actions.copyGif }));
 
 beforeEach(() => { useMapStore.getState().setLayerVisible("model-field", true); });
+
+it("uses each displayed panel's default parameter when exporting the whole layout", async () => {
+  const inventory = parseMapCatalog(catalog), product = defaultProductFor(inventory, 0);
+  const second = defaultProductFor(inventory, 1);
+  const context = resolveForecast(parseModelCatalog(models).models, inventory, { modelKey: "hrrr", runTime: null, forecastHour: 0 });
+  if (context === null || product === undefined || second === undefined) throw new Error("Forecast fixture missing");
+  useMapStore.getState().setPanelLayout(2);
+  actions.exportForecast.mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+  const anchor = document.createElement("button"); document.body.append(anchor);
+  const { view, queryClient } = renderWithBackend(<ForecastExportDialog anchor={anchor} context={context} product={product} panel={0} onClose={vi.fn()} />, createTransport());
+  fireEvent.click(screen.getByRole("combobox", { name: "Export area" }));
+  fireEvent.click(screen.getByRole("option", { name: "Whole layout · 2 panels" }));
+  await waitFor(() => { expect(screen.getByRole("button", { name: "Create PNG" }).hasAttribute("disabled")).toBe(false); });
+  fireEvent.click(screen.getByRole("button", { name: "Create PNG" }));
+  await waitFor(() => { expect(actions.exportForecast).toHaveBeenCalledOnce(); });
+  expect(actions.exportForecast.mock.calls[0]?.[0]).toMatchObject({
+    panels: [{ panel: 0, product: { key: product.key } }, { panel: 1, product: { key: second.key } }],
+  });
+  view.unmount(); queryClient.clear(); anchor.remove();
+});
 afterEach(() => { cleanup(); useMapStore.setState(useMapStore.getInitialState(), true); vi.resetAllMocks(); vi.unstubAllGlobals(); });
 it("offers hours, resolution and timing without pixel, loop or transition controls", () => {
   const inventory = parseMapCatalog(catalog), product = inventory.products[0];

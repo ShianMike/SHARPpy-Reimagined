@@ -1,0 +1,4 @@
+.preview { align-self: start; aspect-ratio: var(--animation-aspect); }
+.playback { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.playback input { flex: 1; min-width: 0; accent-color: var(--accent-bright); }
+.playback span { flex-basis: 100%; font-size: var(--font-size-caption); color: var(--text-secondary); font-variant-numeric: tabular-nums; }

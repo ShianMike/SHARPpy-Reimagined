@@ -1,0 +1,8 @@
+{
+  "bytes": 18625139,
+  "messages": 17,
+  "sha256": "2a3b76ccad81c26ea03b488b63f35b9fdc8339aa2b7f396d75403084cf40affb",
+  "source_offset": 35626208,
+  "sourceUrl": "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20261117/conus/hrrr.t00z.wrfsfcf01.grib2",
+  "inventory": "62:0:d=2026111700:PRES:surface:1 hour fcst:\r\n63:1510471:d=2026111700:HGT:surface:1 hour fcst:\r\n64:3664166:d=2026111700:TMP:surface:1 hour fcst:\r\n65:4940454:d=2026111700:ASNOW:surface:0-1 hour acc fcst:\r\n66:5010726:d=2026111700:MSTAV:0 m underground:1 hour fcst:\r\n67:6507122:d=2026111700:CNWAT:surface:1 hour fcst:\r\n68:6571587:d=2026111700:WEASD:surface:1 hour fcst:\r\n69:6701386:d=2026111700:SNOWC:surface:1 hour fcst:\r\n70:6807421:d=2026111700:SNOD:surface:1 hour fcst:\r\n71:6905973:d=2026111700:TMP:2 m above ground:1 hour fcst:\r\n72:8121056:d=2026111700:POT:2 m above ground:1 hour fcst:\r\n73:9281485:d=2026111700:SPFH:2 m above ground:1 hour fcst:\r\n74:10713711:d=2026111700:DPT:2 m above ground:1 hour fcst:\r\n75:11885332:d=2026111700:RH:2 m above ground:1 hour fcst:\r\n76:13491894:d=2026111700:MASSDEN:8 m above ground:1 hour fcst:\r\n77:13861909:d=2026111700:UGRD:10 m above ground:1 hour fcst:\r\n78:16243524:d=2026111700:VGRD:10 m above ground:1 hour fcst:\r\n"
+}

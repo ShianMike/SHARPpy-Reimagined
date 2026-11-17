@@ -1,6 +1,6 @@
 //! Inventory and byte-range planning for native map-field transfers.
 
-use crate::model_http::{Error, ModelClient};
+use crate::model_http::{Error, ModelClient, ObjectIdentity};
 use std::{collections::HashMap, future::poll_fn, future::Future, task::Poll};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -83,10 +83,22 @@ pub struct RangeGroup {
 
 /// Coalesce overlapping and nearby records without losing their caller indices.
 pub fn merge_map_ranges(rows: &[(u64, u64)], slack: i64) -> Result<Vec<RangeGroup>, Error> {
+    merge_map_ranges_bounded(rows, slack, u64::MAX)
+}
+
+/// Keep complete messages while bounding each coalesced response in memory.
+pub fn merge_map_ranges_bounded(
+    rows: &[(u64, u64)],
+    slack: i64,
+    maximum: u64,
+) -> Result<Vec<RangeGroup>, Error> {
     let mut ordered: Vec<_> = rows.iter().enumerate().collect();
     ordered.sort_by_key(|(_, (offset, _))| *offset);
     let mut groups: Vec<RangeGroup> = Vec::new();
     for (index, &(offset, length)) in ordered {
+        if length > maximum {
+            return Err(Error::Budget);
+        }
         let end = if length == 0 {
             0
         } else {
@@ -98,6 +110,7 @@ pub fn merge_map_ranges(rows: &[(u64, u64)], slack: i64) -> Result<Vec<RangeGrou
             if end != 0
                 && previous.end != 0
                 && i128::from(offset) - i128::from(previous.end) - 1 <= i128::from(slack)
+                && end.max(previous.end) - previous.start < maximum
             {
                 previous.end = previous.end.max(end);
                 previous.members.push(index);
@@ -113,6 +126,7 @@ pub fn merge_map_ranges(rows: &[(u64, u64)], slack: i64) -> Result<Vec<RangeGrou
     Ok(groups)
 }
 
+#[derive(Clone)]
 pub struct FieldJob {
     pub url: String,
     pub limit: usize,
@@ -127,19 +141,72 @@ pub async fn fetch_model_fields(
     workers: usize,
     should_cancel: impl Fn() -> Result<bool, String>,
 ) -> Result<Vec<Vec<u8>>, Error> {
+    let mut output = vec![Vec::new(); jobs.len()];
+    visit_model_fields(
+        client,
+        jobs.into_iter().map(|job| (job, None)).collect(),
+        timeout,
+        workers,
+        should_cancel,
+        |index, bytes| {
+            output[index] = bytes;
+            std::future::ready(Ok(()))
+        },
+    )
+    .await?;
+    Ok(output)
+}
+
+/// Emit complete validated ranges as soon as they arrive. The consumer's
+/// bounded channel supplies backpressure without retaining every payload.
+pub async fn visit_model_fields<F, Fut>(
+    client: &ModelClient,
+    jobs: Vec<(FieldJob, Option<ObjectIdentity>)>,
+    timeout: f64,
+    workers: usize,
+    should_cancel: impl Fn() -> Result<bool, String>,
+    mut complete: F,
+) -> Result<(), Error>
+where
+    F: FnMut(usize, Vec<u8>) -> Fut,
+    Fut: Future<Output = Result<(), Error>>,
+{
     if should_cancel().map_err(Error::Invalid)? {
         return Err(Error::Cancelled);
     }
-    let mut output = vec![Vec::new(); jobs.len()];
-    let cancel = &should_cancel;
-    let mut pending = jobs.into_iter().enumerate().map(|(index, job)| {
-        Box::pin(async move {
-            let result = client
-                .fetch(&job.url, timeout, job.limit, job.range, cancel)
-                .await;
-            (index, result)
+    let started = std::time::Instant::now();
+    let bytes = jobs
+        .iter()
+        .map(|(job, _)| {
+            job.range.map_or(job.limit as u64, |(start, end)| {
+                end.saturating_sub(start).saturating_add(1)
+            })
         })
+        .sum::<u64>();
+    let first_url = jobs.first().map(|(job, _)| job.url.clone());
+    let workers = workers.clamp(1, 8).min(jobs.len().max(1));
+    let workers = first_url.as_ref().map_or(workers, |url| {
+        crate::transfer_policy::shared().workers(url, bytes, workers)
     });
+    let cancel = &should_cancel;
+    let mut pending = jobs
+        .into_iter()
+        .enumerate()
+        .map(|(index, (job, identity))| {
+            Box::pin(async move {
+                let result = client
+                    .fetch_version(
+                        &job.url,
+                        timeout,
+                        job.limit,
+                        job.range,
+                        identity.as_ref(),
+                        cancel,
+                    )
+                    .await;
+                (index, result)
+            })
+        });
     let workers = workers.clamp(1, 8);
     let mut active = Vec::with_capacity(workers);
     loop {
@@ -148,7 +215,10 @@ pub async fn fetch_model_fields(
             active.push(job);
         }
         if active.is_empty() {
-            return Ok(output);
+            if let Some(url) = &first_url {
+                crate::transfer_policy::shared().observe(url, bytes, started.elapsed(), workers);
+            }
+            return Ok(());
         }
         let (position, (index, result)) = poll_fn(|context| {
             for (position, job) in active.iter_mut().enumerate() {
@@ -162,7 +232,7 @@ pub async fn fetch_model_fields(
         drop(active.swap_remove(position));
         // Returning on the first error drops all in-flight request futures and
         // leaves queued jobs unstarted; detached transfers cannot outlive a batch.
-        output[index] = result?;
+        complete(index, result?).await?;
     }
 }
 

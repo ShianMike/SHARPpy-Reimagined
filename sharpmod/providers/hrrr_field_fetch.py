@@ -51,6 +51,12 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
             product, run, fxx, timeout, should_cancel, _api._RANGE_WORKERS,
         )
     native = opener is _NATIVE_OPENER
+    if native:
+        import sharpmod_rs
+
+        return sharpmod_rs.download_map_fields(
+            product, run, fxx, timeout, should_cancel, model,
+        )
     failed = threading.Event()
 
     def stopped():

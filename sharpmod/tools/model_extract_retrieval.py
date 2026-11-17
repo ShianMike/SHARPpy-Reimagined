@@ -442,6 +442,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
     _api.require_runtime_dependencies()
     Herbie = _api._load_herbie_class()
 
+    companion_fetch = None
     try:  # pragma: no cover - live network / cache path
         H = _api._create_herbie(
             Herbie,
@@ -485,6 +486,16 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                 "10-m winds); refusing a pressure-only sounding (missing: %s)"
                 % (config.label, ", ".join(missing_surface) or "unknown")
             )
+        from sharpmod.backends import get_backend
+
+        if get_backend().name == "rust":
+            from sharpmod_rs import ModelCompanionFetch
+
+            companion_fetch = ModelCompanionFetch(
+                Herbie, config, run_dt, int(fxx), member, download_dir,
+                cancelled, on_bytes, needs_surface_companion,
+                needs_invariant_height,
+            )
         expected_bytes = _api._subset_download_bytes(planned_inventory)
         _api._emit_progress(progress_callback, "downloading", expected_bytes)
         # Herbie 2026.3.0 unconditionally prints an emoji when it creates its
@@ -497,9 +508,17 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
         source_url = str(H.grib)
         if lat is not None and lon is not None and selected_fields \
                 and _api._point_backends_enabled() and nomads_supported(config) \
-                and _api._prefer_nomads_subset(expected_bytes):
+                and _api._prefer_nomads_subset(
+                    expected_bytes, config.key, str(H.grib)):
             try:
-                _path, transferred_bytes, source_url = download_nomads_subset(
+                from sharpmod.backends import get_backend
+
+                point_fetch = download_nomads_subset
+                if get_backend().name == "rust":
+                    from sharpmod_rs import ModelPointSubset
+
+                    point_fetch = ModelPointSubset(point_fetch)
+                _path, transferred_bytes, source_url = point_fetch(
                     H,
                     config,
                     search,
@@ -589,7 +608,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                 companion_bytes,
                 companion_url,
                 companion_fields,
-            ) = _api._surface_companion(
+            ) = companion_fetch.result() if companion_fetch is not None else _api._surface_companion(
                 Herbie,
                 config,
                 run_dt,
@@ -618,7 +637,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                 companion_bytes,
                 companion_url,
                 companion_fields,
-            ) = _api._surface_height_companion(
+            ) = companion_fetch.result() if companion_fetch is not None else _api._surface_height_companion(
                 Herbie,
                 config,
                 run_dt,
@@ -673,3 +692,6 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
         raise RetrievalError(
             "failed to retrieve %s data for %s F%03d: %s"
             % (config.label, run_dt.isoformat(), int(fxx), exc)) from exc
+    finally:
+        if companion_fetch is not None:
+            companion_fetch.close()

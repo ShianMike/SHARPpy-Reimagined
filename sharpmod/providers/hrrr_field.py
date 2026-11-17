@@ -831,6 +831,11 @@ def _singleflight_field(cache_key, produce, should_cancel):
 
 
 def clear_cache() -> None:
+    import sys
+
+    native = sys.modules.get("sharpmod_rs")
+    if native is not None and hasattr(native, "clear_model_field_cache"):
+        native.clear_model_field_cache()
     with _CACHE_LOCK:
         _CACHE.clear()
     with _DERIVED_LOCK:

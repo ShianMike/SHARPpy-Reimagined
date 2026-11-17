@@ -14,6 +14,12 @@ records complete public wind-layer calls before and after the optional native
 integration paths, with paired output checks and source hashes. It does not
 replace the complete-render baseline.
 
+The [2026-11-17 Unreleased GRIB-loading comparison](results/2026-11-17-unreleased-grib-loading/README.md)
+uses fixed real HRRR messages to compare complete provider ingredient loads,
+with three fresh-process repetitions, reuse passes and exact numerical hashes.
+It measures the shared-field cache and download/decode pipeline under controlled
+HTTP pacing, separately from Internet, sounding-render and export performance.
+
 | Workload | Reproducible measurement |
 | --- | --- |
 | Severe and Winter sounding PNGs | [Current Rust driver](#headless-sounding-renders), complete first and warm HD/UHD renders |

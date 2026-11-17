@@ -4,6 +4,17 @@ use reqwest::{header, Client, Url};
 use std::{future::Future, sync::OnceLock, time::Duration};
 use time::{format_description::well_known::Rfc2822, OffsetDateTime};
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ObjectIdentity {
+    pub etag: String,
+    pub length: u64,
+}
+
+pub struct ModelResponse {
+    pub bytes: Vec<u8>,
+    pub identity: Option<ObjectIdentity>,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Error {
     Cancelled,
@@ -130,8 +141,9 @@ impl ModelClient {
         byte_range: Option<(u64, u64)>,
         cancel: impl Fn() -> Result<bool, String>,
     ) -> Result<Vec<u8>, Error> {
-        self.fetch_attempts(url, timeout, limit, byte_range, 2, cancel)
+        self.fetch_attempts(url, timeout, limit, byte_range, None, 2, cancel)
             .await
+            .map(|response| response.bytes)
     }
 
     pub async fn fetch_once(
@@ -140,19 +152,47 @@ impl ModelClient {
         timeout: f64,
         limit: usize,
     ) -> Result<Vec<u8>, Error> {
-        self.fetch_attempts(url, timeout, limit, None, 0, || Ok(false))
+        self.fetch_attempts(url, timeout, limit, None, None, 0, || Ok(false))
             .await
+            .map(|response| response.bytes)
     }
 
+    pub async fn identity(
+        &self,
+        url: &str,
+        timeout: f64,
+        cancel: impl Fn() -> Result<bool, String>,
+    ) -> Result<Option<ObjectIdentity>, Error> {
+        self.fetch_attempts(url, timeout, 1, Some((0, 0)), None, 2, cancel)
+            .await
+            .map(|response| response.identity)
+    }
+
+    pub async fn fetch_version(
+        &self,
+        url: &str,
+        timeout: f64,
+        limit: usize,
+        range: Option<(u64, u64)>,
+        identity: Option<&ObjectIdentity>,
+        cancel: impl Fn() -> Result<bool, String>,
+    ) -> Result<Vec<u8>, Error> {
+        self.fetch_attempts(url, timeout, limit, range, identity, 2, cancel)
+            .await
+            .map(|response| response.bytes)
+    }
+
+    #[allow(clippy::too_many_arguments)]
     async fn fetch_attempts(
         &self,
         url: &str,
         timeout: f64,
         limit: usize,
         byte_range: Option<(u64, u64)>,
+        identity: Option<&ObjectIdentity>,
         retries: u8,
         cancel: impl Fn() -> Result<bool, String>,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<ModelResponse, Error> {
         cancelled(&cancel)?;
         let url = Url::parse(url).map_err(|error| Error::Invalid(error.to_string()))?;
         if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
@@ -171,11 +211,15 @@ impl ModelClient {
             .map_err(|error| Error::Offline(error.clone()))?;
         let mut response = None;
         for attempt in 0..=retries {
+            let attempt_started = std::time::Instant::now();
             let mut request = client
                 .get(url.clone())
                 .header(header::ACCEPT_ENCODING, "identity");
             if let Some((start, end)) = byte_range {
                 request = request.header(header::RANGE, format!("bytes={start}-{end}"));
+            }
+            if let Some(identity) = identity {
+                request = request.header(header::IF_MATCH, &identity.etag);
             }
             let sent = wait(request.send(), timeout, &cancel).await;
             let reply = match sent {
@@ -230,16 +274,17 @@ impl ModelClient {
             if status >= 400 {
                 return Err(Error::Http(status));
             }
-            response = Some(reply);
+            response = Some((reply, attempt_started.elapsed()));
             break;
         }
-        let mut response = response.expect("an attempt returned a response or error");
+        let (mut response, latency) = response.expect("an attempt returned a response or error");
         if response
             .content_length()
             .is_some_and(|length| length > limit as u64)
         {
             return Err(Error::Budget);
         }
+        let mut object_length = response.content_length();
         let expected_length = if let Some((start, end)) = byte_range {
             let range = response
                 .headers()
@@ -255,7 +300,7 @@ impl ModelClient {
                         total.parse::<u64>().ok()?,
                     ))
                 });
-            let Some((first, last, _)) = range.filter(|&(first, last, total)| {
+            let Some((first, last, total)) = range.filter(|&(first, last, total)| {
                 response.status() == 206
                     && total > start
                     && first == start
@@ -266,10 +311,26 @@ impl ModelClient {
                     "model response does not match the requested byte range".into(),
                 ));
             };
+            object_length = Some(total);
             Some(last - first + 1)
         } else {
             None
         };
+        let actual_identity = response
+            .headers()
+            .get(header::ETAG)
+            .and_then(|value| value.to_str().ok())
+            .filter(|value| value.starts_with('"') && value.ends_with('"'))
+            .zip(object_length)
+            .map(|(etag, length)| ObjectIdentity {
+                etag: etag.to_string(),
+                length,
+            });
+        if identity.is_some() && identity != actual_identity.as_ref() {
+            return Err(Error::Invalid(
+                "model source changed during field acquisition".into(),
+            ));
+        }
         let mut output = Vec::new();
         loop {
             let chunk = wait(response.chunk(), timeout, &cancel)
@@ -287,7 +348,11 @@ impl ModelClient {
                 "model response contains an incomplete byte range".into(),
             ));
         }
-        Ok(output)
+        crate::transfer_policy::shared().observe_latency(url.as_str(), latency);
+        Ok(ModelResponse {
+            bytes: output,
+            identity: actual_identity,
+        })
     }
 }
 

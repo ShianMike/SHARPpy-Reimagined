@@ -1,0 +1,64 @@
+{
+  "fixtureSha256": "2a3b76ccad81c26ea03b488b63f35b9fdc8339aa2b7f396d75403084cf40affb",
+  "mode": "optimized",
+  "samples": [
+    {
+      "decodedFields": 5,
+      "downloadDecodeOverlap": true,
+      "numericHashes": {
+        "dpt-2m/dpt2m": "39a84e9261403f2c5ac7165922f3f72c6106948792d293eef6df2a6d3c7e5aac",
+        "thetae-2m/dpt2m": "39a84e9261403f2c5ac7165922f3f72c6106948792d293eef6df2a6d3c7e5aac",
+        "thetae-2m/pres": "7302ad3e78e036f6ae7baf3aa5859077a70f262f2442dc22e04b80e27816551a",
+        "thetae-2m/tmp2m": "f045ccc28d79173dbcd9a6e824664113834ddad6eb989cdb3281498bb8f274ef",
+        "thetae-2m/u10": "e02f3095bfab23ebc73dad774aefa8226d302f3b2b29a4810c516eefbf535b82",
+        "thetae-2m/v10": "49fb1f94ac2dad580b8dc4a8aa916dc4dbe8ba236896a6531d0a61162504e18b",
+        "tmp-2m/tmp2m": "f045ccc28d79173dbcd9a6e824664113834ddad6eb989cdb3281498bb8f274ef",
+        "wind-10m/u10": "e02f3095bfab23ebc73dad774aefa8226d302f3b2b29a4810c516eefbf535b82",
+        "wind-10m/v10": "49fb1f94ac2dad580b8dc4a8aa916dc4dbe8ba236896a6531d0a61162504e18b"
+      },
+      "pass": 0,
+      "requests": 9,
+      "seconds": 0.302096577,
+      "transferredBytes": 8661364
+    },
+    {
+      "decodedFields": 0,
+      "downloadDecodeOverlap": false,
+      "numericHashes": {
+        "dpt-2m/dpt2m": "39a84e9261403f2c5ac7165922f3f72c6106948792d293eef6df2a6d3c7e5aac",
+        "thetae-2m/dpt2m": "39a84e9261403f2c5ac7165922f3f72c6106948792d293eef6df2a6d3c7e5aac",
+        "thetae-2m/pres": "7302ad3e78e036f6ae7baf3aa5859077a70f262f2442dc22e04b80e27816551a",
+        "thetae-2m/tmp2m": "f045ccc28d79173dbcd9a6e824664113834ddad6eb989cdb3281498bb8f274ef",
+        "thetae-2m/u10": "e02f3095bfab23ebc73dad774aefa8226d302f3b2b29a4810c516eefbf535b82",
+        "thetae-2m/v10": "49fb1f94ac2dad580b8dc4a8aa916dc4dbe8ba236896a6531d0a61162504e18b",
+        "tmp-2m/tmp2m": "f045ccc28d79173dbcd9a6e824664113834ddad6eb989cdb3281498bb8f274ef",
+        "wind-10m/u10": "e02f3095bfab23ebc73dad774aefa8226d302f3b2b29a4810c516eefbf535b82",
+        "wind-10m/v10": "49fb1f94ac2dad580b8dc4a8aa916dc4dbe8ba236896a6531d0a61162504e18b"
+      },
+      "pass": 1,
+      "requests": 4,
+      "seconds": 0.035026147,
+      "transferredBytes": 4
+    },
+    {
+      "decodedFields": 0,
+      "downloadDecodeOverlap": false,
+      "numericHashes": {
+        "dpt-2m/dpt2m": "39a84e9261403f2c5ac7165922f3f72c6106948792d293eef6df2a6d3c7e5aac",
+        "thetae-2m/dpt2m": "39a84e9261403f2c5ac7165922f3f72c6106948792d293eef6df2a6d3c7e5aac",
+        "thetae-2m/pres": "7302ad3e78e036f6ae7baf3aa5859077a70f262f2442dc22e04b80e27816551a",
+        "thetae-2m/tmp2m": "f045ccc28d79173dbcd9a6e824664113834ddad6eb989cdb3281498bb8f274ef",
+        "thetae-2m/u10": "e02f3095bfab23ebc73dad774aefa8226d302f3b2b29a4810c516eefbf535b82",
+        "thetae-2m/v10": "49fb1f94ac2dad580b8dc4a8aa916dc4dbe8ba236896a6531d0a61162504e18b",
+        "tmp-2m/tmp2m": "f045ccc28d79173dbcd9a6e824664113834ddad6eb989cdb3281498bb8f274ef",
+        "wind-10m/u10": "e02f3095bfab23ebc73dad774aefa8226d302f3b2b29a4810c516eefbf535b82",
+        "wind-10m/v10": "49fb1f94ac2dad580b8dc4a8aa916dc4dbe8ba236896a6531d0a61162504e18b"
+      },
+      "pass": 2,
+      "requests": 4,
+      "seconds": 0.031220467,
+      "transferredBytes": 4
+    }
+  ],
+  "scope": "Real HRRR F001 messages through the provider and ecCodes; fixed loopback HTTP with 128 KiB chunks and 4 ms pacing. Scientific hashing is excluded from timing."
+}

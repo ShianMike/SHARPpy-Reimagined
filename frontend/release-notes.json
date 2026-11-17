@@ -1,4 +1,29 @@
 {
+  "unreleased": {
+    "summary": "Reuse forecast ingredients across panels and reduce repeated work while loading maps and soundings.",
+    "highlights": [
+      {
+        "title": "Share forecast ingredients between panels",
+        "description": "Parameters that use the same GRIB fields can reuse their downloaded and decoded data while the source revision matches. Each panel still receives its own output arrays."
+      },
+      {
+        "title": "Download and decode together",
+        "description": "Begin decoding complete map fields while other ranges are still downloading. Bounded batches keep long accumulation and maximum products from retaining every hour's grid at once."
+      },
+      {
+        "title": "Smarter sounding downloads",
+        "description": "Use measured transfer costs and the current provider queue to choose between cloud ranges and a small geographic subset. Request limits and provider spacing remain in place."
+      },
+      {
+        "title": "Load companion data in parallel",
+        "description": "Fetch required surface or terrain data alongside the main sounding download. Briefly reuse companion data within a model run, with separate files for each sounding."
+      },
+      {
+        "title": "Independent map cancellation",
+        "description": "Stopping one panel's request keeps shared fields available for another panel that is still loading. Updated GRIB files receive fresh inventories and decoded ingredients. Decode failures retain their original error for troubleshooting."
+      }
+    ]
+  },
   "3.8.4": {
     "summary": "Recover open soundings after reopening, choose export hours faster, and reliably include each panel's weather overlays.",
     "highlights": [

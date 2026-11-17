@@ -109,9 +109,9 @@ def test_retrieval_joins_all_levels_surface_and_same_run_analysis(
         mx.get_config(MODEL), RUN, fxx, download_dir=tmp_path,
     )
     try:
-        assert split_feed["downloads"] == [
+        assert sorted(split_feed["downloads"]) == sorted([
             ("pl", fxx), ("sfc", fxx), *([("sfc", 0)] if fxx else []),
-        ]
+        ])
         payload = dataset.path.read_bytes()
         assert b":gh:975:pl:" in payload and b":gh:10:pl:" in payload
         assert b":2d:sfc:" in payload and b":z:sfc:" in payload
@@ -140,10 +140,13 @@ def test_availability_checks_both_products_and_the_analysis_terrain(split_feed):
     assert split_feed["downloads"] == []
 
 
-def test_cancellation_after_pressure_download_skips_surface(split_feed, tmp_path):
+def test_cancellation_after_pressure_download_stops_before_combining_surface(
+        split_feed, tmp_path):
     with pytest.raises(mx.DownloadCancelled):
         mx._retrieve_dataset(
             mx.get_config(MODEL), RUN, 12, download_dir=tmp_path,
-            cancelled=lambda: bool(split_feed["downloads"]),
+            cancelled=lambda: ("pl", 12) in split_feed["downloads"],
         )
-    assert split_feed["downloads"] == [("pl", 12)]
+    assert ("pl", 12) in split_feed["downloads"]
+    assert set(split_feed["downloads"]) <= {("pl", 12), ("sfc", 12), ("sfc", 0)}
+    assert not list(tmp_path.glob("*-verified-surface.grib2"))

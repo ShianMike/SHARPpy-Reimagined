@@ -6,7 +6,6 @@ import math
 import os
 import re
 import tempfile
-import threading
 import time
 from contextlib import suppress
 from pathlib import Path
@@ -32,7 +31,6 @@ NOMADS_ENDPOINTS = {
     "gefs": "filter_gefs_atmos_0p50a.pl",
 }
 
-_NOMADS_LOCK = threading.RLock()
 _LAST_NOMADS_REQUEST = 0.0
 
 
@@ -148,15 +146,10 @@ def select_herbie_provider(herbie, *, ttl_seconds: float = 6 * 3600):
 
 def _wait_for_nomads_slot(cancelled=None) -> None:
     global _LAST_NOMADS_REQUEST
-    while True:
-        with _NOMADS_LOCK:
-            remaining = 10.0 - (time.monotonic() - _LAST_NOMADS_REQUEST)
-            if remaining <= 0:
-                _LAST_NOMADS_REQUEST = time.monotonic()
-                return
-        if cancelled is not None and cancelled():
-            raise DownloadCancelled("forecast-model download cancelled")
-        time.sleep(min(0.2, remaining))
+    from sharpmod_rs import wait_model_point_slot
+
+    wait_model_point_slot(cancelled)
+    _LAST_NOMADS_REQUEST = time.monotonic()
 
 
 def download_nomads_subset(

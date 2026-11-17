@@ -81,9 +81,11 @@ def download_herbie_subset(
         raise _api.OptimizedTransportUnavailable(
             "Herbie could not provide a subset inventory: %s" % exc
         ) from exc
+    from sharpmod_rs import adaptive_model_range_gap
+
     ranges = _api.ranges_from_inventory(
         inventory,
-        max_gap=max_gap,
+        max_gap=adaptive_model_range_gap(source, max_gap),
         max_overhead_ratio=max_overhead_ratio,
     )
     total = sum(item.size for item in ranges)

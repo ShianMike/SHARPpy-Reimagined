@@ -7,6 +7,45 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Share immutable decoded GRIB ingredients between map parameters and panels,
+  with bounded memory and separate output arrays. Cache inventories and fields
+  by the source object's strong validator and size; check the revision before
+  reuse and use conditional requests when downloading its fields. Sources
+  without strong validators continue to load without cross-request reuse.
+- Decode complete map ranges while other ranges download, retaining ecCodes'
+  existing serial decoding lock. Limit coalesced responses to 64 MiB and process
+  long accumulation/maxima products in batches so they do not retain every
+  forecast hour's decoded grid at once.
+- Learn range coalescing, worker counts and compatible mirror preferences from
+  completed transfers. Preserve existing request ceilings, byte budgets,
+  retries, cancellation and source-size checks, with existing defaults before
+  enough measurements are available.
+- Choose sounding point-subset versus cloud-range downloads using observed
+  transfer/decode costs and the current NOMADS queue. Move request spacing and
+  per-request timing into Rust, retaining NOMADS' ten-second spacing and
+  excluding cache hits and queue time from completed subset measurements.
+- Start required surface or terrain companions alongside pressure-level
+  downloads. Reuse bounded companion bytes for up to five minutes, sharing
+  invariant F000 terrain within a model run while materializing a separate file
+  for each sounding's existing cleanup lifetime.
+
+### Fixed
+
+- Keep another panel's shared field acquisition alive when its original
+  consumer cancels, and retry an abandoned shared producer once for a still-active
+  consumer. Avoid holding cache locks during Python callbacks, prevent
+  cleared in-flight work from repopulating the cache, and join companion work
+  before its owning retrieval exits.
+- Reject out-of-horizon forecast requests, incomplete trailing-hour windows
+  and inventory spans outside a validated GRIB object before field decoding.
+- Preserve the original GRIB decode error when a failed decoder closes the
+  bounded transfer channel, instead of masking it with a secondary send error.
+- Preserve NAM accumulation order and NaN propagation in trailing maxima
+  across bounded batches, with native regressions for revision changes,
+  independent output ownership, cancellation and cache memory limits.
+
 ## [v3.8.4] - 2026-11-18
 
 ### Added

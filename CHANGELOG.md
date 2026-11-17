@@ -51,7 +51,8 @@ Planned release: **v3.8.5**.
   another format choice. Group Save and Copy with the finished file and give
   playback and export controls room to wrap on narrow screens. Give the frame
   picker its own shortcuts, a visible selection limit, and aligned profile
-  tiles that keep each UTC timestamp together.
+  tiles that keep each UTC timestamp together. Separate sounding details,
+  frame selection and timing controls with subtle divider lines.
 - Use a compact restore dialog with source and valid time for each saved
   sounding. Mark the last viewed profile and scroll only the saved-soundings
   list, keeping the heading, description and actions in place. Group recovery

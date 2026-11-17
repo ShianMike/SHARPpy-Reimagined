@@ -100,6 +100,7 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
     <div className={styles.body}>
       <div className={styles.settings}>
         <section className={styles.identity}><span>One location · One run</span><strong>{summary.title}</strong><p>Every selected profile loads before the images are rendered. Plot axes stay fixed throughout playback.</p></section>
+        <hr className={local.separator} />
         <fieldset disabled={busy} className={local.framePicker}>
           <legend>{summary.kind === "model" ? "Forecast hours" : "File profiles"}</legend>
           <div className={local.framePanel}>
@@ -134,6 +135,7 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
         </fieldset>
         {summary.kind === "model" && models.isPending ? <p className={styles.help}>Loading available forecast hours…</p> : null}
         {models.isError && summary.kind === "model" ? <Notice tone="danger" title="Forecast hours unavailable" message={models.error.message} /> : null}
+        <hr className={local.separator} />
         <SourceSelect label="Time per sounding" value={delay} disabled={busy} options={[{ value: 250, label: "0.25 seconds" }, { value: 500, label: "0.5 seconds" }, { value: 750, label: "0.75 seconds" }, { value: 1000, label: "1 second" }]}
           onChange={(value) => { setResult(null); setCopied(false); setDelay(value); }} />
         <p className={styles.help}>{quality === "uhd" ? "UHD" : "HD"} · Original rendered PNG frames · Looping playback with discrete forecast hours.</p>

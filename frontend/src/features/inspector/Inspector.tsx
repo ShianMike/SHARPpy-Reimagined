@@ -1,8 +1,8 @@
 // Location, readings, and the sounding action lead; provenance stays in a
 // disclosure. A removed station still offers a clear-selection recovery.
 
-import { Activity, MapPinOff, RadioTower } from "lucide-react";
-import type { ReactNode } from "react";
+import { Activity, Check, Copy, MapPin, MapPinOff, RadioTower } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { Action } from "../../ui/Controls";
 import { Surface } from "../../ui/Surface";
 import { IconAction } from "../../ui/Controls";
@@ -30,6 +30,9 @@ function clearSelection(): void {
 function PointInspector({ point, className }: { point: MapPoint; className?: string | undefined }): ReactNode {
   const context = useForecastContext();
   const live = useMapStore((state) => state.view === "live");
+  const coordinates = `${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}`;
+  const [copy, setCopy] = useState<{ coordinates: string; state: "copying" | "copied" | "error" } | null>(null);
+  const copyState = copy?.coordinates === coordinates ? copy.state : null;
   return (
     <Surface
       as="aside"
@@ -40,15 +43,30 @@ function PointInspector({ point, className }: { point: MapPoint; className?: str
       data-kind="point"
     >
       <div className={styles.header}>
+        <span className={styles.locationIcon}><MapPin className="icon" aria-hidden="true" /></span>
         <div className={styles.heading}>
           <p className={styles.id}>{live ? "Live location" : "Forecast point"}</p>
           <p className={cx(styles.coordinates, "tabular")}>{formatCoordinates(point)}</p>
         </div>
-        <IconAction icon={MapPinOff} size="sm" label="Clear selection" onClick={clearSelection} />
+        <div className={styles.locationActions}>
+          <IconAction icon={copyState === "copied" ? Check : Copy} size="sm" label={copyState === "copied" ? "Coordinates copied" : "Copy coordinates"} loading={copyState === "copying"} disabled={copy?.state === "copying"}
+            onClick={() => {
+              if (!("clipboard" in navigator)) { setCopy({ coordinates, state: "error" }); return; }
+              setCopy({ coordinates, state: "copying" });
+              void navigator.clipboard.writeText(coordinates).then(
+                () => { setCopy({ coordinates, state: "copied" }); },
+                () => { setCopy({ coordinates, state: "error" }); },
+              );
+            }} />
+          <IconAction icon={MapPinOff} size="sm" label="Clear selection" onClick={clearSelection} />
+        </div>
       </div>
+      {copyState === "copied" || copyState === "error" ? <p className={styles.copyNotice} role={copyState === "error" ? "alert" : "status"} data-error={copyState === "error"}>
+        {copyState === "copied" ? "Coordinates copied." : "Couldn’t copy. Select the coordinates to copy manually."}
+      </p> : null}
       {live || context === null ? null : <div className={styles.context} data-testid="point-forecast">
         <strong>{context.model.label} <span className="tabular">{forecastLabel(context.hour)}</span></strong>
-        <span className="tabular">Valid {compactUtc(context.validTime)} UTC</span>
+        <time className="tabular" dateTime={context.validTime}>Valid {compactUtc(context.validTime)} UTC</time>
       </div>}
       <div className={styles.body}>
         {live ? <SurfacePlotControls /> : <PointDetails point={point} />}

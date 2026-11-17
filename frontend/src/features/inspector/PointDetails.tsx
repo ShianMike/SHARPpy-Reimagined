@@ -20,7 +20,7 @@ import { useForecastContext, type ForecastContext } from "../forecast/useForecas
 import { compactUtc, forecastLabel } from "../sounding/soundingTime";
 import styles from "./Inspector.module.css";
 
-function FieldValue({ panel, point, numbered }: { panel: number; point: MapPoint; numbered: boolean }): ReactNode {
+function FieldValue({ panel, point, active }: { panel: number; point: MapPoint; active: boolean }): ReactNode {
   const units = useUiStore((state) => state.units);
   const field = usePanelField(panel);
   const frame = field.frame.data;
@@ -31,19 +31,18 @@ function FieldValue({ panel, point, numbered }: { panel: number; point: MapPoint
   const note = value === null ? "" : drawnRangeNote(value, field.product.palette);
   const unit = displayUnit(frame?.units ?? "", units, field.product.palette.display);
   return (
-    <div className={styles.reading}>
-      <dt title={field.product.label}>
-        {numbered ? <span className={cx(styles.panelNumber, "tabular")}>{panel + 1}</span> : null}
+    <li>
+      <button type="button" className={styles.reading} aria-label={`Inspect panel ${String(panel + 1)}: ${field.product.label}`} aria-describedby={`point-value-${String(panel + 1)}`} aria-pressed={active}
+        aria-busy={frame === undefined && !field.frame.isError} onClick={() => { useMapStore.getState().setActivePanel(panel); }} title={`Use panel ${String(panel + 1)}`}>
+        <span className={cx(styles.panelNumber, "tabular")} aria-hidden="true">{panel + 1}</span>
         <span className={styles.fieldName}><strong>{field.product.shortLabel}</strong><span>{field.product.label}</span></span>
-      </dt>
-      <dd data-testid={`point-value-${String(panel + 1)}`}>
-        <span className={cx(styles.readingValue, "tabular")}>
+        <span id={`point-value-${String(panel + 1)}`} className={cx(styles.readingValue, "tabular")} data-state={field.frame.isError || frame === undefined || value === null ? "unavailable" : "ready"} data-testid={`point-value-${String(panel + 1)}`}>
           {field.frame.isError ? "Unavailable" : frame === undefined ? "Loading…" : value === null ? "No data" : formatValue(convertUnit(value, frame.units, unit, field.product.palette.display))}
           {value === null ? null : <span className={styles.units}> {unit}</span>}
         </span>
-        {note === "" ? null : <span className={styles.explanation}>{note}</span>}
-      </dd>
-    </div>
+        {note === "" ? null : <span className={styles.rangeNote}>{note}</span>}
+      </button>
+    </li>
   );
 }
 
@@ -63,12 +62,12 @@ function OutlookAreas({ point, validTime }: { point: MapPoint; validTime: string
       found.push({ key, area: hit });
     }
   });
-  return found.map(({ key, area }) => (
+  return found.length === 0 ? null : <dl className={styles.outlooks}>{found.map(({ key, area }) => (
     <div className={styles.outlook} key={key}>
       <dt>{OUTLOOK_NAMES[key]}</dt>
       <dd data-testid={`point-outlook-${key}`}>{area.description === "" ? area.label : `${area.label}, ${area.description}`}</dd>
     </div>
-  ));
+  ))}</dl>;
 }
 
 /** The Sounding workspace, on its Model form, with the forecast time and this point filled in. */
@@ -91,15 +90,22 @@ export function PointDetails({ point }: { point: MapPoint }): ReactNode {
   const context = useForecastContext();
   const layout = useMapStore((state) => state.panelLayout);
   const activePanel = useMapStore((state) => state.activePanel);
+  const anyFieldVisible = useMapStore((state) => Array.from({ length: state.panelLayout }, (_, panel) => panelLayers(state, panel)["model-field"].visible).some(Boolean));
   const field = usePanelField(activePanel);
+  const emptyMessage = context === null ? "Loading forecast…" : !context.fieldsAvailable ? "Map fields aren’t available for this model."
+    : !anyFieldVisible ? "Turn on a model layer in Layers to read this point."
+    : field.catalog.data === undefined ? field.catalog.isError ? "Map parameters unavailable." : "Loading map parameters…" : null;
   return (
     <>
-      <dl className={styles.readings}>
-        {Array.from({ length: layout }, (_, panel) => (
-          <FieldValue key={panel} panel={panel} point={point} numbered={layout > 1} />
-        ))}
-        {context === null ? null : <OutlookAreas point={point} validTime={context.validTime} />}
-      </dl>
+      {emptyMessage !== null ? <p className={styles.readingsEmpty} role="status">{emptyMessage}</p> : <>
+        <div className={styles.readingsHeading}><h3>Panel readings</h3><span>Panel {String(activePanel + 1)} active</span></div>
+        <ul className={styles.readings} aria-label="Forecast panel readings">
+          {Array.from({ length: layout }, (_, panel) => (
+            <FieldValue key={panel} panel={panel} point={point} active={activePanel === panel} />
+          ))}
+        </ul>
+      </>}
+      {context === null ? null : <OutlookAreas point={point} validTime={context.validTime} />}
       {context === null ? null : <details className={styles.disclosure} open={sourceOpen}
         onToggle={(event) => { useUiStore.getState().setInspectorSourceOpen(event.currentTarget.open); }}>
         <summary>Forecast &amp; source <ChevronDown className="icon icon-sm" aria-hidden="true" /></summary>

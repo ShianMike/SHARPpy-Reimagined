@@ -118,7 +118,7 @@ export function Shell(): ReactNode {
               aria-pressed={fullscreen} aria-keyshortcuts="F11" disabled={fullscreenBusy} onClick={() => { void toggleFullscreen(); }} />
           </div>
         </Toolbar>
-        <div className={styles.leftDock}>
+        <div className={styles.leftDock} data-point-open={isMap && detailsOpen && sideTab === "point"}>
           <NavigationRail className={styles.rail} />
           <div ref={attachLeft} className={styles.mapTools} data-motion="fade" inert={!isMap} hidden={!isMap} />
         </div>

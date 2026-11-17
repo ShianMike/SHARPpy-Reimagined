@@ -7,6 +7,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Planned release: **v3.8.5**.
+
 ### Fixed
 
 - Keep observed UWyo soundings usable when reported pressure or height repeats

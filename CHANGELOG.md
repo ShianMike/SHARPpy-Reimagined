@@ -7,6 +7,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep observed UWyo soundings usable when reported pressure or height repeats
+  or arrives out of order. Select consistent measured levels before analysis
+  without changing their values or relaxing portable sounding validation.
+  Report unusable observed profiles as sounding data errors.
+
 ## [v3.8.4] - 2026-11-17
 
 ### Added

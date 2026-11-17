@@ -40,6 +40,14 @@ def _observed_failure(exc: Exception, station: str, when: datetime) -> BridgeErr
                 if isinstance(a, dict)
             ]
         }
+        if "ObservedParseError" in kinds:
+            return BridgeError(
+                "SOUNDING_INVALID",
+                f"The {label} sounding was received but could not be read. "
+                "Try another provider or time.",
+                False,
+                details,
+            )
         if "ObservedRetrievalError" in kinds:
             return BridgeError(
                 "SOUNDING_FETCH_FAILED",
@@ -89,7 +97,11 @@ def open_observed(params: dict[str, Any]) -> dict[str, Any]:
         raise _observed_failure(exc, station, when) from None
     entry_id = cache().new_id()
     path = cache().data_path(entry_id, ".npz")
-    obs.write_observed_npz(result, path)
+    try:
+        obs.write_observed_npz(result, path)
+    except ValueError as exc:
+        log.info("observed sounding %s %s from %s: %s", station, when, result.provider, exc)
+        raise _observed_failure(obs.ObservedParseError(str(exc)), station, when) from None
     collection, _ = decode(path)
     metadata = dict(result.metadata)
     name = str(metadata.get("station_name") or "").strip() or None

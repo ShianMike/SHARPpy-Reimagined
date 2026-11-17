@@ -1,4 +1,13 @@
 {
+  "3.8.5": {
+    "summary": "Open more observed soundings from the University of Wyoming archive.",
+    "highlights": [
+      {
+        "title": "Observed soundings open reliably",
+        "description": "Keep the usable measurements when the archive repeats or misorders sounding levels. When a profile cannot be read, the app shows a sounding data error."
+      }
+    ]
+  },
   "3.8.4": {
     "summary": "Recover your sounding session, load forecast data with less repeated work, and export each panel's complete weather overlays.",
     "highlights": [

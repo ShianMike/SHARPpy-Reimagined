@@ -9,6 +9,8 @@ use std::sync::OnceLock;
 use std::time::Duration;
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset};
 
+mod levels;
+
 const STATION_LIST_URL: &str = "https://weather.uwyo.edu/wsgi/sounding_json";
 const UWYO_STATIONS_JSON: &str = include_str!("../../../sharpmod/resources/uwyo_stations.json");
 const MAX_LIST_BYTES: usize = 16 * 1024 * 1024;
@@ -413,12 +415,18 @@ pub fn decode_uwyo_text(text: &str) -> Result<UwyoDecoded, DecodeError> {
         ));
     }
 
+    let ordered = levels::ordered_indices(&cols)?;
+    if ordered.len() != n_levels || ordered.iter().copied().ne(0..n_levels) {
+        for col in &mut cols {
+            *col = ordered.iter().map(|&index| col[index]).collect();
+        }
+    }
     if n_levels > HIGH_RES_LEVEL_THRESHOLD {
         let mut keep = pressure_spaced_indices(&cols[0], THIN_MIN_DP_HPA);
         if keep.len() > MAX_ANALYSIS_LEVELS {
             keep = subsample_indices(&keep, MAX_ANALYSIS_LEVELS);
         }
-        if !keep.is_empty() && keep.len() < n_levels {
+        if keep.len() < cols[0].len() {
             for col in &mut cols {
                 *col = keep.iter().map(|&idx| col[idx]).collect();
             }
@@ -733,5 +741,42 @@ mod tests {
         assert!(thinned.pres.len() <= MAX_ANALYSIS_LEVELS);
         assert_eq!(thinned.pres[0], 1000.0);
         assert!((thinned.pres.last().copied().unwrap() - (1000.0 - 499.0 * 1.5)).abs() < 0.2);
+    }
+
+    #[test]
+    fn keeps_consistent_observed_rows_with_repeated_pressure_and_height() {
+        use std::fmt::Write as _;
+        let mut page = String::from(
+            "<PRE>\n-\nPRES HGHT TEMP DWPT RELH MIXR DRCT SKNT\n hPa m C C % g/kg deg knot\n-\n",
+        );
+        for [p, z, t, d, dir, spd] in [
+            [1000., 10., 20., 15., 180., 10.],
+            [925., 800., 15., 10., 195., 18.],
+            [875., 800., 10., 6., 200., 21.], // Repeated reported height.
+            [700., 3000., 0., -5., 210., 25.],
+            [900., 1000., 13., 8., 205., 20.], // Good row out of order.
+            [800., 6900., 4., 0., 215., 22.],  // Height would discard valid rows above.
+            [850., MISSING, 9., 4., 205., 22.],
+            [500., 5500., -17., -23., 250., 35.],
+            [5.7, 34479., -51.1, -87.1, MISSING, MISSING],
+            [5.7, 34442., -51.1, -87.1, 165., 21.],
+        ] {
+            writeln!(
+                page,
+                "{p:7.1}{z:7.0}{t:7.1}{d:7.1}{:7}{:7}{dir:7.0}{spd:7.1}",
+                "", ""
+            )
+            .unwrap();
+        }
+        page.push_str("</PRE>\n");
+        let profile = decode_uwyo_text(&page).unwrap();
+        assert_eq!(profile.pres, [1000., 925., 900., 850., 700., 500., 5.7]);
+        assert_eq!(
+            profile.hght,
+            [10., 800., 1000., MISSING, 3000., 5500., 34442.]
+        );
+        assert_eq!(profile.tmpc, [20., 15., 13., 9., 0., -17., -51.1]);
+        assert_eq!(profile.wdir, [180., 195., 205., 205., 210., 250., 165.]);
+        assert_eq!(profile.wspd.last(), Some(&21.));
     }
 }

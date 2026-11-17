@@ -33,6 +33,9 @@
   and panels, decode completed fields while other ranges download, and fetch
   required sounding companions alongside pressure data. Measured transfer
   history guides route, mirror and worker choices within existing limits.
+- **Cleaner Windows upgrades:** remove obsolete installed runtime code and native
+  packages while keeping current files, saved soundings, preferences and recovery
+  sessions. Locked or unsafe runtime paths stop the installer with a clear error.
 
 The [fixed-input GRIB comparison](benchmarks/results/2026-11-17-unreleased-grib-loading/README.md)
 records exact numerical parity and less repeated transfer work. Its controlled

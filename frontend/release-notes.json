@@ -8,7 +8,7 @@
       },
       {
         "title": "More reliable sounding files and edits",
-        "description": "Imports display the correct filename across platforms and clean up failed temporary files. Invalid edits report clear errors before rendering. Cached images are checked before reuse, with redraws for missing or damaged files and cleanup of partial renders."
+        "description": "Imports display the correct filename across platforms, invalid edits report clear errors, and damaged cached images redraw automatically. Windows upgrades remove obsolete installed runtime code, wheels and package metadata while preserving saved soundings, preferences and recovery sessions."
       },
       {
         "title": "Faster forecast export setup",

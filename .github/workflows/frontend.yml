@@ -108,7 +108,14 @@ jobs:
       - run: rustup component add rustfmt clippy
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
-      - run: cargo test --locked
+      - run: |
+          cargo test --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop tests failed' }
+          $cleanupTests = Join-Path $env:RUNNER_TEMP 'installer-cleanup-tests.exe'
+          rustc --edition 2021 --test ../packaging/installer_cleanup.rs -o $cleanupTests
+          if ($LASTEXITCODE -ne 0) { throw 'Installer cleanup tests did not compile' }
+          & $cleanupTests
+          if ($LASTEXITCODE -ne 0) { throw 'Installer cleanup tests failed' }
       - name: Cache cargo-audit
         id: cargo-audit
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

@@ -68,6 +68,13 @@ on the device. This downloads a complete installer rather than a binary delta
 patch. Nothing installs until you click, and checks run only while the app is
 open. Browser previews cannot install updates.
 
+Windows installer and in-app upgrades remove obsolete code, native wheels and
+package metadata from the installed backend. Current runtime files, saved
+soundings, preferences, exports and recovery sessions are preserved. Installers
+and portable copies that you downloaded elsewhere remain under your control.
+If cleanup is blocked by a running process or an unsafe linked directory, close
+the app, check the installation folder and run the installer again.
+
 In v3.8.4, wait for **Recovery copy saved on this device**
 before closing or updating if you want to restore completed sounding work.
 Unapplied editor inputs and unfinished recalculations are not included.

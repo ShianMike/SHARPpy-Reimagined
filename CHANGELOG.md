@@ -52,7 +52,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   selected forecast hours and panels before export capture. Wait for current-time
   overlays and their rendered layers before saving PNG, GIF or WebP frames,
   with explicit failures for unavailable requested overlays.
-
+- Remove obsolete installed runtime code, native wheels and package metadata
+  during Windows installer and in-app upgrades. Track bundled files for later
+  upgrades, validate directories before copying or deleting, reject links and
+  junctions, and report locked files instead of silently leaving mixed versions.
+  Preserve current runtime files, unknown documents, saved soundings, preferences
+  and session recovery. Verify stale-file removal in direct and public-updater
+  acceptance alongside the existing rendering and restart checks.
 - Keep another panel's shared field acquisition alive when its original
   consumer cancels, and retry an abandoned shared producer once for a still-active
   consumer. Avoid holding cache locks during Python callbacks, prevent

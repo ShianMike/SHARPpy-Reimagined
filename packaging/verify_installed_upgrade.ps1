@@ -48,11 +48,29 @@ $previousExecutable = Install-Candidate $PreviousInstaller $PreviousVersion 'pre
 $marker = Join-Path $installRoot 'upgrade-preservation-check.txt'
 'User-created file retained during in-place upgrade.' | Set-Content -LiteralPath $marker -Encoding utf8
 $markerHash = (Get-FileHash -LiteralPath $marker -Algorithm SHA256).Hash
+$staleCode = Join-Path $installRoot 'backend/_internal/obsolete-upgrade-check.pyc'
+$staleWheel = Join-Path $installRoot 'backend/sharpmod_rs-0.0.0-test.whl'
+$staleMetadata = Join-Path $installRoot 'backend/_internal/sharpmod_rs-0.0.0.dist-info'
+New-Item -ItemType Directory -Path $staleMetadata | Out-Null
+'Old installed code' | Set-Content -LiteralPath $staleCode
+'Old installed wheel' | Set-Content -LiteralPath $staleWheel
+'Old installed package metadata' | Set-Content -LiteralPath (Join-Path $staleMetadata 'METADATA')
+$backendUserFile = Join-Path $installRoot 'backend/saved-user-sounding.spc'
+Copy-Item -LiteralPath $sampleFile -Destination $backendUserFile
+$backendUserHash = (Get-FileHash -LiteralPath $backendUserFile -Algorithm SHA256).Hash
 $candidateExecutable = Install-Candidate $Installer $ExpectedVersion 'upgraded'
 if ($previousExecutable -ne $candidateExecutable) { throw 'Upgrade changed the installation path' }
 if ((Get-FileHash -LiteralPath $marker -Algorithm SHA256).Hash -ne $markerHash -or `
-    (Get-FileHash -LiteralPath $savedFile -Algorithm SHA256).Hash -ne $sampleHash) {
+    (Get-FileHash -LiteralPath $savedFile -Algorithm SHA256).Hash -ne $sampleHash -or `
+    (Get-FileHash -LiteralPath $backendUserFile -Algorithm SHA256).Hash -ne $backendUserHash) {
     throw 'Upgrade modified preserved data'
+}
+foreach ($stale in @($staleCode, $staleWheel, $staleMetadata)) {
+    if (Test-Path -LiteralPath $stale) { throw "Obsolete installed runtime entry remains: $stale" }
+}
+$cleanup = Get-Content -LiteralPath (Join-Path $installRoot 'installer-cleanup.json') -Raw | ConvertFrom-Json
+if ($cleanup.ok -ne $true -or $cleanup.version -ne $ExpectedVersion -or $cleanup.removed_files -lt 3) {
+    throw 'Installed runtime cleanup was not verified'
 }
 [ordered]@{
     ok = $true
@@ -62,5 +80,7 @@ if ((Get-FileHash -LiteralPath $marker -Algorithm SHA256).Hash -ne $markerHash -
     installer_sha256 = (Get-FileHash -LiteralPath $Installer -Algorithm SHA256).Hash.ToLowerInvariant()
     preserved_sounding_sha256 = $sampleHash.ToLowerInvariant()
     preserved_user_file = $true
+    obsolete_runtime_removed = $true
+    cleanup = $cleanup
     limitation = 'Checks silent NSIS in-place upgrade, frozen runtime, rendering and saved files; browser preference migration and interactive updater restart still require the desktop acceptance run.'
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reportRoot 'upgrade.json') -Encoding utf8

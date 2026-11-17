@@ -23,7 +23,7 @@ impl Directory {
         path
     }
     fn install(&self) {
-        self.file("backend/SHARPpy-Reimagined.exe");
+        self.file("backend/sharppy-backend.exe");
         self.file("backend/_internal/current.dll");
         write_inventory(&self.backend(), "3.8.4").unwrap();
     }
@@ -152,18 +152,22 @@ fn directory_links_and_report_links_are_rejected_without_touching_their_targets(
     directory.install();
     let stale = directory.file("backend/_internal/old.dll");
     let preserved = outside.file("preserved.dll");
-    let link = directory.backend().join("_internal/linked");
+    let link = directory.backend().join("_internal").join("linked");
     #[cfg(unix)]
     std::os::unix::fs::symlink(&outside.0, &link).unwrap();
     #[cfg(windows)]
     {
-        let status = std::process::Command::new("cmd")
-            .args(["/C", "mklink", "/J"])
+        let make_link = std::process::Command::new("cmd.exe")
+            .args(["/D", "/C", "mklink", "/J"])
             .arg(&link)
             .arg(&outside.0)
-            .status()
+            .output()
             .unwrap();
-        assert!(status.success());
+        assert!(
+            make_link.status.success(),
+            "{}",
+            String::from_utf8_lossy(&make_link.stderr)
+        );
     }
     assert!(prune(&directory.0, &directory.0.join("none")).is_err());
     assert!(prepare(&directory.0, &directory.0.join("previous")).is_err());

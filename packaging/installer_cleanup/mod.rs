@@ -154,7 +154,7 @@ fn read_inventory(path: &Path) -> io::Result<Inventory> {
             return Err(invalid("runtime inventory has too many files"));
         }
     }
-    if !files.contains("sharppy-reimagined.exe")
+    if !files.contains("sharppy-backend.exe")
         || !files.iter().any(|name| name.starts_with("_internal/"))
     {
         return Err(invalid("runtime inventory lacks the bundled application"));

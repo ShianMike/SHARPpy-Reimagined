@@ -42,6 +42,9 @@ Planned release: **v3.8.5**.
 
 ### Changed
 
+- Keep the sounding source form at its full height above the open profiles.
+  Put the observed date and launch on one row on short windows and use the
+  sidebar to reach content when it needs more room.
 - Make Create GIF the primary action in sounding animation and keep WebP as
   another format choice. Group Save and Copy with the finished file and give
   playback and export controls room to wrap on narrow screens. Give the frame

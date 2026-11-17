@@ -8,7 +8,7 @@
       },
       {
         "title": "Clearer sounding controls",
-        "description": "Review saved sounding times and your last viewed profile before restoring. Pick animation frames with compact shortcuts, clear UTC times, and a visible selection limit. Create GIF is the primary action, with Save and Copy beside the finished file."
+        "description": "Sounding source controls no longer scroll in their own pane. Review saved times before restoring, pick animation frames with compact shortcuts and clear UTC times, and use the highlighted Create GIF action."
       },
       {
         "title": "Focused WRF point reads",

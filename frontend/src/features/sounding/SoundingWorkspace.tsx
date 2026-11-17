@@ -4,6 +4,7 @@ import { useRef, useState, type ReactNode, type Ref, type RefObject } from "reac
 import { Action, EmptyPanel, IconAction } from "../../ui/Controls";
 import { Surface } from "../../ui/Surface";
 import { Popover } from "../../components/Popover";
+import { cx } from "../../lib/cx";
 import { MAX_OPEN, pendingDiscardSounding, useActiveSounding, useSoundingStore } from "../../stores/soundingStore";
 import { OpenSoundings, soundingMeta } from "./OpenSoundings";
 import { SoundingImage } from "./SoundingImage";
@@ -89,7 +90,7 @@ export function SoundingWorkspace(): ReactNode {
     <div ref={workspaceRef} tabIndex={-1} className={styles.workspace} data-testid="sounding-workspace">
       <div className={styles.layout} data-sources={sources} data-controls={controls}>
         <Surface className={styles.side} id="sounding-sources" data-motion="fade" inert={!sources} hidden={!sources}>
-          <div className={styles.sideContent} hidden={controls} inert={controls}>
+          <div className={cx(styles.sideContent, styles.sourceContent)} hidden={controls} inert={controls}>
             <SourcePanel onHide={hide} onControls={() => { selectPanel(true); }} />
             <OpenSoundings />
           </div>

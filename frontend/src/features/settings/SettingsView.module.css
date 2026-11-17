@@ -64,7 +64,6 @@
 .updateMessage[role="alert"] .updateTitle { color: var(--danger); }
 .updateMessage p + p { margin-top: var(--space-2); color: var(--text-secondary); font-size: var(--font-size-small); }
 .updateActions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.updateSchedule { padding-top: var(--space-4); border-top: var(--hairline) solid var(--border-subtle); color: var(--text-tertiary); font-size: var(--font-size-caption); line-height: var(--line-height-body); }
 .updateProgress { display: flex; align-items: center; gap: var(--space-3); font-variant-numeric: tabular-nums; }
 .updateProgress progress { flex: 1; min-width: 0; accent-color: var(--accent); }
 .releaseNotes { display: grid; gap: var(--space-4); overflow-wrap: anywhere; }

@@ -52,6 +52,7 @@ it("shows a newer version and downloads only after an explicit install click, pr
   check.mockResolvedValue(update);
   const view = render(<SettingsWithReview />);
   expect(screen.getByText(`Current version: ${version}`)).toBeTruthy();
+  expect(screen.getByRole("status").textContent).toContain("Checks at 00:00 and 12:00 UTC, or when next opened online. You choose when to install.");
   expect(check).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
   await screen.findByText("Version 3.4.2 is available");
@@ -70,7 +71,6 @@ it("shows a newer version and downloads only after an explicit install click, pr
   // Navigation must not cancel the download or allow a second installation.
   view.unmount();
   render(<SettingsWithReview />);
-  expect(screen.getByText(/Automatic checks run at 00:00 and 12:00 UTC/u)).toBeTruthy();
   expect(screen.getByText("25%")).toBeTruthy();
   await useUpdateStore.getState().check();
   useUpdateStore.getState().install();
@@ -148,7 +148,7 @@ it("reviews inputs typed during download before installation even when they have
 it("explains the desktop requirement in the browser without contacting an update server", () => {
   vi.unstubAllGlobals();
   render(<UpdateSettings />);
-  expect(screen.getByText("Check for updates in the installed Windows app.")).toBeTruthy();
+  expect(screen.getByRole("status").textContent).toContain("The Windows app checks at 00:00 and 12:00 UTC, or when next opened online. You choose when to install.");
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Check for updates" }).disabled).toBe(true);
   expect(check).not.toHaveBeenCalled();
   expect(screen.getByRole("heading", { name: `What’s new in ${version}` })).toBeTruthy();

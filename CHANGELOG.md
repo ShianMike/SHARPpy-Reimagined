@@ -42,6 +42,8 @@ Planned release: **v3.8.5**.
 
 ### Changed
 
+- Combine update availability and automatic check timing into one concise
+  message in Settings, removing the separate schedule divider.
 - Replace the static Overview welcome cards with a current SPC briefing,
   a vector outlook map and Categorical, Tornado, Wind and Hail choices. Show
   official issue and valid times, outlined risks and the selected location's

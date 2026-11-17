@@ -165,10 +165,16 @@ pub(super) fn skew_layers(sound: &Bound<'_, PyAny>, data: &WinterProfile) -> PyR
         .call1((sound.getattr("plotBitMap")?,))?;
     let result = (|| -> PyResult<()> {
         let left: f64 = sound.getattr("lpad")?.extract()?;
-        let marker_left = annotation_left(sound)?;
         let right: f64 = sound.getattr("brx")?.extract()?;
         let scale: f64 = sound.getattr("scale")?.extract()?;
         let origin: f64 = sound.getattr("originy")?.extract()?;
+        let origin_x: f64 = sound.getattr("originx")?.extract()?;
+        let bottom_pressure: f64 = sound.getattr("pmax")?.extract()?;
+        let marker_left = origin_x
+            + sound
+                .call_method1("tmpc_to_pix", (-40.0, bottom_pressure))?
+                .extract::<f64>()?
+                / scale;
         let top: f64 = sound.getattr("tpad")?.extract()?;
         let bottom: f64 = sound.getattr("bry")?.extract()?;
         let font = gui.getattr("QFont")?.call0()?;

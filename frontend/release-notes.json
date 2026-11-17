@@ -8,7 +8,7 @@
       },
       {
         "title": "Clearer sounding controls",
-        "description": "Sounding source controls no longer scroll in their own pane. Scroll saved soundings while restore details and buttons stay in place. Pick animation frames with compact shortcuts and clear UTC times, and use the highlighted Create GIF action."
+        "description": "Sounding source controls no longer scroll in their own pane. Scroll saved soundings while restore details and buttons stay in place. Pick animation frames with compact shortcuts and use the highlighted Create GIF action. Winter DGZ labels align with −40 °C."
       },
       {
         "title": "Focused WRF point reads",

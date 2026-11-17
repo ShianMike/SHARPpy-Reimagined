@@ -42,6 +42,8 @@ Planned release: **v3.8.5**.
 
 ### Changed
 
+- Align the winter Skew-T DGZ bracket and label with the −40 °C bottom-axis
+  position.
 - Keep the sounding source form at its full height above the open profiles.
   Put the observed date and launch on one row on short windows and use the
   sidebar to reach content when it needs more room.

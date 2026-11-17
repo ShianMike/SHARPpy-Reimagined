@@ -13,7 +13,7 @@ const SECTIONS = [
   { id: "workspace", label: "Workspace", icon: SlidersHorizontal, description: "Keep your setup between sessions, or start fresh." },
   { id: "appearance", label: "Appearance", icon: Palette, description: "Choose how the workspace looks on your screen." },
   { id: "units", label: "Units", icon: Ruler, description: "Choose how temperature and wind values are displayed." },
-  { id: "playback", label: "Playback", icon: Play, description: "Set the pace of the forecast timeline." },
+  { id: "playback", label: "Playback", icon: Play, description: "Set the pace of forecast and live timelines." },
   { id: "graphics", label: "Map rendering", icon: Monitor, description: "Balance map detail with performance on this computer." },
   { id: "storage", label: "Storage", icon: HardDrive, description: "See what’s cached and free up space on this device." },
   { id: "diagnostics", label: "Device Info", icon: Cpu, description: "Graphics capabilities and the current renderer state." },

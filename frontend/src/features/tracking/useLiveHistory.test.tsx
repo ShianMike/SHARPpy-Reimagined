@@ -11,6 +11,7 @@ import { useMapStore } from "../../stores/mapStore";
 import { useUiStore } from "../../stores/uiStore";
 import { renderWithBackend } from "../../test/backendHarness";
 import { LiveTimeline } from "./LiveTimeline";
+import { FRAME_INTERVAL_MS } from "../../map/usePlayback";
 
 const map = useMapStore.getState(), app = useAppStore.getState(), clock = useLiveTrackingStore.getState(), ui = useUiStore.getState();
 const now = Date.parse("2026-10-17T08:00:00Z");
@@ -74,6 +75,22 @@ it("loads only the next playback time and waits for its image before advancing",
   expect(radarCalls).toHaveLength(1);
   expect(radarCalls[0]?.[1]?.validTime).toBe(liveTimestamp(now - 55 * LIVE_MINUTE));
   await act(async () => { ready({ width: 2, height: 2 }); await Promise.resolve(); });
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 55 * LIVE_MINUTE);
+  view.unmount(); queryClient.clear();
+});
+
+it.each([3, 4])("advances loaded live frames at %s times speed", async (speed) => {
+  vi.useFakeTimers(); vi.setSystemTime(now);
+  useUiStore.getState().setSpeed(speed);
+  const transport = createTransport(), original = transport.call.bind(transport);
+  vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame"
+    ? Promise.resolve(frame(Date.parse(String(args?.validTime)))) : original(command, args));
+  const { view, queryClient } = renderWithBackend(<LiveTimeline />, transport);
+  fireEvent.click(screen.getByRole("button", { name: "Play" }));
+  const interval = Math.floor(FRAME_INTERVAL_MS / speed);
+  await act(async () => { await vi.advanceTimersByTimeAsync(interval - 1); });
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 60 * LIVE_MINUTE);
+  await act(async () => { await vi.advanceTimersByTimeAsync(1); });
   expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 55 * LIVE_MINUTE);
   view.unmount(); queryClient.clear();
 });

@@ -42,6 +42,10 @@ Planned release: **v3.8.5**.
 
 ### Changed
 
+- Redesign Appearance, Units and Playback with consistent choice cards,
+  descriptive labels, responsive layouts and visible keyboard focus. Add 3×
+  and 4× playback to both forecast and live timelines and save the selected
+  speed across app restarts.
 - Show the current app version beside the Overview title, using the same
   package metadata as Settings → Updates.
 - Align the winter Skew-T DGZ bracket and label with the −40 °C bottom-axis

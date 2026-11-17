@@ -47,7 +47,7 @@ it.each(["overview", "live", "sounding", "status", "settings"] as const)("does n
   } finally { hook.unmount(); queryClient.clear(); }
 });
 
-it("prepares both active modes once across four matching panels, waits on cached fields, and cancels the old window", async () => {
+it.each([1, 3, 4])("waits for both render modes across four panels at %s times speed and cancels the old window", async (speed) => {
   vi.useFakeTimers();
   useAppStore.setState({ activeWorkspace: "map" });
   vi.stubGlobal("ImageData", class { constructor(public data: Uint8ClampedArray, public width: number, public height: number) {} });
@@ -58,7 +58,7 @@ it("prepares both active modes once across four matching panels, waits on cached
   useMapStore.setState({ panelLayout: 4, productKey: "refc", layers: sharp,
     panels: [smooth, sharp, smooth].map((layers, index) => ({ ...useMapStore.getInitialState().panels[index], reportFilter: "all", reportWindowS: 21600, productKey: "refc", layers })) });
   useForecastStore.setState({ modelKey: "hrrr", runTime: run, forecastHour: 0, playing: true });
-  useUiStore.setState({ speed: 1, loop: true });
+  useUiStore.setState({ speed, loop: true });
   useGraphicsStore.setState({ effective: { ...savedGraphics.effective, profile: "balanced" } });
   const queryClient = createQueryClient();
   queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
@@ -78,7 +78,7 @@ it("prepares both active modes once across four matching panels, waits on cached
   );
   const hook = renderHook(usePlayback, { wrapper });
   try {
-    await act(async () => { await vi.advanceTimersByTimeAsync(FRAME_INTERVAL_MS); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(Math.ceil(FRAME_INTERVAL_MS / speed)); });
     expect(fetch).not.toHaveBeenCalled();
     expect(pending.map(({ hour, smooth }) => [hour, smooth])).toEqual([[1, false], [1, true], [2, false], [2, true]]);
     expect(useForecastStore.getState().forecastHour).toBe(0);

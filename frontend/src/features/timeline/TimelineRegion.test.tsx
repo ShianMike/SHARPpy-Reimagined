@@ -187,6 +187,10 @@ it("changes shared playback speed and loop settings", async () => {
   renderWithBackend(<TimelineRegion />, createTransport());
   await userEvent.click(screen.getByRole("button", { name: "Playback speed 1 times" }));
   expect(useUiStore.getState().speed).toBe(1.5);
+  for (const [before, after] of [[1.5, 2], [2, 3], [3, 4], [4, 0.5]]) {
+    await userEvent.click(screen.getByRole("button", { name: `Playback speed ${String(before)} times` }));
+    expect(useUiStore.getState().speed).toBe(after);
+  }
   const loop = screen.getByRole("button", { name: "Loop Forecast Animation" });
   const mode = screen.getByRole("button", { name: "Smooth Playback" });
   expect(loop.nextElementSibling).toBe(mode);

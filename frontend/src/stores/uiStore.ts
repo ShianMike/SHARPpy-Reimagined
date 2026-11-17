@@ -37,7 +37,7 @@ interface UiState {
   setLoop(value: boolean): void;
   setSmoothPlayback(value: boolean): void;
 }
-export const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2] as const;
+export const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2, 3, 4] as const;
 export const useUiStore = create<UiState>()(persist((set, get) => ({
   lastUpdateCheckWindow: null,
   setLastUpdateCheckWindow: (lastUpdateCheckWindow) => { set({ lastUpdateCheckWindow }); },

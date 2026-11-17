@@ -3,6 +3,10 @@
     "summary": "Open soundings more reliably, read WRF point data without whole grids, and move more scientific and provider work into Rust.",
     "highlights": [
       {
+        "title": "A current weather briefing on Overview",
+        "description": "See current SPC categorical, tornado, wind and hail outlooks on a sharp vector map, with the published outlook day, official UTC issue and valid times and guidance for a selected location. The briefing follows the current clock even when your forecast is archived. Compact shortcuts keep your forecast, live layers and soundings close by."
+      },
+      {
         "title": "Observed soundings open reliably",
         "description": "Keep usable measurements when the archive repeats or misorders levels. Automatic provider selection checks the received data before accepting it and tries the next configured source when needed."
       },

@@ -98,6 +98,20 @@ export function outlookQueryOptions(client: BackendClient, product: typeof OUTLO
   };
 }
 
+/** The Overview briefing always follows the clock, independently of forecast or history selections. */
+export function useCurrentSpcOutlook(product: typeof OUTLOOK_KEYS[number]): UseQueryResult<SpcOutlook> {
+  const client = useBackendClient();
+  return useQuery({
+    ...BASE_QUERY_OPTIONS,
+    queryKey: ["spc-current", product],
+    queryFn: ({ signal }) => client.getSpcOutlook(product, `${new Date(Date.now()).toISOString().slice(0, 19)}Z`, signal),
+    staleTime: SPC_REFRESH_MS,
+    gcTime: 3 * SPC_REFRESH_MS,
+    refetchInterval: SPC_REFRESH_MS,
+    refetchOnWindowFocus: "always",
+  });
+}
+
 /** The four outlook products in OUTLOOK_KEYS order; `enabled[i]` turns each on. */
 export function useSpcOutlooks(enabled: readonly boolean[], validTime: string | null): UseQueryResult<SpcOutlook>[] {
   const client = useBackendClient();

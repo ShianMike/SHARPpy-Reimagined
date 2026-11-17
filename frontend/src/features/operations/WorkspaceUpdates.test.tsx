@@ -72,7 +72,7 @@ it("keeps viewer and sounding navigation available during a failed forecast, the
       ? Promise.reject({ code: "CATALOG_UNAVAILABLE", message: "Forecast service unavailable", retryable: false, context: { operation: command } }) : base.call(command, args),
   });
   await screen.findByText("Forecast models unavailable", { exact: true });
-  expect(screen.getByText("Forecast service unavailable")).toBeTruthy();
+  expect(within(screen.getByTestId("overview-model-error")).getByText("Forecast service unavailable")).toBeTruthy();
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "Open Live Tracking" }));
   expect(useAppStore.getState().activeWorkspace).toBe("live");

@@ -42,6 +42,12 @@ Planned release: **v3.8.5**.
 
 ### Changed
 
+- Replace the static Overview welcome cards with a current SPC briefing,
+  a vector outlook map and Categorical, Tornado, Wind and Hail choices. Show
+  official issue and valid times, outlined risks and the selected location's
+  outlook, independently of archived model runs or live-history selections.
+  Refresh while open, with explicit unavailable, expired and failed-refresh
+  states, and keep compact shortcuts to forecasts, live tracking and soundings.
 - Redesign Appearance, Units and Playback with consistent choice cards,
   descriptive labels, responsive layouts and visible keyboard focus. Add 3×
   and 4× playback to both forecast and live timelines and save the selected

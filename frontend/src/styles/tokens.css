@@ -183,7 +183,8 @@
   --workspace-background: var(--surface-0);
   --theme-preview-light: #f6f8fb;
   --theme-preview-dark: #252c38;
-  --overview-h: 684px;
+  --overview-h: 810px;
+  --overview-w: 1080px;
   --workspace-orange: #b8540b;
   --workspace-orange-hover: #a54806;
   --workspace-orange-pressed: #913e04;

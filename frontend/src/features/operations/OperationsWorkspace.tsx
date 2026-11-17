@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ArrowUpRight, ChevronDown, FileUp, History, Layers, Map, RadioTower, ScanLine } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { version } from "../../../package.json";
 import { useMapCatalog } from "../../map/mapQueries";
@@ -16,13 +16,14 @@ import { HealthIndicator } from "../toolbar/HealthIndicator";
 import styles from "./OperationsWorkspace.module.css";
 import { ModelBackendStatus } from "./ModelBackendStatus";
 import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
+import { SpcBriefing } from "./SpcBriefing";
 
-const SOURCES: readonly { source: SoundingSource; label: string; hint: string }[] = [
-  { source: "observed", label: "Observed", hint: "Weather balloon profiles" },
-  { source: "model", label: "Forecast", hint: "Model profiles at a point" },
-  { source: "era5", label: "ERA5 archive", hint: "Past atmospheric conditions" },
-  { source: "file", label: "Open a file", hint: "A profile from your computer" },
-];
+const SOURCES = [
+  { source: "observed", label: "Observed", hint: "Weather balloon profiles", icon: RadioTower },
+  { source: "model", label: "Forecast", hint: "Model profiles at a point", icon: Layers },
+  { source: "era5", label: "ERA5 archive", hint: "Past atmospheric conditions", icon: History },
+  { source: "file", label: "Open a file", hint: "A profile from your computer", icon: FileUp },
+] as const satisfies readonly { source: SoundingSource; label: string; hint: string; icon: typeof RadioTower }[];
 
 export function OperationsWorkspace(): ReactNode {
   const [providersOpen, setProvidersOpen] = useState(false);
@@ -34,13 +35,15 @@ export function OperationsWorkspace(): ReactNode {
   const chosen = useMapStore((state) => panelProduct(state, panel));
   const product = productOf(catalog.data, chosen, panel);
   const entries = useLogStore((state) => state.entries);
+  const openSoundings = useSoundingStore((state) => state.open.length);
   const errors = entries.filter((entry) => entry.level === "error").length;
   const navigate = (id: WorkspaceId): void => { useAppStore.getState().setActiveWorkspace(id); };
   return <div className={styles.page}>
-    <header className={styles.heading}><div className={styles.identity}><BrandMark className={styles.brandMark} /><div><div className={styles.title}><h1>SHARPpy Reimagined</h1><span className={styles.version} title="Current app version">v{version}</span></div><p>Your weather workspace. Choose where to begin.</p></div></div><HealthIndicator /></header>
+    <header className={styles.heading}><div className={styles.identity}><BrandMark className={styles.brandMark} /><div><div className={styles.title}><h1>SHARPpy Reimagined</h1><span className={styles.version} title="Current app version">v{version}</span></div><p>Your weather briefing. Current outlooks, your next analysis.</p></div></div><HealthIndicator /></header>
+    <SpcBriefing />
     <div className={styles.workflows}>
       <section className={styles.workflow} aria-labelledby="continue-title">
-        <header className={styles.workflowHeading}><h2 id="continue-title">Model Viewer</h2><p>Explore forecast guidance.</p></header>
+        <header className={styles.workflowHeading}><Map className="icon" aria-hidden="true" /><h2 id="continue-title">Model Viewer</h2><span>Panel {String(panel + 1)}</span></header>
         {context === null ? <div className={styles.forecastCopy}>{forecast.status === "error"
           ? <SoundingErrorNotice error={forecast.error} operation="get_model_catalog" onRetry={forecast.retry} busy={forecast.retrying} testId="overview-model-error" />
           : <><h3>{forecast.status === "loading" ? "Preparing your forecast…" : "Forecast unavailable"}</h3><p>{forecast.status === "empty" ? "No forecast models are available." : "Loading models and parameters."}</p></>}</div> : <>
@@ -48,23 +51,22 @@ export function OperationsWorkspace(): ReactNode {
           <dl className={styles.facts}>
             <div><dt>Valid · UTC</dt><dd><time dateTime={context.validTime} title={formatUtc(context.validTime)}>{compactUtc(context.validTime)}</time></dd></div>
             <div><dt>Run · UTC</dt><dd><time dateTime={context.run} title={formatUtc(context.run)}>{compactUtc(context.run)}</time></dd></div>
-            <div><dt>Forecast range</dt><dd>{forecastLabel(context.hours[0] ?? 0)} – {forecastLabel(context.hours.at(-1) ?? 0)}</dd></div>
           </dl>
         </>}
-        <div className={styles.workflowFooter}><Action tone="accent" onClick={() => { navigate("map"); }}>Open Model Viewer</Action></div>
+        <div className={styles.workflowFooter}><Action tone="accent" onClick={() => { navigate("map"); }}>Open Model Viewer <ArrowUpRight className="icon-sm" aria-hidden="true" /></Action></div>
       </section>
       <section className={styles.workflow} aria-labelledby="live-start-title">
-        <header className={styles.workflowHeading}><h2 id="live-start-title">Live Tracking</h2><p>Live layers. Past-hour playback.</p></header>
+        <header className={styles.workflowHeading}><ScanLine className="icon" aria-hidden="true" /><h2 id="live-start-title">Live Tracking</h2></header>
         <ul className={styles.liveFeatures}>
-          <li><strong>Radar</strong><p>Base Reflectivity, Velocity, Correlation Coefficient, and Enhanced Echo Tops.</p></li>
-          <li><strong>Satellite & observations</strong><p>Cloud imagery and conditions on the ground.</p></li>
-          <li><strong>Alerts & storm reports</strong><p>Warnings, watches, and tornado, hail and wind reports alongside your live layers.</p></li>
+          <li><strong>Follow the weather as it unfolds.</strong><p>Radar, satellite, surface observations, warnings and storm reports.</p></li>
+          <li><p>Inspect Correlation Coefficient and Enhanced Echo Tops, or replay the past hour.</p></li>
         </ul>
-        <div className={styles.workflowFooter}><Action tone="accent" onClick={() => { navigate("live"); }}>Open Live Tracking</Action></div>
+        <div className={styles.workflowFooter}><Action onClick={() => { navigate("live"); }}>Open Live Tracking <ArrowUpRight className="icon-sm" aria-hidden="true" /></Action></div>
       </section>
       <section className={styles.workflow} aria-labelledby="sounding-start-title">
-        <header className={styles.workflowHeading}><h2 id="sounding-start-title">Soundings</h2><p>Explore the atmosphere in detail.</p></header>
-        <div className={styles.sources}>{SOURCES.map(({ source, label, hint }) => <Action key={source} className={styles.source} aria-label={label} aria-describedby={`overview-source-${source}`} onClick={() => { useSoundingStore.getState().setSource(source); navigate("sounding"); }}><strong>{label}</strong><small id={`overview-source-${source}`}>{hint}</small></Action>)}</div>
+        <header className={styles.workflowHeading}><RadioTower className="icon" aria-hidden="true" /><h2 id="sounding-start-title">Soundings</h2>{openSoundings > 0 ? <span>{String(openSoundings)} open</span> : null}</header>
+        <div className={styles.sources}>{SOURCES.map(({ source, label, hint, icon: Icon }) => <Action key={source} className={styles.source} aria-label={label} title={hint} onClick={() => { useSoundingStore.getState().setSource(source); navigate("sounding"); }}><Icon className="icon-sm" aria-hidden="true" /><strong>{label}</strong><ArrowUpRight className="icon-sm" aria-hidden="true" /></Action>)}</div>
+        {openSoundings > 0 ? <div className={styles.workflowFooter}><Action onClick={() => { navigate("sounding"); }}>Resume sounding <ArrowUpRight className="icon-sm" aria-hidden="true" /></Action></div> : <p className={styles.soundingHint}>Severe & Winter · Inspect, edit and export</p>}
       </section>
     </div>
     <div className={styles.diagnostics}>

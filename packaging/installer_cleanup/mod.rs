@@ -9,6 +9,7 @@ use std::{
 };
 
 const HEADER: &str = "io.github.shianmike.sharppy-reimagined/runtime-files/v1";
+const PREVIOUS_HEADER: &str = "io.github.shianmike.sharppy-reimagined/previous-runtime-files/v1";
 const INVENTORY: &str = ".sharppy-runtime-files";
 const MAX_FILES: usize = 100_000;
 
@@ -70,7 +71,11 @@ fn relative(path: &str) -> io::Result<&str> {
     Ok(path)
 }
 
-pub fn prepare(installation: &Path, previous_inventory: &Path) -> io::Result<()> {
+pub fn prepare(
+    installation: &Path,
+    previous_inventory: &Path,
+    registered: &Path,
+) -> io::Result<()> {
     if !installation.is_absolute()
         || installation
             .components()
@@ -92,27 +97,37 @@ pub fn prepare(installation: &Path, previous_inventory: &Path) -> io::Result<()>
     fs::create_dir_all(installation)?;
     let installation = root(installation)?;
     let backend = installation.join("backend");
+    let mut entries = Vec::new();
     match fs::symlink_metadata(&backend) {
         Ok(_) => {
             if !ordinary(&backend)?.is_dir() {
                 return Err(invalid("bundled backend path is not a directory"));
             }
-            files(&backend, "", 0, &mut Vec::new(), &mut Vec::new())?;
+            files(&backend, "", 0, &mut entries, &mut Vec::new())?;
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
         Err(error) => return Err(error),
     }
+    // The stock installer records its previous root before this install writes
+    // anything. A new destination may contain another application's backend.
+    if !root(registered).is_ok_and(|registered| registered == installation) {
+        return Ok(());
+    }
     let previous = match read_inventory(&backend.join(INVENTORY)) {
-        Ok(inventory) => inventory,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Ok(inventory) => inventory.files,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => entries
+            .into_iter()
+            .map(|(name, _)| key(&name))
+            .filter(|name| legacy_code(name))
+            .collect(),
         Err(error) => return Err(error),
     };
     let mut output = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(previous_inventory)?;
-    writeln!(output, "{HEADER}\n{}", previous.version)?;
-    for name in previous.files {
+    writeln!(output, "{PREVIOUS_HEADER}")?;
+    for name in previous {
         writeln!(output, "{name}")?;
     }
     Ok(())
@@ -122,7 +137,7 @@ fn key(path: &str) -> String {
     path.to_ascii_lowercase()
 }
 
-fn read_inventory(path: &Path) -> io::Result<Inventory> {
+fn read_record(path: &Path) -> io::Result<String> {
     if !ordinary(path)?.is_file() {
         return Err(invalid("runtime inventory is not a file"));
     }
@@ -133,6 +148,11 @@ fn read_inventory(path: &Path) -> io::Result<Inventory> {
     if source.len() > 8 * 1024 * 1024 {
         return Err(invalid("runtime inventory is too large"));
     }
+    Ok(source)
+}
+
+fn read_inventory(path: &Path) -> io::Result<Inventory> {
+    let source = read_record(path)?;
     let mut lines = source.lines();
     if lines.next() != Some(HEADER) {
         return Err(invalid("unrecognized runtime inventory"));
@@ -147,13 +167,7 @@ fn read_inventory(path: &Path) -> io::Result<Inventory> {
     {
         return Err(invalid("invalid runtime version"));
     }
-    let mut files = BTreeSet::new();
-    for line in lines {
-        files.insert(key(relative(line)?));
-        if files.len() > MAX_FILES {
-            return Err(invalid("runtime inventory has too many files"));
-        }
-    }
+    let files = read_names(lines)?;
     if !files.contains("sharppy-backend.exe")
         || !files.iter().any(|name| name.starts_with("_internal/"))
     {
@@ -163,6 +177,17 @@ fn read_inventory(path: &Path) -> io::Result<Inventory> {
         version: version.into(),
         files,
     })
+}
+
+fn read_names<'a>(lines: impl Iterator<Item = &'a str>) -> io::Result<BTreeSet<String>> {
+    let mut files = BTreeSet::new();
+    for line in lines {
+        files.insert(key(relative(line)?));
+        if files.len() > MAX_FILES {
+            return Err(invalid("runtime inventory has too many files"));
+        }
+    }
+    Ok(files)
 }
 
 fn files(
@@ -219,17 +244,15 @@ pub fn write_inventory(directory: &Path, version: &str) -> io::Result<()> {
 }
 
 fn legacy_code(name: &str) -> bool {
-    let lower = name.to_ascii_lowercase();
-    let parts: Vec<_> = lower.split('/').collect();
     // Before v3.8.4 there was no installed inventory. Restrict that fallback
     // to bundled code and package metadata, preserving unrelated data files.
-    let metadata = parts.iter().any(|part| {
+    let metadata = name.split('/').any(|part| {
         (part.ends_with(".dist-info") || part.ends_with(".egg-info"))
             && part
                 .split('-')
                 .any(|part| part.starts_with(|character: char| character.is_ascii_digit()))
     });
-    let code = Path::new(&lower)
+    let code = Path::new(name)
         .extension()
         .and_then(|value| value.to_str())
         .is_some_and(|extension| {
@@ -238,8 +261,8 @@ fn legacy_code(name: &str) -> bool {
                 "py" | "pyc" | "pyo" | "pyd" | "dll" | "so" | "whl"
             )
         });
-    lower.starts_with("_internal/") && (metadata || code)
-        || !lower.contains('/') && lower.ends_with(".whl") && lower.starts_with("sharpmod")
+    name.starts_with("_internal/") && (metadata || code)
+        || !name.contains('/') && name.ends_with(".whl") && name.starts_with("sharpmod")
 }
 
 pub fn prune(installation: &Path, previous_inventory: &Path) -> io::Result<()> {
@@ -259,9 +282,15 @@ pub fn prune(installation: &Path, previous_inventory: &Path) -> io::Result<()> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(error),
     }
-    let previous = match fs::symlink_metadata(previous_inventory) {
-        Ok(_) => Some(read_inventory(previous_inventory)?),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+    let previous = match read_record(previous_inventory) {
+        Ok(source) => {
+            let mut lines = source.lines();
+            if lines.next() != Some(PREVIOUS_HEADER) {
+                return Err(invalid("unrecognized previous runtime inventory"));
+            }
+            read_names(lines)?
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => BTreeSet::new(),
         Err(error) => return Err(error),
     };
     let mut entries = Vec::new();
@@ -278,11 +307,8 @@ pub fn prune(installation: &Path, previous_inventory: &Path) -> io::Result<()> {
     let obsolete: Vec<_> = entries
         .into_iter()
         .filter(|(name, _)| {
-            !current.files.contains(&key(name))
-                && (previous
-                    .as_ref()
-                    .is_some_and(|previous| previous.files.contains(&key(name)))
-                    || legacy_code(name))
+            let name = key(name);
+            previous.contains(&name) && !current.files.contains(&name)
         })
         .collect();
     let mut empty_candidates = BTreeSet::new();

@@ -8,7 +8,7 @@
       },
       {
         "title": "More reliable sounding files and edits",
-        "description": "Imports display the correct filename across platforms, invalid edits report clear errors, and damaged cached images redraw automatically. Windows upgrades remove obsolete installed runtime code, wheels and package metadata while preserving saved soundings, preferences and recovery sessions."
+        "description": "Imports display the correct filename across platforms, invalid edits report clear errors, and damaged cached images redraw automatically. Windows upgrades clean up obsolete files from the previous installation and keep saved soundings, preferences and recovery sessions. New install folders skip this cleanup."
       },
       {
         "title": "Faster forecast export setup",

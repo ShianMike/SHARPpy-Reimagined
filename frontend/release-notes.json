@@ -7,8 +7,8 @@
         "description": "Keep usable measurements when the archive repeats or misorders levels. Automatic provider selection checks the received data before accepting it and tries the next configured source when needed."
       },
       {
-        "title": "Clearer sounding controls",
-        "description": "Sounding source controls no longer scroll in their own pane. Restore details and buttons stay in place while saved soundings scroll. Animation uses compact frame shortcuts, section dividers and a highlighted Create GIF action. Winter DGZ labels align with −40 °C."
+        "title": "Clearer workspace controls",
+        "description": "See the current app version on Overview. Sounding source controls stay together, and restore details and buttons stay in place while saved soundings scroll. Animation uses compact frame shortcuts, section dividers and a highlighted Create GIF action. Winter DGZ labels align with −40 °C."
       },
       {
         "title": "Focused WRF point reads",

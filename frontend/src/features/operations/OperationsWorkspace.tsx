@@ -1,5 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { version } from "../../../package.json";
 import { useMapCatalog } from "../../map/mapQueries";
 import { productOf } from "../../map/panelField";
 import { useStationCatalog } from "../../stations/stationQueries";
@@ -36,7 +37,7 @@ export function OperationsWorkspace(): ReactNode {
   const errors = entries.filter((entry) => entry.level === "error").length;
   const navigate = (id: WorkspaceId): void => { useAppStore.getState().setActiveWorkspace(id); };
   return <div className={styles.page}>
-    <header className={styles.heading}><div className={styles.identity}><BrandMark className={styles.brandMark} /><div><h1>SHARPpy Reimagined</h1><p>Your weather workspace. Choose where to begin.</p></div></div><HealthIndicator /></header>
+    <header className={styles.heading}><div className={styles.identity}><BrandMark className={styles.brandMark} /><div><div className={styles.title}><h1>SHARPpy Reimagined</h1><span className={styles.version} title="Current app version">v{version}</span></div><p>Your weather workspace. Choose where to begin.</p></div></div><HealthIndicator /></header>
     <div className={styles.workflows}>
       <section className={styles.workflow} aria-labelledby="continue-title">
         <header className={styles.workflowHeading}><h2 id="continue-title">Model Viewer</h2><p>Explore forecast guidance.</p></header>

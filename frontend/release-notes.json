@@ -1,30 +1,30 @@
 {
   "3.8.4": {
-    "summary": "Recover open soundings after reopening, choose export hours faster, and reliably include each panel's weather overlays.",
+    "summary": "Recover your sounding session, load forecast data with less repeated work, and export each panel's complete weather overlays.",
     "highlights": [
       {
         "title": "Restore your sounding session",
         "description": "Reopen saved profiles with completed edits, undo/redo history, selected times and the Severe or Winter view. Recovery copies stay on this device, separately from the weather cache. Recovery controls work in Windows builds and show when a copy has finished saving."
       },
       {
-        "title": "More reliable sounding file handling",
-        "description": "Imported soundings display the correct filename across Windows and Linux. Failed imports clean up their temporary files. Cached images are checked before reuse, with automatic redraws for missing files or invalid image dimensions. Failed renders leave no cached partial image."
-      },
-      {
-        "title": "More reliable sounding edits",
-        "description": "Invalid animation ranges and incomplete storm-motion edits report a clear request error before rendering. Drag targets match their native edit points, and equivalent default view selections reuse completed sounding images."
+        "title": "More reliable sounding files and edits",
+        "description": "Imports display the correct filename across platforms, invalid edits report clear errors, and damaged cached images redraw automatically. Windows upgrades remove obsolete installed runtime code, wheels and package metadata while preserving saved soundings, preferences and recovery sessions."
       },
       {
         "title": "Faster forecast export setup",
         "description": "Keep your resolution, frame duration and panel/layout choice between sessions. Compact icons and labels keep all hour shortcuts in one row. Select the next 6 or 12 hours, keep hours three hours apart, or Shift-click a range."
       },
       {
-        "title": "Storm reports stay with their panel",
-        "description": "Choose a separate hazard and event window for each map in two- or four-panel layouts. The choices are saved and remain separate in Model Viewer and Live Tracking."
+        "title": "Independent reports and complete export overlays",
+        "description": "Each map keeps its own storm-report hazard and event window. PNG, GIF and WebP exports load enabled storm reports, SPC outlooks and isobars for every selected panel and hour, then wait for those layers to finish drawing."
       },
       {
-        "title": "Complete overlays in forecast exports",
-        "description": "PNG, GIF and WebP exports load enabled storm reports, SPC outlooks and isobars for every selected panel and hour, then wait for those layers to finish drawing before capturing frames."
+        "title": "Less repeated forecast loading",
+        "description": "Share decoded GRIB ingredients between parameters and panels while the source revision matches, and decode completed fields while other ranges download. Bounded batches control temporary memory. Canceling one panel keeps shared work available to another, and decode failures retain their original error."
+      },
+      {
+        "title": "Smarter sounding transfers",
+        "description": "Measured transfer history and provider queues guide cloud-range or geographic-subset downloads, mirror choices and worker counts within existing request limits. Required surface or terrain companions load alongside pressure data and briefly reuse data within a model run, with separate files for each sounding."
       }
     ]
   },

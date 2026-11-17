@@ -57,16 +57,41 @@ pub(crate) fn choose(
             .max_by_key(|&(size, count)| (count, size))
             .map(|(size, _)| size)
     });
+    let estimates: Vec<_> = probes
+        .iter()
+        .enumerate()
+        .map(|(index, probe)| {
+            probe
+                .filter(|probe| Some(probe.size) == expected)
+                .and_then(|probe| {
+                    sharpmod_weather::transfer_policy::shared()
+                        .seconds(&sources[index].url, probe.size)
+                })
+        })
+        .collect();
+    let comparable = probes
+        .iter()
+        .enumerate()
+        .filter(|(_, probe)| probe.is_some_and(|probe| Some(probe.size) == expected))
+        .all(|(index, _)| estimates[index].is_some());
     let mut best: Option<(usize, f64)> = None;
     for (index, probe) in probes.iter().enumerate() {
         let Some(probe) = probe.filter(|probe| Some(probe.size) == expected) else {
             continue;
         };
+        // Missing history is not a zero-second transfer. Use probe latency
+        // until the eligible sources have comparable completion estimates.
+        let completion = probe.elapsed
+            + if comparable {
+                estimates[index].unwrap()
+            } else {
+                0.
+            };
         if best.is_none_or(|(current, elapsed)| {
-            probe.elapsed < elapsed
-                || (probe.elapsed == elapsed && sources[index].name < sources[current].name)
+            completion < elapsed
+                || (completion == elapsed && sources[index].name < sources[current].name)
         }) {
-            best = Some((index, probe.elapsed));
+            best = Some((index, completion));
         }
     }
     best.map(|(index, _)| index)
@@ -95,6 +120,35 @@ impl Router {
                 .unwrap();
             let result = probe(&request.sources[index..index + 1]);
             if result[0].is_some_and(|probe| probe.size == cached.size) {
+                let policy = sharpmod_weather::transfer_policy::shared();
+                if let Some(current) = policy.seconds(&request.sources[index].url, cached.size) {
+                    let alternative = request
+                        .sources
+                        .iter()
+                        .enumerate()
+                        .filter(|(position, _)| *position != index)
+                        .filter_map(|(position, source)| {
+                            policy
+                                .seconds(&source.url, cached.size)
+                                .map(|seconds| (position, seconds))
+                        })
+                        .filter(|(_, seconds)| *seconds < current * 0.8)
+                        .min_by(|a, b| a.1.total_cmp(&b.1));
+                    if let Some((alternative, _)) = alternative {
+                        let result = probe(&request.sources[alternative..alternative + 1]);
+                        if result[0].is_some_and(|probe| probe.size == cached.size) {
+                            self.cache.lock().unwrap().insert(
+                                key,
+                                Cached {
+                                    expires: now + request.ttl.max(0.),
+                                    name: request.sources[alternative].name.clone(),
+                                    size: cached.size,
+                                },
+                            );
+                            return Some(alternative);
+                        }
+                    }
+                }
                 return Some(index);
             }
         }

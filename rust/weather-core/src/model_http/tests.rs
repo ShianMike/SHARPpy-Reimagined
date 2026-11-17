@@ -1,4 +1,5 @@
 use super::*;
+
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Write},
@@ -9,6 +10,34 @@ use std::{
     },
     thread::{self, JoinHandle},
 };
+
+#[tokio::test]
+async fn failed_response_bodies_do_not_train_range_coalescing_latency() {
+    let server = Server::new(|_| {
+        let mut reply = Reply::new(206, b"GRI");
+        reply
+            .headers
+            .push(("Content-Range", "bytes 10-13/100".into()));
+        reply
+    });
+    let client = ModelClient::default();
+    for _ in 0..2 {
+        assert!(client
+            .fetch(&server.url, 2., 4, Some((10, 13)), || Ok(false))
+            .await
+            .is_err());
+        crate::transfer_policy::shared().observe(
+            &server.url,
+            1024 * 1024,
+            Duration::from_secs(1),
+            1,
+        );
+    }
+    assert_eq!(
+        crate::transfer_policy::shared().range_gap(&server.url, 2 * 1024 * 1024),
+        2 * 1024 * 1024
+    );
+}
 
 #[derive(Clone)]
 struct Request {
@@ -181,6 +210,68 @@ fn client() -> ModelClient {
             .build()
             .unwrap()),
     }
+}
+
+#[tokio::test]
+async fn strong_object_identity_is_required_and_a_revision_change_rejects_the_body() {
+    let server = Server::new(|request| {
+        let probe = request
+            .headers
+            .get("range")
+            .is_some_and(|range| range == "bytes=0-0");
+        let mut reply = Reply::new(206, if probe { vec![1] } else { vec![1, 2, 3] });
+        reply.headers.push((
+            "content-range",
+            if probe {
+                "bytes 0-0/100"
+            } else {
+                "bytes 0-2/100"
+            }
+            .into(),
+        ));
+        reply
+            .headers
+            .push(("etag", if probe { "\"a\"" } else { "\"b\"" }.into()));
+        reply
+    });
+    let client = client();
+    let identity = client
+        .identity(&server.url, 1., || Ok(false))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(identity.length, 100);
+    assert!(matches!(
+        client
+            .fetch_version(&server.url, 1., 3, Some((0, 2)), Some(&identity), || Ok(
+                false
+            ))
+            .await,
+        Err(Error::Invalid(_))
+    ));
+    assert_eq!(
+        server.requests.lock().unwrap()[1].headers["if-match"],
+        "\"a\""
+    );
+}
+
+#[tokio::test]
+async fn weak_etags_do_not_allow_cross_request_source_reuse() {
+    let server = Server::new(|_| {
+        let mut reply = Reply::new(206, vec![1]);
+        reply
+            .headers
+            .push(("content-range", "bytes 0-0/100".into()));
+        reply.headers.push(("etag", "W/\"a\"".into()));
+        reply
+    });
+    assert_eq!(
+        client()
+            .identity(&server.url, 1., || Ok(false))
+            .await
+            .unwrap(),
+        None
+    );
 }
 
 #[tokio::test]

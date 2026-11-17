@@ -743,9 +743,14 @@ def _subset_download_bytes(inventory_or_herbie, search=None):
 _NOMADS_MIN_RANGE_BYTES = 32 * 1024 * 1024
 
 
-def _prefer_nomads_subset(expected_range_bytes):
-    """Use CGI subsetting only when indexed ranges would be a large transfer."""
+def _prefer_nomads_subset(expected_range_bytes, model="", source_url=None):
+    """Delegate point-route costs and queue-aware selection to the backend."""
     size = max(0, int(expected_range_bytes or 0))
+    from sharpmod.backends import get_backend
+    if get_backend().name == "rust":
+        from sharpmod_rs import prefer_model_point_subset
+
+        return prefer_model_point_subset(size, model, source_url)
     return size == 0 or size > _NOMADS_MIN_RANGE_BYTES
 
 

@@ -1734,6 +1734,7 @@ pub fn decode_grib_points(
         None
     };
 
+    let decode_started = std::time::Instant::now();
     let guard = {
         #[cfg(test)]
         let _span = profiling::span("ecCodes_lock_wait");
@@ -1776,6 +1777,8 @@ pub fn decode_grib_points(
     };
     drop(guard);
     let decoded = assemble_decoded_points(states, missing)?;
+    sharpmod_weather::transfer_policy::shared()
+        .observe_decode(mapping.len() as u64, decode_started.elapsed());
     if let Some(key) = point_key {
         let mut cache = inventory_cache();
         if cache.enabled && generation == Some(cache.generation) {

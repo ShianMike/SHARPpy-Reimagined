@@ -140,6 +140,14 @@ try {
     Install-Version $baseline
     Start-Desktop
     Run-Phase 'seed'
+    $installedRoot = Split-Path -Parent $desktop.Path
+    $obsoleteCode = Join-Path $installedRoot 'backend/_internal/obsolete-updater-check.pyc'
+    $obsoleteWheel = Join-Path $installedRoot 'backend/sharpmod_rs-0.0.0-updater.whl'
+    'Old installed bytecode' | Set-Content -LiteralPath $obsoleteCode
+    'Old installed native wheel' | Set-Content -LiteralPath $obsoleteWheel
+    $userFile = Join-Path $installedRoot 'saved-user-sounding.spc'
+    'User sounding preserved by upgrade' | Set-Content -LiteralPath $userFile
+    $userFileHash = (Get-FileHash -LiteralPath $userFile).Hash
     if ($PublicUpdate) {
         $executablePath = $desktop.Path
         Run-Phase 'update'
@@ -156,6 +164,15 @@ try {
         Install-Version $candidate
         Start-Desktop
     }
+    foreach ($obsolete in @($obsoleteCode, $obsoleteWheel)) {
+        if (Test-Path -LiteralPath $obsolete) { throw "Updater left obsolete runtime entry: $obsolete" }
+    }
+    if ((Get-FileHash -LiteralPath $userFile).Hash -ne $userFileHash) { throw 'Updater modified a saved user file' }
+    $cleanup = Get-Content -LiteralPath (Join-Path $installedRoot 'installer-cleanup.json') -Raw | ConvertFrom-Json
+    if ($cleanup.ok -ne $true -or $cleanup.version -ne $ExpectedVersion -or $cleanup.removed_files -lt 2) {
+        throw 'Updater runtime cleanup was not verified'
+    }
+    $cleanup | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'installer-cleanup.json')
     Run-Phase 'upgrade'
     Stop-Desktop
     Start-Desktop

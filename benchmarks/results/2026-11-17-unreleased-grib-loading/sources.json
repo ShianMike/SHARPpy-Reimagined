@@ -1,0 +1,55 @@
+{
+  "baseCommit": "2879acc1ae79c9c919a027e91b70bb04f0b71bcd",
+  "branch": "perf/grib-p1-p5",
+  "applicationVersion": "3.8.4",
+  "nativeVersion": "3.8.4",
+  "profile": "release",
+  "cpuLimit": 4,
+  "memoryLimitBytes": 6442450944,
+  "python": "3.11.18",
+  "numpy": "2.4.6",
+  "eccodesPython": "2.50.1",
+  "eccodeslib": "2.50.0.34",
+  "files": [
+    {
+      "path": "rust/sharpmod-rs/src/model_map_fields/acquire.rs",
+      "sha256": "2436f454a4ba3f44c98ec875e8610c8a29a041fbc2498df716c3664bbbbd43f4"
+    },
+    {
+      "path": "rust/sharpmod-rs/src/model_map_fields/benchmark.rs",
+      "sha256": "6664bd7bb50f1154cf7bc853234251dd4b2ceaad1e4b51073f195efb2f9e5ca4"
+    },
+    {
+      "path": "rust/sharpmod-rs/src/model_map_fields/fixtures.rs",
+      "sha256": "939b4ed1227aaee2100a379b705a9d13e06129293e86b1a417ab8bba5ac1b6b4"
+    },
+    {
+      "path": "rust/sharpmod-rs/src/model_map_fields/inventory.rs",
+      "sha256": "7c2e9bc642c499f9621ae341c2418412d3186d980eb12155e9923d811f104fa3"
+    },
+    {
+      "path": "rust/sharpmod-rs/src/model_map_fields/mod.rs",
+      "sha256": "b5c1439cd4a3bedc393bcee861ba1d3f08bdc8964cf6b5afadc00bcf77860ae0"
+    },
+    {
+      "path": "rust/sharpmod-rs/src/model_map_fields/plan.rs",
+      "sha256": "c34545b4b7a609b4e36bed5a8046f230cc03ec223bcf795600482fe1e62e16b6"
+    },
+    {
+      "path": "rust/sharpmod-rs/src/model_field_cache.rs",
+      "sha256": "724351c4f50ca49d065d5c2cd73192dd21f033b5fb5309e94b4331b7631517ae"
+    },
+    {
+      "path": "rust/weather-core/src/model_http.rs",
+      "sha256": "aab9eed0ad9b8b03eb70b78a89b4c79209efafaa8aec718366930afb171d7c83"
+    },
+    {
+      "path": "rust/weather-core/src/map_fields.rs",
+      "sha256": "1ba4eb05fef58fd00ef740ddc2bf24e1d09254abf7dc0250602973456cff7e6c"
+    },
+    {
+      "path": "rust/weather-core/src/transfer_policy.rs",
+      "sha256": "82369eac780b06405beb73d686e47d43d05903bc5e00e3c42c683024b3259a77"
+    }
+  ]
+}

@@ -68,7 +68,14 @@ on the device. This downloads a complete installer rather than a binary delta
 patch. Nothing installs until you click, and checks run only while the app is
 open. Browser previews cannot install updates.
 
-In the upcoming v3.8.4 interface, wait for **Recovery copy saved on this device**
+Windows installer and in-app upgrades remove obsolete code, native wheels and
+package metadata from the installed backend. Current runtime files, saved
+soundings, preferences, exports and recovery sessions are preserved. Installers
+and portable copies that you downloaded elsewhere remain under your control.
+If cleanup is blocked by a running process or an unsafe linked directory, close
+the app, check the installation folder and run the installer again.
+
+In v3.8.4, wait for **Recovery copy saved on this device**
 before closing or updating if you want to restore completed sounding work.
 Unapplied editor inputs and unfinished recalculations are not included.
 
@@ -442,7 +449,7 @@ for links and the distinction between research context and implemented methods.
 Opening a file and rendering its image are separate operations. The first image
 can take longer while the render worker starts.
 
-#### Recovering a sounding session (v3.8.4, unreleased)
+#### Recovering a sounding session (v3.8.4)
 
 Open soundings are saved automatically on this device. After an accidental exit,
 Alt+F4 or a normal close, reopening offers **Restore previous session**. This

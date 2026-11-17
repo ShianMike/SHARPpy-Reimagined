@@ -297,7 +297,9 @@ where
         }
         metrics.planned_bytes = total;
     }
-    metrics.worker_count = options.workers.clamp(1, 8).min(plan.len());
+    metrics.worker_count = sharpmod_weather::transfer_policy::shared()
+        .workers(url, metrics.planned_bytes, options.workers)
+        .min(plan.len());
     if disk::valid_grib(output) {
         metrics.worker_count = 0;
         metrics.reused_bytes = metrics.planned_bytes;
@@ -321,6 +323,7 @@ where
         feed: consumer.as_ref().map(|_| &feed),
     };
     let done = (Mutex::new(false), Condvar::new());
+    let started = std::time::Instant::now();
     let (result, assembled) = std::thread::scope(|scope| {
         scope.spawn(|| loop {
             let finished = done
@@ -361,6 +364,14 @@ where
         )
     });
     *metrics = transfer.state.into_inner().unwrap().metrics;
+    if result.is_ok() {
+        sharpmod_weather::transfer_policy::shared().observe(
+            url,
+            metrics.transferred_bytes,
+            started.elapsed(),
+            metrics.worker_count,
+        );
+    }
     if assembled || matches!(result, Err(Error::ObjectChanged(_))) {
         transfer.store.remove()?;
     }

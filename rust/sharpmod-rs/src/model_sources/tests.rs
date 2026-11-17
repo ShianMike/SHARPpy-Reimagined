@@ -1,5 +1,87 @@
 use super::*;
+
+#[test]
+fn unmeasured_mirrors_do_not_look_faster_because_they_lack_completion_samples() {
+    let sources = [
+        Source {
+            name: "known".into(),
+            url: "https://measured-mirror.example/grib".into(),
+        },
+        Source {
+            name: "unmeasured".into(),
+            url: "https://unknown-mirror.example/grib".into(),
+        },
+    ];
+    let probes = [
+        Some(Probe {
+            size: 1024 * 1024,
+            elapsed: 0.1,
+        }),
+        Some(Probe {
+            size: 1024 * 1024,
+            elapsed: 0.2,
+        }),
+    ];
+    for _ in 0..2 {
+        sharpmod_weather::transfer_policy::shared().observe(
+            &sources[0].url,
+            1024 * 1024,
+            std::time::Duration::from_secs(2),
+            1,
+        );
+    }
+    assert_eq!(choose(&sources, &probes, None), Some(0));
+    for _ in 0..2 {
+        sharpmod_weather::transfer_policy::shared().observe(
+            &sources[1].url,
+            1024 * 1024,
+            std::time::Duration::from_millis(200),
+            1,
+        );
+    }
+    assert_eq!(choose(&sources, &probes, None), Some(1));
+}
 use std::cell::RefCell;
+
+#[test]
+fn cached_probe_winner_can_change_when_real_transfer_history_is_better() {
+    let router = Router::default();
+    let mut request = request("observed");
+    request.sources[0].url = "https://left-transfer.example/observed".into();
+    request.sources[1].url = "https://right-transfer.example/observed".into();
+    request.reference = Some(request.sources[0].url.clone());
+    let size = 8 * 1024 * 1024;
+    assert_eq!(
+        router.select(&request, 0., |_| vec![
+            sample(size, 0.1),
+            sample(size, 0.2),
+            None
+        ]),
+        Some(0)
+    );
+    let policy = sharpmod_weather::transfer_policy::shared();
+    for _ in 0..2 {
+        policy.observe(
+            &request.sources[0].url,
+            size,
+            std::time::Duration::from_secs(5),
+            4,
+        );
+        policy.observe(
+            &request.sources[1].url,
+            size,
+            std::time::Duration::from_secs(1),
+            4,
+        );
+    }
+    assert_eq!(
+        router.select(&request, 1., |sources| vec![
+            sample(size, 0.1);
+            sources.len()
+        ]),
+        Some(1)
+    );
+}
 
 fn request(object: &str) -> Request {
     Request {

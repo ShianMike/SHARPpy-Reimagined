@@ -484,6 +484,16 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: |
           if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) { throw "Updater signing key is not configured" }
+          $cleanupDirectory = Join-Path $PWD '../src-tauri/target/release'
+          New-Item -ItemType Directory -Path $cleanupDirectory -Force | Out-Null
+          $cleanup = Join-Path $cleanupDirectory 'installer-cleanup.exe'
+          rustc --edition 2021 -O ../packaging/installer_cleanup.rs -o $cleanup
+          if ($LASTEXITCODE -ne 0) { throw 'Installer cleanup helper build failed' }
+          $runtimeRoot = (Resolve-Path -LiteralPath '../dist/sharppy-backend').Path
+          $version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          $inventory = Start-Process -FilePath $cleanup -WindowStyle Hidden -PassThru -Wait `
+            -ArgumentList "--manifest `"$runtimeRoot`" $version"
+          if ($inventory.ExitCode -ne 0) { throw 'Bundled runtime inventory generation failed' }
           # Refresh app assets and version metadata while retaining compiled dependencies.
           cargo clean --manifest-path ../src-tauri/Cargo.toml --release -p sharppy-reimagined
           if ($LASTEXITCODE -ne 0) { throw "Desktop application cleanup failed" }

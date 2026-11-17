@@ -171,6 +171,18 @@ fn range_groups_support_negative_slack_and_reject_offset_overflow() {
     );
 }
 
+#[test]
+fn response_limit_splits_groups_only_between_complete_messages() {
+    let groups = merge_map_ranges_bounded(&[(0, 10), (10, 10), (20, 10)], 65536, 20).unwrap();
+    assert_eq!(groups.len(), 2);
+    assert_eq!((groups[0].start, groups[0].end), (0, 19));
+    assert_eq!(groups[1].members, [2]);
+    assert_eq!(
+        merge_map_ranges_bounded(&[(0, 21)], 65536, 20),
+        Err(Error::Budget)
+    );
+}
+
 struct Request {
     path: String,
     range: String,

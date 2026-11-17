@@ -10,6 +10,11 @@ type InventoryTuple = (usize, u64, u64, &'static str, String, String);
 type WgribInventoryTuple = (i64, u64, u64, String, String, String, usize);
 type MapRangeTuple = (u64, u64, Vec<usize>);
 
+#[pyfunction(signature=(url,ceiling=2097152))]
+fn adaptive_model_range_gap(url: &str, ceiling: u64) -> u64 {
+    sharpmod_weather::transfer_policy::shared().range_gap(url, ceiling)
+}
+
 #[pyfunction]
 fn parse_wgrib_inventory(py: Python<'_>, text: &str) -> Vec<WgribInventoryTuple> {
     py.detach(|| map_fields::parse_wgrib_inventory(text))
@@ -168,6 +173,7 @@ pub(crate) fn field_error(py: Python<'_>, error: Error) -> PyErr {
 }
 
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(adaptive_model_range_gap, module)?)?;
     module.add_function(wrap_pyfunction!(parse_ecmwf_inventory, module)?)?;
     module.add_function(wrap_pyfunction!(parse_wgrib_inventory, module)?)?;
     module.add_function(wrap_pyfunction!(merge_map_ranges, module)?)?;

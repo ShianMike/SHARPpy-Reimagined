@@ -46,6 +46,13 @@ export async function layerRow(page: Page, id: string) {
   return row;
 }
 
+/** Weather layers use a separate editor; map details keep their inline settings. */
+export async function layerSettings(page: Page, id: string) {
+  const row = await layerRow(page, id);
+  const editor = page.getByTestId(`layer-settings-${id}`);
+  return await editor.count() > 0 ? editor : row;
+}
+
 /** Turns a layer on through its switch. */
 export async function turnOn(page: Page, id: string): Promise<void> {
   const row = await layerRow(page, id);

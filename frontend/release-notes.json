@@ -3,6 +3,10 @@
     "summary": "Open soundings more reliably, read WRF point data without whole grids, and move more scientific and provider work into Rust.",
     "highlights": [
       {
+        "title": "Less scrolling in Layers",
+        "description": "Keep the layer list compact while a separate area shows product, opacity, pixel rendering and the color key. Expand Details & source for the longer explanation and provenance. On narrow windows, open one layer editor at a time and return to the list with a back action."
+      },
+      {
         "title": "A clearer point inspector",
         "description": "Scan compact readouts with aligned units and an active-panel highlight. Select a reading to switch panels, copy the point’s coordinates, and keep Open sounding within reach while viewing source details."
       },

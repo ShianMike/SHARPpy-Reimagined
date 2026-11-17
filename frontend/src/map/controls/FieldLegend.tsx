@@ -44,7 +44,7 @@ export function convertedTicks(low: number, high: number): { value: number; at: 
   });
 }
 
-export function FieldLegend({ palette, vertical = false, description }: { palette: Palette; vertical?: boolean; description?: string }): ReactNode {
+export function FieldLegend({ palette, vertical = false, description, compact = false }: { palette: Palette; vertical?: boolean; description?: string; compact?: boolean }): ReactNode {
   const preferences = useUiStore((state) => state.units);
   const categorical = palette.units === "flag";
   const unit = displayUnit(palette.units, preferences, palette.display);
@@ -70,7 +70,7 @@ export function FieldLegend({ palette, vertical = false, description }: { palett
   const value = categorical ? Math.round(at) : low + at * (high - low);
   const valueText = categorical ? (value === 1 ? "Present (1)" : "Absent (0)") : `${tickText(shown(value))} ${unit || "unitless"}`;
   return (
-    <figure className={styles.scale} data-testid="field-legend" data-orientation={vertical ? "vertical" : "horizontal"} title={vertical ? undefined : hidden}>
+    <figure className={styles.scale} data-testid="field-legend" data-orientation={vertical ? "vertical" : "horizontal"} data-compact={!vertical && compact} aria-describedby={!vertical && compact ? descriptionId : undefined} title={vertical ? undefined : hidden}>
       <canvas ref={ref} className={styles.ramp} width={vertical ? RAMP_THICKNESS : LUT_SIZE} height={vertical ? LUT_SIZE : RAMP_THICKNESS} aria-hidden="true" />
       {vertical ? <>
         <ol className={cx(styles.verticalTicks, "tabular")} aria-label={`Scale ticks, ${categorical ? "categories" : unit || "unitless"}`}>
@@ -105,7 +105,7 @@ export function FieldLegend({ palette, vertical = false, description }: { palett
           </li>
         ))}
       </ol>}
-      {vertical ? null : <figcaption className={styles.hint}>{`${unit === "" ? "No units" : unit}. ${hidden}`}</figcaption>}
+      {vertical ? null : compact ? <figcaption className={styles.compactUnit}>{unit || "Unitless"}<VisuallyHidden id={descriptionId}>{hidden}</VisuallyHidden></figcaption> : <figcaption className={styles.hint}>{`${unit === "" ? "No units" : unit}. ${hidden}`}</figcaption>}
     </figure>
   );
 }

@@ -1,7 +1,7 @@
 import { presetPreferences, waitForMapDrawn } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
-import { layerRow, turnOn } from "./support/ui";
+import { layerSettings, turnOn } from "./support/ui";
 import { expect, test } from "./support/test";
 import appManifest from "../package.json" with { type: "json" };
 
@@ -78,7 +78,8 @@ test.describe("forecast playback", () => {
     if (panels === 4) await page.clock.fastForward(1500);
     else await page.waitForTimeout(1500);
     expect(await hour.inputValue()).toBe(stopped);
-    const field = await layerRow(page, "model-field");
+    const field = await layerSettings(page, "model-field");
+    await field.getByText("Details & source", { exact: true }).click();
     await expect(field.getByTestId("field-shown")).toContainText(`F${stopped.padStart(3, "0")}`);
     await page.getByRole("button", { name: "Close layers", exact: true }).click();
     if (panels === 4) {

@@ -42,6 +42,11 @@ Planned release: **v3.8.5**.
 
 ### Changed
 
+- Reduce scrolling in Layers with a separate settings area, compact
+  pixel-rendering choices, a persistent color key and source/explanation text
+  behind Details & source. Keep loading
+  and error states visible, and open one weather-layer editor at a time. On
+  narrow windows, switch between the layer list and its editor with a back action.
 - Redesign the point inspector with compact readings, aligned values and
   units, an active-panel indicator and selectable rows for switching map
   panels. Add coordinate copying with success and failure feedback, keeping

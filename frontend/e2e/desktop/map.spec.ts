@@ -10,7 +10,7 @@
 import { expect, test } from "@playwright/test";
 import { compactUtc } from "../../src/features/sounding/soundingTime";
 import {
-  FIELD_MS, OVERLAY_MS, RUN_ATTEMPTS, FOUR_PRODUCTS, page, results, text, row,
+  FIELD_MS, OVERLAY_MS, RUN_ATTEMPTS, FOUR_PRODUCTS, page, results, text, row, settings,
   shot, seconds, openLayers, setLayer, chooseProduct, forecastIdentity, fieldOutcome,
   loadedField, mapCentre, pointerValue, loadedPanels, weatherPixels,
   measureFrames, setupMapHarness,
@@ -45,7 +45,7 @@ test.describe("real-backend forecast map", () => {
       valid: await text(page.getByLabel("Valid time")),
     };
     await setLayer("model-field", true);
-    await row("model-field").getByRole("slider", { name: "Model field opacity", exact: true }).press("End");
+    await settings("model-field").getByRole("slider", { name: "Model field opacity", exact: true }).press("End");
     await page.getByRole("group", { name: "Layer categories" }).getByRole("button", { name: "Map details", exact: true }).click();
     await page.getByRole("group", { name: "Map projection" }).getByRole("button", { name: "Flat map", exact: true }).click();
     await page.getByRole("group", { name: "Layer categories" }).getByRole("button", { name: "Weather", exact: true }).click();
@@ -184,7 +184,7 @@ test.describe("real-backend forecast map", () => {
     await page.getByRole("region", { name: "Live Tracking timeline", exact: true }).getByRole("button", { name: "Live", exact: true }).click();
     await setLayer("radar", true);
     const started = Date.now();
-    const radar = row("radar").getByTestId("radar-shown");
+    const radar = settings("radar").getByTestId("radar-shown");
     await expect(radar).toBeVisible({ timeout: OVERLAY_MS });
     await expect(radar).toContainText("High-resolution MRMS mosaic.");
     await expect(radar).toContainText(/valid \d{4}-\d\d-\d\d/u);
@@ -221,7 +221,7 @@ test.describe("real-backend forecast map", () => {
       await page.getByRole("group", { name: "Active map panel" }).getByRole("button", { name: `Panel ${String(index + 1)}`, exact: true }).click();
       await chooseProduct(product.label, product.unit);
       await setLayer("model-field", true);
-      await row("model-field").getByRole("slider", { name: "Model field opacity", exact: true }).press("End");
+      await settings("model-field").getByRole("slider", { name: "Model field opacity", exact: true }).press("End");
       await loadedField();
     }
     const panels = await loadedPanels();

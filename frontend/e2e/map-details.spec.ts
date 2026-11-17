@@ -2,7 +2,7 @@ import { camera, deckLayers, mapErrors, nextFrames, waitForMapDrawn } from "./su
 import { regionStats } from "./support/pixels";
 import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
-import { chooseThroughSearch, layerRow, resolved } from "./support/ui";
+import { chooseThroughSearch, layerRow, layerSettings, resolved } from "./support/ui";
 
 test("projection changes release the old canvases' display-scaling observers", async ({ page }) => {
   await page.goto("/");
@@ -82,7 +82,7 @@ test("theta-e renders its fixed Kelvin palette and wind barbs in both projection
   await picker.getByRole("button", { name: "2 m AGL Theta-e, 10 m AGL Wind, K", exact: true }).click();
   const field = await layerRow(page, "model-field");
   await field.getByRole("switch").setChecked(true);
-  await field.getByRole("slider", { name: "Model field opacity", exact: true }).focus();
+  await (await layerSettings(page, "model-field")).getByRole("slider", { name: "Model field opacity", exact: true }).focus();
   await page.keyboard.press("End");
   await page.getByRole("button", { name: "Map details", exact: true }).click();
   for (const projection of ["Globe", "Flat map"]) {

@@ -1,7 +1,7 @@
 import { deckLayers, nextFrames, projectPoint, waitForMapDrawn } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
-import { boxOf, hoverAt, layerRow, overlapArea, turnOn } from "./support/ui";
+import { boxOf, hoverAt, layerRow, layerSettings, overlapArea, turnOn } from "./support/ui";
 import { expect, test } from "./support/test";
 
 test("radar site labels toggle and persist on the flat live map", async ({ page, consoleMessages }) => {
@@ -142,7 +142,7 @@ test("Live Tracking has independent layers, a past-hour clock, and a session cac
   await reflectivity.press("End");
   await expect(firstScale.getByRole("tooltip")).toHaveText("72.5 dBZ");
   await reflectivity.press("Tab");
-  const radar = await layerRow(page, "radar");
+  const radar = await layerSettings(page, "radar");
   await expect(page.getByRole("button", { name: "Show point details", exact: true })).toHaveCount(0);
   await expect(radar.getByTestId("radar-shown")).toBeVisible();
   await expect(page.getByTestId("layer-row-model-field")).toHaveCount(0);
@@ -187,7 +187,7 @@ test("single-site radar controls follow the active live panel and its scale", as
   await waitForMapDrawn(page);
   await page.getByRole("button", { name: "Four synchronized panels", exact: true }).click();
   await expect(page.getByTestId("panel-chip-4")).toBeVisible();
-  const radar = await layerRow(page, "radar");
+  const radar = await layerSettings(page, "radar");
   const liveRadar = page.getByRole("group", { name: "Live radar", exact: true });
   const firstScale = page.getByTestId("map-panel-1").getByTestId("radar-scale");
   await liveRadar.getByRole("combobox", { name: "Site", exact: true }).click();

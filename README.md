@@ -10,7 +10,7 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v384---2026-11-18)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v384---2026-11-17)
 
 </div>
 
@@ -29,6 +29,14 @@
 - **More reliable sounding images:** native request checks catch invalid edits
   before rendering. Rust manages imports and image-cache transactions, retries
   invalid cached images, and cleans up failed uploads and partial renders.
+- **Faster forecast loading:** share decoded GRIB ingredients between parameters
+  and panels, decode completed fields while other ranges download, and fetch
+  required sounding companions alongside pressure data. Measured transfer
+  history guides route, mirror and worker choices within existing limits.
+
+The [fixed-input GRIB comparison](benchmarks/results/2026-11-17-unreleased-grib-loading/README.md)
+records exact numerical parity and less repeated transfer work. Its controlled
+loading measurements are separate from Internet, PNG and GIF performance.
 
 ## Sounding and forecast tools
 

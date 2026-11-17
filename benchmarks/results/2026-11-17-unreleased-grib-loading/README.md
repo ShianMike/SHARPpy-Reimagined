@@ -1,8 +1,9 @@
-# GRIB loading: local Unreleased comparison
+# GRIB loading: v3.8.4 integration comparison
 
 Measured on 2026-11-17 in `perf/grib-p1-p5`, based on frozen source
 `2879acc1ae79c9c919a027e91b70bb04f0b71bcd`. App and native versions remain
-3.8.4; these changes are separate from the scheduled, frozen v3.8.4 release.
+3.8.4. The user subsequently authorized including these changes in the November
+17 v3.8.4 release; this record preserves the original pre-integration measurement.
 The source fingerprints in [sources.json](sources.json) identify the measured
 map-loading implementation. This comparison does not replace the complete
 rendering/GIF baseline.

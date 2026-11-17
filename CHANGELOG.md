@@ -36,6 +36,9 @@ Planned release: **v3.8.5**.
   incomplete storm-motion edits before applying temperature or dewpoint edits.
 - Reject invalid HRRR Zarr chunk dimensions, numeric dtypes and point indices
   before sampling, while retaining partial edge chunks and C/Fortran storage.
+- Try GRIB when an HRRR Zarr analysis is missing, unreadable or has malformed
+  metadata. Keep cancellations from starting another download and stop queuing
+  Zarr chunks after a retrieval failure.
 
 ### Changed
 

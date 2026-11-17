@@ -21,6 +21,10 @@
       {
         "title": "Safer opening and editing",
         "description": "Failed model, ERA5 and WRF opens remove their temporary outputs. Portable file validation and pair publication share a native owner. Editing several levels copies each changed column once and validates storm-motion edits before changing the profile."
+      },
+      {
+        "title": "Try another source for HRRR analyses",
+        "description": "When the HRRR analysis archive is missing or unreadable, the app tries the standard GRIB source. Canceling a request stops it before trying another source."
       }
     ]
   },

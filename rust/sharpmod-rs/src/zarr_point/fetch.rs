@@ -57,7 +57,7 @@ impl Loader {
     }
 }
 #[pyfunction]
-fn fetch_hrrr_zarr_native<'py>(
+pub(super) fn fetch_hrrr_zarr_native<'py>(
     py: Python<'py>,
     run: &Bound<'py, PyAny>,
     fxx: i64,
@@ -65,13 +65,42 @@ fn fetch_hrrr_zarr_native<'py>(
     lon: f64,
     options: &Bound<'py, PyDict>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let api = PyModule::import(py, "sharpmod.providers.hrrr_zarr")?;
+    // The retrieval layer falls back to GRIB only for an unavailable Zarr
+    // source. Preserve cancellation and interrupts instead of trying a mirror.
+    let unavailable = api.getattr("ZarrBackendUnavailable")?;
+    let cancelled = api.getattr("DownloadCancelled")?;
+    fetch(&api, run, fxx, lat, lon, options).map_err(|failure| {
+        if !failure.is_instance_of::<pyo3::exceptions::PyException>(py)
+            || failure.is_instance(py, &cancelled)
+            || failure.is_instance(py, &unavailable)
+        {
+            return failure;
+        }
+        let wrapped = error(
+            py,
+            format!("HRRR Zarr point retrieval failed: {}", failure.value(py)),
+        );
+        wrapped.set_cause(py, Some(failure));
+        wrapped
+    })
+}
+
+fn fetch<'py>(
+    api: &Bound<'py, PyModule>,
+    run: &Bound<'py, PyAny>,
+    fxx: i64,
+    lat: f64,
+    lon: f64,
+    options: &Bound<'py, PyDict>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = api.py();
     if fxx != 0 {
         return Err(error(
             py,
             "the public HRRR Zarr archive currently exposes analyses, not lead times",
         ));
     }
-    let api = PyModule::import(py, "sharpmod.providers.hrrr_zarr")?;
     let root = api.call_method1("_root_url", (run,))?.extract::<String>()?;
     let cache = api.call_method1("_cache_path", (options.get_item("cache_dir")?,))?;
     let cached = api.call_method1("_load_cached_point", (&cache, run, lat, lon, &root))?;
@@ -146,7 +175,7 @@ fn fetch_hrrr_zarr_native<'py>(
         .num_threads(workers.clamp(1, 32))
         .build()
         .map_err(|e| error(py, e.to_string()))?;
-    let results: Vec<PyResult<f64>> = py.detach(|| {
+    let results: Vec<f64> = py.detach(|| {
         pool.install(|| {
             jobs.par_iter()
                 .map(|(_, _, _, url, metadata)| {
@@ -161,16 +190,15 @@ fn fetch_hrrr_zarr_native<'py>(
                         )
                     })
                 })
-                .collect()
+                .collect::<PyResult<Vec<_>>>()
         })
-    });
+    })?;
     let mut columns = std::collections::HashMap::new();
     for field in &fields {
         columns.insert(field.clone(), vec![f64::NAN; levels.len()]);
     }
     let surface = PyDict::new(py);
     for ((ground, index, field, _, _), value) in jobs.iter().zip(results) {
-        let value = value?;
         if *ground {
             surface.set_item(field, value)?;
         } else {

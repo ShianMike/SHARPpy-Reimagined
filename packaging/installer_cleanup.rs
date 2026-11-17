@@ -14,9 +14,10 @@ fn main() {
             std::path::Path::new(&args[2]),
             std::path::Path::new(&args[3]),
         ),
-        Some("--prepare") if args.len() == 4 => runtime::prepare(
+        Some("--prepare") if args.len() == 5 => runtime::prepare(
             std::path::Path::new(&args[2]),
             std::path::Path::new(&args[3]),
+            std::path::Path::new(&args[4]),
         ),
         _ => Err(std::io::Error::other("invalid installer cleanup arguments")),
     };

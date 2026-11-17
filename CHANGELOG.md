@@ -53,9 +53,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   overlays and their rendered layers before saving PNG, GIF or WebP frames,
   with explicit failures for unavailable requested overlays.
 - Remove obsolete installed runtime code, native wheels and package metadata
-  during Windows installer and in-app upgrades. Track bundled files for later
-  upgrades, validate directories before copying or deleting, reject links and
-  junctions, and report locked files instead of silently leaving mixed versions.
+  during Windows installer and in-app upgrades at the registered install path.
+  Record the previous runtime files before installing the new ones. Fresh
+  destinations never prune existing files. Validate paths before copying or
+  deleting, reject links and junctions, and report locked files.
   Preserve current runtime files, unknown documents, saved soundings, preferences
   and session recovery. Verify stale-file removal in direct and public-updater
   acceptance alongside the existing rendering and restart checks.

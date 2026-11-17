@@ -1,9 +1,9 @@
 ; Retain Tauri's stock installer and its updater/shortcut behavior.
 !define SHARPPY_CLEANUP_EXE "${__FILEDIR__}\..\target\release\installer-cleanup.exe"
 
-!macro SHARPPY_RUNTIME_STEP MODE
+!macro SHARPPY_RUNTIME_STEP MODE EXTRA
   ClearErrors
-  ExecWait '"$PLUGINSDIR\sharppy-installer-cleanup.exe" ${MODE} "$INSTDIR" "$PLUGINSDIR\previous-runtime-files"' $0
+  ExecWait '"$PLUGINSDIR\sharppy-installer-cleanup.exe" ${MODE} "$INSTDIR" "$PLUGINSDIR\previous-runtime-files" ${EXTRA}' $0
   ${If} ${Errors}
   ${OrIf} $0 != 0
     MessageBox MB_ICONSTOP|MB_OK "SHARPpy could not safely update its runtime files. Close running SHARPpy processes and verify the selected installation folder, then run this installer again. Your soundings and preferences are preserved."
@@ -17,10 +17,12 @@
   InitPluginsDir
   SetOutPath "$PLUGINSDIR"
   File /oname=sharppy-installer-cleanup.exe "${SHARPPY_CLEANUP_EXE}"
-  ; Check paths and retain the old file list before resources are overwritten.
-  !insertmacro SHARPPY_RUNTIME_STEP "--prepare"
+  ; Use Tauri's existing installation registration before it is overwritten.
+  ; The final dot also keeps any trailing separator away from argument quotes.
+  ReadRegStr $R9 SHCTX "${MANUPRODUCTKEY}" ""
+  !insertmacro SHARPPY_RUNTIME_STEP "--prepare" '"$R9\."'
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
-  !insertmacro SHARPPY_RUNTIME_STEP "--prune"
+  !insertmacro SHARPPY_RUNTIME_STEP "--prune" ""
 !macroend

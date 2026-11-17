@@ -1,10 +1,14 @@
 {
   "3.8.5": {
-    "summary": "Open more observed soundings from the University of Wyoming archive.",
+    "summary": "Open observed soundings more reliably and keep active profiles available during background work.",
     "highlights": [
       {
         "title": "Observed soundings open reliably",
-        "description": "Keep the usable measurements when the archive repeats or misorders sounding levels. When a profile cannot be read, the app shows a sounding data error."
+        "description": "Keep usable measurements when the archive repeats or misorders levels. Automatic provider selection checks the received data before accepting it and tries the next configured source when needed."
+      },
+      {
+        "title": "Safer sounding background work",
+        "description": "Keep open profiles available while background soundings load, including older profiles with edits. Renders and recovery saves keep their source files until finished. Failed or canceled observed opens clean up their temporary files, and unusable profiles report a data error."
       }
     ]
   },

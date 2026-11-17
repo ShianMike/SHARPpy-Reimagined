@@ -13,6 +13,27 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or arrives out of order. Select consistent measured levels before analysis
   without changing their values or relaxing portable sounding validation.
   Report unusable observed profiles as sounding data errors.
+- Try the next explicitly configured observed provider when downloaded levels,
+  optional omega arrays, coordinates or timestamps fail validation. Preserve
+  the selected provider's measurements, masks and provenance without combining
+  archives.
+- Roll back observed NPZ and metadata files when opening is canceled or later
+  decoding or registration fails, and retain files that a rendering or recovery
+  request still owns after cache eviction. Avoid deleting neighboring cache IDs.
+- Retain profiles in the open sounding list while background opens put pressure
+  on the bounded source cache. Release that retention when a profile closes,
+  serialize open-list synchronization, and preserve source ownership when an
+  in-flight entry is re-added after eviction.
+- Protect open profiles before model-animation loading with one retention
+  acknowledgement instead of requesting scientific analyses for every open
+  profile solely to update its LRU position.
+
+### Changed
+
+- Move observed-provider fallback, pre-save validation, NPZ/metadata assembly,
+  observed bridge registration and opened-profile cache ownership into Rust.
+  Retain the existing provider adapters, public schemas, archive decoders and
+  validated atomic output transaction.
 
 ## [v3.8.4] - 2026-11-17
 

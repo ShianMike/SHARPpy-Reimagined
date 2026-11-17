@@ -1,8 +1,6 @@
-// Deterministic fixture transport (DESIGN-frontend F2) for explicit fixture builds
-// and tests. It serves the shared contract fixtures, the golden 933-station
-// catalogue included, and rejects with plain BackendError objects, so the
-// client's mapping is the one under test. A ?scenario= value, read once at
-// startup, selects one state; see SCENARIOS.
+// Shared contract fixtures for explicit fixture builds and tests (DESIGN-frontend F2).
+// Includes the golden 933-station catalogue and plain BackendErrors for client mapping.
+// A ?scenario= value, read once at startup, selects one state; see SCENARIOS.
 import catalogFull from "@contracts/public/stations.catalog.full.json";
 import catalogSeedFallback from "@contracts/public/stations.catalog.seed-fallback.json";
 import catalogUnavailable from "@contracts/public/errors/CATALOG_UNAVAILABLE.json";
@@ -195,6 +193,7 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
   const handlers: Record<CommandName, (args?: Readonly<Record<string, unknown>>) => Promise<unknown>> = {
     get_sounding_snapshot: args => Promise.resolve({ soundingId: args?.soundingId, payload: "fixture-sounding-source" }),
     restore_sounding_snapshot: () => Promise.resolve({ ...copy(soundingSummary) as Record<string, unknown>, soundingId: `recovered${String(++opened)}` }),
+    retain_soundings: () => Promise.resolve({ retained: true }),
     cancel_request: () => Promise.resolve(null),
     encode_webp_frame: () => Promise.reject(new Error("Lossless WebP requires the real backend.")),
     get_cached_forecast_hours: (args) => Promise.resolve(frames.hours(args)),

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,112 +18,11 @@ log = logging.getLogger("sharpmod.bridge")
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 
-def _observed_failure(exc: Exception, station: str, when: datetime) -> BridgeError:
-    from sharpmod.providers import observations as obs
-
-    label = f"{station} at {when:%Y-%m-%d %HZ}"
-    if isinstance(exc, obs.ObservedFallbackError):
-        attempts = list(getattr(exc, "attempts", ()) or ())
-        kinds = {
-            str(item.get("error_type", ""))
-            for item in attempts
-            if isinstance(item, dict)
-        }
-        details = {
-            "attempts": [
-                {
-                    "provider": str(a.get("provider", "")),
-                    "error": str(a.get("error", ""))[:200],
-                }
-                for a in attempts
-                if isinstance(a, dict)
-            ]
-        }
-        if "ObservedParseError" in kinds:
-            return BridgeError(
-                "SOUNDING_INVALID",
-                f"The {label} sounding was received but could not be read. "
-                "Try another provider or time.",
-                False,
-                details,
-            )
-        if "ObservedRetrievalError" in kinds:
-            return BridgeError(
-                "SOUNDING_FETCH_FAILED",
-                f"No provider could be reached for the {label} sounding. "
-                "Check the connection and try again.",
-                True,
-                details,
-            )
-        return BridgeError(
-            "SOUNDING_UNAVAILABLE",
-            f"No provider has a sounding for {label}. Try another time or station.",
-            False,
-            details,
-        )
-    if isinstance(exc, obs.ObservedRetrievalError):
-        return BridgeError(
-            "SOUNDING_FETCH_FAILED",
-            f"The {label} sounding could not be downloaded: {exc}",
-            True,
-        )
-    if isinstance(exc, obs.ObservedParseError):
-        return BridgeError(
-            "SOUNDING_INVALID",
-            f"The {label} sounding was received but could not be read: {exc}",
-            False,
-        )
-    return BridgeError(
-        "SOUNDING_UNAVAILABLE", f"No sounding is available for {label}: {exc}", False
-    )
-
-
 def open_observed(params: dict[str, Any]) -> dict[str, Any]:
-    """An observed radiosonde sounding from UWyo, IEM, or IGRA."""
-    p.keys(params, ("station_id", "time"), ("provider",))
-    station = p.text(params, "station_id", 1, 16)
-    when = p.time(params, "time")
-    from sharpmod.providers import observations as obs
+    """Open one observed profile through the native provider transaction."""
+    from sharpmod_rs import open_observed_sounding
 
-    provider = p.choice(
-        params, "provider", ("auto", *obs.registered_provider_keys()), "auto"
-    )
-    providers = tuple(obs.DEFAULT_PROVIDER_ORDER) if provider == "auto" else (provider,)
-    try:
-        result = obs.fetch_observed(station, when, providers=providers)
-    except obs.ObservedProviderError as exc:
-        log.info("observed sounding %s %s: %s", station, when, exc)
-        raise _observed_failure(exc, station, when) from None
-    entry_id = cache().new_id()
-    path = cache().data_path(entry_id, ".npz")
-    try:
-        obs.write_observed_npz(result, path)
-    except ValueError as exc:
-        log.info("observed sounding %s %s from %s: %s", station, when, result.provider, exc)
-        raise _observed_failure(obs.ObservedParseError(str(exc)), station, when) from None
-    collection, _ = decode(path)
-    metadata = dict(result.metadata)
-    name = str(metadata.get("station_name") or "").strip() or None
-    return register(
-        entry_id,
-        path,
-        summary(
-            entry_id,
-            "observed",
-            collection,
-            title=f"{result.station_id} {name}" if name else result.station_id,
-            location=result.station_id,
-            station_id=result.station_id,
-            station_name=name,
-            latitude=p.num(metadata.get("lat")),
-            longitude=p.num(metadata.get("lon")),
-            valid_time=p.iso(result.valid),
-            provider=result.provider,
-            provider_name=result.provider_name,
-            source_url=result.source_url or None,
-        ),
-        collection,
-    )
+    return open_observed_sounding(params)
 
 
 def open_model(params: dict[str, Any]) -> dict[str, Any]:

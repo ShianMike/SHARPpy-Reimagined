@@ -1,6 +1,6 @@
 // Validate replies, normalize failures and log once for all transports (F2, C6).
 import type { BackendHealth, BridgeStatus, StationCatalog } from "../../types/contracts";
-import { ContractError } from "../contracts/guards";
+import { ContractError, expectBoolean, expectExactKeys, expectObject } from "../contracts/guards";
 import { parseBackendHealth, parseBridgeStatus } from "../contracts/health";
 import { parseModelStatus } from "../contracts/modelStatus";
 import {
@@ -97,6 +97,15 @@ export class BackendClient {
   inspectWrf(filePath: string): Promise<WrfFile> { return this.request("inspect_wrf", parseWrfFile, { filePath }); }
   getSoundingSnapshot(soundingId: string): Promise<SoundingSnapshot> {
     return this.request("get_sounding_snapshot", parseSoundingSnapshot, { soundingId });
+  }
+  retainSoundings(soundingIds: readonly string[]): Promise<boolean> {
+    return this.request("retain_soundings", value => {
+      const object = expectObject(value, "");
+      expectExactKeys(object, "", ["retained"]);
+      const retained = expectBoolean(object.retained, "retained");
+      if (!retained) throw new ContractError("retained", "expected a successful retention acknowledgement");
+      return retained;
+    }, { soundingIds });
   }
   restoreSoundingSnapshot(payload: string): Promise<SoundingSummary> {
     return this.request("restore_sounding_snapshot", parseSoundingSummary, { payload });

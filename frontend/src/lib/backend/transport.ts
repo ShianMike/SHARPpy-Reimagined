@@ -3,6 +3,7 @@
 // fixtures in offline builds and tests. BackendClient validates every response.
 
 export type CommandName =
+  | "retain_soundings"
   | "get_sounding_snapshot"
   | "restore_sounding_snapshot"
   | "encode_webp_frame"

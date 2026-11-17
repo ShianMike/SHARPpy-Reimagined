@@ -68,14 +68,15 @@ class SoundingCache:
     """A bounded, thread-safe LRU of opened soundings."""
 
     def __init__(self, root: Path, max_entries: int = MAX_ENTRIES) -> None:
+        from sharpmod_rs import SoundingEntries
+
         self.root = root
         self.renders = root / "renders"
         self.max_entries = max_entries
-        self._entries: OrderedDict[str, Entry] = OrderedDict()
-        self._lock = threading.Lock()
         self.renders.mkdir(parents=True, exist_ok=True)
         self.model_root = root / "model-hours"
         self.model_root.mkdir(exist_ok=True)
+        self._entries = SoundingEntries(self.root, self.renders, max_entries)
         self.model_hours = ModelHourCache(
             directory_factory=lambda _key: tempfile.mkdtemp(prefix="source-", dir=self.model_root),
         )
@@ -91,12 +92,7 @@ class SoundingCache:
         return self.renders / f"{sounding_id}-{parcel.lower()}-{mode}.png"
 
     def add(self, entry: Entry) -> None:
-        with self._lock:
-            self._entries[entry.sounding_id] = entry
-            self._entries.move_to_end(entry.sounding_id)
-            while len(self._entries) > self.max_entries:
-                _, old = self._entries.popitem(last=False)
-                self._remove_files(old.sounding_id)
+        self._entries.add(entry)
 
     def get(self, sounding_id: Any) -> Entry:
         if not isinstance(sounding_id, str) or not sounding_id:
@@ -105,36 +101,25 @@ class SoundingCache:
                 "The request was not valid: sounding_id must be a string.",
                 False,
             )
-        with self._lock:
-            entry = self._entries.get(sounding_id)
-            if entry is not None:
-                self._entries.move_to_end(sounding_id)
-        if entry is None:
+        try:
+            return self._entries.get(sounding_id)
+        except KeyError:
             raise BridgeError(
                 "SOUNDING_NOT_FOUND",
                 "This sounding is no longer open in the backend. Open it again.",
                 False,
                 {"sounding_id": sounding_id},
-            )
-        return entry
+            ) from None
 
     def completed_downloads(self) -> tuple[Path, ...]:
         """Raw GRIBs can be discarded once the portable sounding is registered."""
-        with self._lock:
-            return tuple(self.root / f"{entry_id}-grib" for entry_id in self._entries)
+        return tuple(self.root / f"{entry_id}-grib" for entry_id in self._entries.ids())
 
     def _remove_files(self, sounding_id: str) -> None:
-        for path in [
-            *self.root.glob(f"{sounding_id}*"),
-            *self.renders.glob(f"{sounding_id}-*"),
-        ]:
-            try:
-                if path.is_dir():
-                    shutil.rmtree(path)
-                else:
-                    path.unlink()
-            except OSError:
-                log.warning("could not remove cached file %s", path)
+        try:
+            self._entries.remove_files(sounding_id)
+        except OSError:
+            log.warning("could not remove cached files for %s", sounding_id)
 
 
 _CACHE: SoundingCache | None = None

@@ -15,6 +15,7 @@
     "allow-get-model-catalog",
     "allow-get-model-status",
     "allow-open-sounding",
+    "allow-retain-soundings",
     "allow-get-sounding-progress",
     "allow-get-sounding-snapshot",
     "allow-restore-sounding-snapshot",

@@ -29,6 +29,7 @@ import { applyPreferences, createPreferencesRepository, DEFAULT_PREFERENCES, sta
 import { useUiStore } from "./stores/uiStore";
 import type { GraphicsProfile } from "./types/graphics";
 import { startSoundingRecovery } from "./features/sounding/soundingRecovery";
+import { startSoundingRetention } from "./features/sounding/soundingRetention";
 
 function startGraphics(): void {
   useGraphicsStore.getState().setCapabilities(probeGraphics());
@@ -93,6 +94,8 @@ async function boot(container: HTMLElement): Promise<void> {
     return;
   }
   const client = new BackendClient(await loadTransport());
+  const stopRetention = startSoundingRetention(client);
+  window.addEventListener("pagehide", stopRetention, { once: true });
   const stopRecovery = startSoundingRecovery(client);
   window.addEventListener("pagehide", stopRecovery, { once: true });
   const queryClient = createQueryClient();

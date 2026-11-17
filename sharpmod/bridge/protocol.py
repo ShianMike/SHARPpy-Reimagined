@@ -113,6 +113,7 @@ def decode_request(line: bytes) -> Request:
 #: bridge/fields.py, bridge/map_layers.py).
 HANDLER_VALIDATED = frozenset({
     "soundings.snapshot",
+    "soundings.retain",
     "soundings.restore",
     "animation.webp_frame",
     "soundings.progress",

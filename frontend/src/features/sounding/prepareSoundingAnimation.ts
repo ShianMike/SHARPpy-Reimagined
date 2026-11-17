@@ -38,13 +38,11 @@ export async function prepareSoundingAnimation(options: SoundingAnimationOptions
   const report = (phase: SoundingAnimationProgress["phase"], done: number): void => { progress({ phase, done, total: options.selected.length }); };
   report("loading", 0);
   const open = useSoundingStore.getState().open;
-  // The backend keeps 24 entries: retain the 12 visible profiles before adding
-  // at most 12 animation sources, without changing the user's open list.
+  // Confirm retention before adding animation sources; this protects visible
+  // profiles without requesting their scientific analyses or changing the list.
   if (summary.kind === "model") {
-    for (const item of open) {
-      await client.getSoundingAnalysis(item.soundingId, signal);
-      signal.throwIfAborted();
-    }
+    await client.retainSoundings(open.map(item => item.soundingId));
+    signal.throwIfAborted();
   }
   for (const [index, item] of options.selected.entries()) {
     signal.throwIfAborted();

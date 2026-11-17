@@ -20,7 +20,7 @@ function setup() {
     view: { mode: "winter", edits: [] }, selected: soundingFrameChoices(summary, model).slice(0, 3) };
   const client = new BackendClient(createTransport());
   const events: string[] = [];
-  vi.spyOn(client, "openSounding").mockImplementation((request) => {
+  const open = vi.spyOn(client, "openSounding").mockImplementation((request) => {
     if (request.kind !== "model") throw new Error("Expected a model");
     events.push(`open:${String(request.forecastHour)}`);
     return Promise.resolve({ ...summary, soundingId: `hour-${String(request.forecastHour)}`, forecastHour: request.forecastHour });
@@ -31,7 +31,7 @@ function setup() {
       inspection: { ...rawView.inspection, levels: [{ ...rawView.inspection.levels[0], windSpeed: id === "hour-2" ? 125 : 35, hodograph: { x: 0.5, y: 0.5 } }] },
     } as SoundingView);
   });
-  return { client, options, events, render };
+  return { client, options, events, render, open };
 }
 it("loads the complete selection and locks a shared scale using the strongest later profile", async () => {
   const { client, options, events, render } = setup();
@@ -48,6 +48,21 @@ it("does not render a partial animation when one selected profile fails", async 
   vi.spyOn(client, "openSounding").mockRejectedValueOnce(new Error("Missing forecast hour"));
   await expect(prepareSoundingAnimation(options, client, new AbortController().signal, () => undefined)).rejects.toThrow("Missing forecast hour");
   expect(render).not.toHaveBeenCalled();
+});
+it("waits for open-profile retention without analyzing unrelated profiles", async () => {
+  const { client, options, open } = setup();
+  const ids = Array.from({ length: 12 }, (_, index) => `open${String(index)}`);
+  useSoundingStore.setState({ open: ids.map(soundingId => ({ ...options.summary, soundingId })) });
+  let confirm: (value: boolean) => void = () => undefined;
+  const retain = vi.spyOn(client, "retainSoundings").mockImplementationOnce(() => new Promise(resolve => { confirm = resolve; }));
+  const analyze = vi.spyOn(client, "getSoundingAnalysis");
+  const prepared = prepareSoundingAnimation(options, client, new AbortController().signal, () => undefined);
+  expect(retain).toHaveBeenCalledWith(ids);
+  expect(open).not.toHaveBeenCalled();
+  confirm(true);
+  await prepared;
+  expect(analyze).not.toHaveBeenCalled();
+  expect(useSoundingStore.getState().open.map(item => item.soundingId)).toEqual(ids);
 });
 it("stops between profiles after cancellation", async () => {
   const { client, options, render, events } = setup();

@@ -42,6 +42,9 @@ Planned release: **v3.8.5**.
 
 ### Changed
 
+- Redesign Workspace settings with a compact saved-setup summary, current
+  panel count and theme, and a distinct reset section that explains which
+  work is kept and groups confirmation actions together.
 - Combine update availability and automatic check timing into one concise
   message in Settings, removing the separate schedule divider.
 - Replace the static Overview welcome cards with a current SPC briefing,

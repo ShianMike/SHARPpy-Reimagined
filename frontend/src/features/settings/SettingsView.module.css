@@ -85,15 +85,10 @@
 @media (max-width: 640px) { .releaseDialog .releaseHighlights { grid-template-columns: minmax(0, 1fr); } }
 .releaseFooter { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); padding-top: var(--space-4); border-top: var(--hairline) solid var(--border-subtle); }
 .releaseFooter p { color: var(--text-tertiary); font-size: var(--font-size-caption); }
-.units, .workspace { display: flex; flex-direction: column; gap: var(--space-4); }
+.units { display: flex; flex-direction: column; gap: var(--space-4); }
 .unitPopover { display: flex; flex-direction: column; gap: var(--space-4); width: var(--picker-w); padding: var(--space-4); overflow-y: auto; }
 .unitPopover > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .unitPopover h2 { font-size: var(--font-size-title); }
-.workspace .section { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5); }
-.workspace .legend { margin: 0; }
-.workspaceNote { padding-top: var(--space-3); border-top: var(--hairline) solid var(--border-subtle); color: var(--text-secondary); font-size: var(--font-size-caption); line-height: var(--line-height-body); }
-.workspace .updateActions { justify-content: flex-end; }
-.workspace .cacheConfirm { margin-top: 0; }
 .unitsFooter { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); color: var(--text-secondary); font-size: var(--font-size-small); }
 .unitsFooter button { flex: none; }
 .storage { display: flex; flex-direction: column; gap: var(--space-3); }

@@ -42,6 +42,10 @@ Planned release: **v3.8.5**.
 
 ### Changed
 
+- Make Create GIF the primary action in sounding animation and keep WebP as
+  another format choice. Group Save and Copy with the finished file and give
+  playback and export controls room to wrap on narrow screens. Fill the
+  preview column and keep profile time buttons evenly spaced.
 - Use a compact restore dialog with source and valid time for each saved
   sounding. Mark the last viewed profile and keep the main actions visible
   while the list scrolls. Group recovery in the sounding sidebar and

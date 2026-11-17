@@ -7,8 +7,8 @@
         "description": "Keep usable measurements when the archive repeats or misorders levels. Automatic provider selection checks the received data before accepting it and tries the next configured source when needed."
       },
       {
-        "title": "Clearer sounding recovery",
-        "description": "See each saved sounding’s source and time and which profile you last viewed. The sidebar distinguishes a previous session from your current save status. Open profiles stay available during background loading, and failed observed opens clean up their temporary files."
+        "title": "Clearer sounding controls",
+        "description": "Review saved sounding times and your last viewed profile before restoring. The sidebar separates the previous session from the current save status. Sounding animation highlights Create GIF and puts Save and Copy beside the finished file."
       },
       {
         "title": "Focused WRF point reads",

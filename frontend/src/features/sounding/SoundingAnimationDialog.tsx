@@ -4,6 +4,7 @@ import { Popover } from "../../components/Popover";
 import { Notice } from "../../components/Notice";
 import { Action, IconAction } from "../../ui/Controls";
 import { useBackendClient } from "../../lib/backend/BackendProvider";
+import { cx } from "../../lib/cx";
 import { useUiStore } from "../../stores/uiStore";
 import type { ImageMode, RenderChoice, SoundingSummary } from "../../types/soundings";
 import type { ViewRequest } from "../../types/soundingView";
@@ -80,10 +81,11 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
       .finally(() => { setCopying(false); });
   };
   const valid = chosen.length >= 2 && chosen.length <= 12;
+  const exportReady = !busy && result !== null && url !== null;
+  const formatLabel = result?.format === "webp" ? "WebP" : "GIF";
   const status = busy ? progress === null ? "Preparing…" : `${STAGES[progress.phase]} · ${String(progress.done)} / ${String(progress.total)}`
-    : copied ? "GIF copied" : result !== null ? `${result.format.toUpperCase()} ready · ${(result.blob.size / 1024 ** 2).toFixed(2)} MiB`
     : prepared !== null ? `${String(prepared.frames.length)} frames ready · ${String(prepared.width)} × ${String(prepared.height)}`
-    : "Choose 2–12 frames, then prepare playback or create an animation.";
+    : "Choose 2–12 frames to preview or export.";
   return <Popover id="sounding-animation" open anchor={anchor} onClose={close} role="dialog" label="Animate sounding" initialFocus="container" movable backdrop className={styles.dialog}>
     <header className={styles.header} data-popover-drag>
       <IconAction icon={GripHorizontal} size="sm" label="Move sounding animation screen" data-popover-move />
@@ -95,8 +97,8 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
         <section className={styles.identity}><span>One location · One run</span><strong>{summary.title}</strong><p>Every selected profile loads before the images are rendered. Plot axes stay fixed throughout playback.</p></section>
         <fieldset disabled={busy} className={styles.hoursSection}>
           <legend>{summary.kind === "model" ? "Forecast hours" : "File profiles"} <span>{chosen.length} selected</span></legend>
-          <div className={styles.hourActions}><Action onClick={() => { reset(); setSelected(choices.slice(0, 12).map((item) => item.value)); }}>Select first 12</Action><Action onClick={() => { reset(); setSelected([]); }}>Clear</Action></div>
-          <div className={styles.hours} role="group" aria-label="Sounding frames to animate">{choices.map((item) => <label key={item.value}>
+          <div className={local.profileActions}><Action onClick={() => { reset(); setSelected(choices.slice(0, 12).map((item) => item.value)); }}>Select first 12</Action><Action onClick={() => { reset(); setSelected([]); }}>Clear</Action></div>
+          <div className={cx(styles.hours, local.hourGrid)} role="group" aria-label="Sounding frames to animate">{choices.map((item) => <label key={item.value}>
             <input type="checkbox" aria-label={`Animate ${item.label}`} checked={chosen.includes(item.value)} onChange={(event) => {
               reset(); setSelected(event.currentTarget.checked ? [...chosen, item.value] : chosen.filter((value) => value !== item.value));
             }} /><span>{item.label}</span>
@@ -109,7 +111,7 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
         <p className={styles.help}>{quality === "uhd" ? "UHD" : "HD"} · Original rendered PNG frames · Looping playback with discrete forecast hours.</p>
       </div>
       <section className={styles.previewSection} aria-label="Sounding animation preview">
-        <div className={[styles.preview, local.preview].join(" ")} style={{ "--animation-aspect": prepared === null ? "16 / 9" : `${String(prepared.width)} / ${String(prepared.height)}` } as CSSProperties}>
+        <div className={cx(styles.preview, local.preview)} style={{ "--animation-aspect": prepared === null ? "16 / 9" : `${String(prepared.width)} / ${String(prepared.height)}` } as CSSProperties}>
           {url === null ? <div className={styles.placeholder}><Film aria-hidden="true" /><strong>Your sounding animation</strong><p>Prepare frames to play every selected hour.</p></div> : <img src={url} alt="Selected sounding animation frame" />}
           <canvas ref={preview} hidden aria-label="Sounding encoding preview" />
         </div>
@@ -119,20 +121,40 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
             onChange={(event) => { setPlaying(false); setIndex(Number(event.currentTarget.value)); }} />
           <span>{prepared.frames[index]?.label}</span>
         </div>}
-        <p className={styles.help}>WebP preserves the full colors without loss. GIF is available for sharing with apps that require it. Each hour uses its saved profile edits and the selected Severe or Winter layout.</p>
+        <p className={styles.help}>Use GIF for sharing or WebP to keep the full colors without loss. Each hour uses its saved profile edits and the selected Severe or Winter layout.</p>
         {error === "" ? null : <Notice tone="danger" role="alert" title="Sounding animation unavailable" message={error} />}
       </section>
     </div>
-    <footer className={styles.footer}>
-      <div className={styles.status} role="status" aria-live="polite" aria-busy={busy}><span>{status}</span>{busy && progress !== null ? <progress aria-label={STAGES[progress.phase]} value={progress.done} max={progress.total} /> : null}</div>
-      {busy ? <Action onClick={() => { controller.current?.abort(); }}>Cancel</Action> : <>
-        <Action onClick={close}>Close</Action>
-        {result === null || url === null ? null : <a className={styles.save} href={url} download={result.filename}><Download className="icon-sm" />Save {result.format.toUpperCase()}</a>}
-        {result?.format === "gif" ? <Action disabled={copying} onClick={copy}><Copy className="icon-sm" />{copying ? "Copying…" : "Copy GIF"}</Action> : null}
-        <Action disabled={!valid} onClick={() => { if (prepared === null) start(); else { setResult(null); setPlaying(true); } }}><Play className="icon-sm" />Prepare playback</Action>
-        <Action disabled={!valid} onClick={() => { start("gif"); }}>Create GIF</Action>
-        <Action tone="accent" disabled={!valid} onClick={() => { start("webp"); }}>Create WebP</Action>
-      </>}
+    <footer className={local.footer} data-export-ready={exportReady}>
+      <div className={exportReady ? local.resultBar : undefined}>
+        <div className={exportReady ? local.resultSummary : styles.status} role="status" aria-busy={busy || copying}>
+          {exportReady ? <>
+            <span className={local.resultIcon}><Film className="icon" aria-hidden="true" /></span>
+            <div>
+              <strong>{result.format === "gif" && copied ? "GIF copied" : `${formatLabel} ready`}</strong>
+              <span className={local.resultSize}>{(result.blob.size / 1024 ** 2).toFixed(2)} MiB</span>
+            </div>
+          </> : <>
+            <span>{status}</span>{busy && progress !== null ? <progress aria-label={STAGES[progress.phase]} value={progress.done} max={progress.total} /> : null}
+          </>}
+        </div>
+        {exportReady ? <div className={local.resultActions} role="group" aria-label="Finished animation">
+          {result.format === "gif" ? <Action disabled={copying} onClick={copy}><Copy className="icon-sm" aria-hidden="true" />{copying ? "Copying…" : "Copy GIF"}</Action> : null}
+          <a className={styles.save} href={url} download={result.filename}><Download className="icon-sm" aria-hidden="true" />Save {formatLabel}</a>
+        </div> : null}
+      </div>
+      <div className={local.actionBar}>
+        {busy ? <Action onClick={() => { controller.current?.abort(); }}>Cancel</Action> : <>
+          <div className={local.previewActions}>
+            <Action onClick={close}>Close</Action>
+            <Action disabled={!valid} onClick={() => { if (prepared === null) start(); else { setResult(null); setPlaying(true); } }}><Play className="icon-sm" aria-hidden="true" />Prepare playback</Action>
+          </div>
+          <div className={local.createActions}>
+            <Action disabled={!valid} onClick={() => { start("webp"); }}>Create WebP</Action>
+            <Action tone="accent" disabled={!valid} onClick={() => { start("gif"); }}><Film className="icon-sm" aria-hidden="true" />Create GIF</Action>
+          </div>
+        </>}
+      </div>
     </footer>
   </Popover>;
 }

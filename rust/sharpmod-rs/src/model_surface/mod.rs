@@ -83,13 +83,13 @@ impl GroundLevel {
     }
 }
 
-struct MergedProfile {
-    columns: [Vec<f64>; 9],
-    removed: usize,
+pub(crate) struct MergedProfile {
+    pub(crate) columns: [Vec<f64>; 9],
+    pub(crate) removed: usize,
 }
 
 /// The binding owns and aligns columns before releasing the interpreter.
-fn merge(columns: [Vec<f64>; 9], ground: GroundLevel, missing: f64) -> MergedProfile {
+pub(crate) fn merge(columns: [Vec<f64>; 9], ground: GroundLevel, missing: f64) -> MergedProfile {
     let keep: Vec<_> = columns[0]
         .iter()
         .enumerate()

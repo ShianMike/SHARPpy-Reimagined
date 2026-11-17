@@ -29,6 +29,13 @@ Planned release: **v3.8.5**.
 - Protect open profiles before model-animation loading with one retention
   acknowledgement instead of requesting scientific analyses for every open
   profile solely to update its LRU position.
+- Roll back model, ERA5 and WRF cache outputs if decoding, cancellation or
+  registration fails after extraction. Preserve the original source files and
+  shared model-hour cache.
+- Copy each edited sounding column once per edit transaction and reject
+  incomplete storm-motion edits before applying temperature or dewpoint edits.
+- Reject invalid HRRR Zarr chunk dimensions, numeric dtypes and point indices
+  before sampling, while retaining partial edge chunks and C/Fortran storage.
 
 ### Changed
 
@@ -36,6 +43,31 @@ Planned release: **v3.8.5**.
   observed bridge registration and opened-profile cache ownership into Rust.
   Retain the existing provider adapters, public schemas, archive decoders and
   validated atomic output transaction.
+- Move display thermodynamic indices, pressure-weighted humidity, precipitable
+  water, lapse rates and inferred temperature advection into Rust, preserving
+  the pinned SHARPpy sampling, masks and conversion constants. Compute TEI,
+  ESP, WNDG, significant-severe, SHIP and the complete MMP predictor natively.
+- Share portable NPZ archive, array, scalar and physical validation through one
+  native boundary. Move NPZ/JSON pair publication, cancellation and rollback
+  ownership into Rust while retaining matching generations and recovery files
+  when restoration fails.
+- Move model, ERA5 and WRF opening, metadata assembly and registration into
+  native transactions behind the existing CLI and bridge interfaces.
+- Select WRF NetCDF point hyperslabs and adjacent staggered wind cells before
+  materializing scientific arrays. Transform only the selected columns in Rust.
+- Run ECCC GeoMet point scheduling, exact run/time checks and normalization in
+  Rust. Move Open-Meteo point orchestration and column assembly into Rust while
+  retaining its single-request billing and credential-aware HTTP adapter.
+- Plan HRRR F000 Zarr metadata, schedule bounded chunk requests and normalize
+  point profiles in Rust. Reuse the native pooled HTTP client and retain
+  numcodecs for compressed chunks, current caches and the GRIB fallback.
+- Move NOMADS geographic subsets and the permissive Herbie transfer fallback
+  into Rust, including local byte ranges, HTTP 200 responses that ignore Range,
+  atomic publication and cancellation of stalled reads.
+- Assemble sounding edit targets, inspection records and original edit values
+  in Rust while retaining the existing Qt plot transforms and public shapes.
+- Check the new required native operations when selecting the Rust backend so
+  stale source-development wheels report the existing rebuild guidance.
 
 ## [v3.8.4] - 2026-11-17
 

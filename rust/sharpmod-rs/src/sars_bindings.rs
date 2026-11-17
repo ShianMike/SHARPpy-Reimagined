@@ -156,7 +156,7 @@ fn profile_sars<'py>(py: Python<'py>, profile: &Bound<'py, PyAny>) -> PyResult<B
     supercell_left[8] = hail_left[7];
 
     let result = PyDict::new(py);
-    result.set_item("ship", params.call_method1("ship", (profile,))?)?;
+    result.set_item("ship", crate::display_bindings::ship(py, profile)?)?;
     result.set_item("hail_database", "sars_hail.txt")?;
     result.set_item("supercell_database", "sars_supercell.txt")?;
     let directory = PyModule::import(py, "sharppy.databases.sars")?

@@ -55,17 +55,23 @@ impl RangeClient {
             header::HeaderValue::from_static("identity"),
         );
         let response = cancellable(self.client.execute(request), &cancel).await?;
-        let headers = ["content-range", "etag", "last-modified", "retry-after"]
-            .into_iter()
-            .filter_map(|name| {
-                response
-                    .headers()
-                    .get(name)?
-                    .to_str()
-                    .ok()
-                    .map(|value| (name.to_string(), value.to_string()))
-            })
-            .collect();
+        let headers = [
+            "content-range",
+            "content-length",
+            "etag",
+            "last-modified",
+            "retry-after",
+        ]
+        .into_iter()
+        .filter_map(|name| {
+            response
+                .headers()
+                .get(name)?
+                .to_str()
+                .ok()
+                .map(|value| (name.to_string(), value.to_string()))
+        })
+        .collect();
         Ok(RangeResponse {
             status: response.status().as_u16(),
             headers,

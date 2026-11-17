@@ -1,6 +1,6 @@
 {
   "3.8.5": {
-    "summary": "Open observed soundings more reliably and keep active profiles available during background work.",
+    "summary": "Open soundings more reliably, read WRF point data without whole grids, and move more scientific and provider work into Rust.",
     "highlights": [
       {
         "title": "Observed soundings open reliably",
@@ -9,6 +9,18 @@
       {
         "title": "Safer sounding background work",
         "description": "Keep open profiles available while background soundings load, including older profiles with edits. Renders and recovery saves keep their source files until finished. Failed or canceled observed opens clean up their temporary files, and unusable profiles report a data error."
+      },
+      {
+        "title": "Focused WRF point reads",
+        "description": "Read the selected NetCDF column and adjacent wind cells before converting arrays, instead of loading whole scientific grids for one sounding. Keep the existing wind rotation and surface-to-top ordering."
+      },
+      {
+        "title": "More native scientific and provider work",
+        "description": "Compute more display diagnostics in Rust with the same SHARPpy conventions. Rust also handles point-provider orchestration, HRRR analysis Zarr chunks and compatibility downloads, while keeping the current CLI, provider credentials and result formats."
+      },
+      {
+        "title": "Safer opening and editing",
+        "description": "Failed model, ERA5 and WRF opens remove their temporary outputs. Portable file validation and pair publication share a native owner. Editing several levels copies each changed column once and validates storm-motion edits before changing the profile."
       }
     ]
   },

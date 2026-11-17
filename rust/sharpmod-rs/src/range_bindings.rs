@@ -1,5 +1,6 @@
 //! Existing Python transport objects at the boundary of the native downloader.
 
+mod compat;
 #[cfg(test)]
 mod pipeline_benchmark;
 mod sessions;
@@ -389,6 +390,7 @@ fn download_model_ranges(
 }
 
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    compat::register(module)?;
     module.add_class::<GribDownloadPoint>()?;
     module.add_function(wrap_pyfunction!(model_range_session, module)?)?;
     module.add_function(wrap_pyfunction!(download_model_ranges, module)?)?;

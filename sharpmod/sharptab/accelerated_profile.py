@@ -402,18 +402,9 @@ class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
             super().get_parcels()
 
     def get_indices(self):
-        from sharpmod.sharptab.derived import _mmp_linear_predictor
+        from sharpmod_rs import populate_severe_indices
 
-        self.tei = sp_params.tei(self)
-        self.esp = sp_params.esp(self)
-        # Upstream MMP reads uninitialized shear cells; reuse our complete shear-pair calculation.
-        if self.mupcl.bplus < 100:
-            self.mmp = 0.0
-        else:
-            predictor = _mmp_linear_predictor(self)
-            self.mmp = ma.masked if predictor is None else float(np.exp(-np.logaddexp(0.0, predictor)))
-        self.wndg = sp_params.wndg(self)
-        self.sig_severe = sp_params.sig_severe(self)
+        populate_severe_indices(self)
         try:
             downdraft = getattr(self, "_sharpmod_downdraft", None)
             if downdraft is None:

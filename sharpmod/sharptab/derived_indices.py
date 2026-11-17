@@ -145,81 +145,10 @@ def _convective_oracle_profile(prof):
 
 
 def _mmp_linear_predictor(sp):
-    """Return the Coniglio et al. (2006) MMP logistic linear predictor, or ``None``.
+    """Return the native MMP predictor with the existing missing-value contract."""
+    from sharpmod_rs import mmp_linear_predictor
 
-    Computes the same input terms as ``sharppy.sharptab.params.mmp`` (MUCAPE, the
-    maximum bulk shear between the lowest 1 km and the 6-10 km layer, the 3-8 km
-    lapse rate, and the 3-12 km mean wind) and combines them with the published
-    regression coefficients, returning the linear predictor so that
-    ``MMP = 1 / (1 + exp(value))``. Returns ``None`` when any required term is
-    missing/masked or the profile lacks the low-level or 6-10 km levels.
-    """
-    from sharppy.sharptab import interp as sp_interp
-    from sharppy.sharptab import winds as sp_winds
-    from sharppy.sharptab import params as sp_params
-    from sharppy.sharptab import utils as sp_utils
-
-    mucape = _api._finite_or_none(getattr(sp.mupcl, "bplus", None))
-    if mucape is None:
-        return None
-
-    agl = sp_interp.to_agl(sp, sp.hght)
-    lowest_idx = np.where(np.asarray(agl) <= 1000.0)[0]
-    highest_idx = np.where((np.asarray(agl) >= 6000.0) & (np.asarray(agl) < 10000.0))[0]
-    if len(lowest_idx) == 0 or len(highest_idx) == 0 or sp.wdir.count() == 0:
-        return None
-
-    pbots = np.ma.masked_invalid(
-        np.atleast_1d(sp_interp.pres(sp, sp.hght[lowest_idx]))).compressed()
-    ptops = np.ma.masked_invalid(
-        np.atleast_1d(sp_interp.pres(sp, sp.hght[highest_idx]))).compressed()
-    if not pbots.size or not ptops.size:
-        return None
-    lower_u, lower_v = sp_interp.components(sp, pbots)
-    upper_u, upper_v = sp_interp.components(sp, ptops)
-
-    from sharpmod.backends import get_backend
-
-    native_shear = None
-    if get_backend().name == "rust":
-        import sharpmod_rs
-
-        native_shear = getattr(sharpmod_rs, "mmp_maximum_bulk_shear", None)
-    if native_shear is not None:
-        max_shear = native_shear(lower_u, lower_v, upper_u, upper_v)
-    else:
-        max_shear = None
-        # Reuse endpoint winds; reduce one upper layer at a time to keep storage linear.
-        for u_bot, v_bot in zip(np.atleast_1d(lower_u), np.atleast_1d(lower_v)):
-            magnitudes = np.ma.masked_invalid(
-                sp_utils.mag(upper_u - u_bot, upper_v - v_bot))
-            mag = _api._finite_or_none(np.ma.max(magnitudes))
-            if mag is not None and (max_shear is None or mag > max_shear):
-                max_shear = mag
-    if max_shear is None:
-        return None
-    max_bulk_shear = float(sp_utils.KTS2MS(max_shear))  # m/s
-
-    lr38 = _api._finite_or_none(sp_params.lapse_rate(sp, 3000.0, 8000.0, pres=False))
-    if lr38 is None:
-        return None
-
-    plower = sp_interp.pres(sp, sp_interp.to_msl(sp, 3000.0))
-    pupper = sp_interp.pres(sp, sp_interp.to_msl(sp, 12000.0))
-    mnu, mnv = sp_winds.mean_wind(sp, pbot=plower, ptop=pupper)
-    mnwind = _api._finite_or_none(sp_utils.mag(mnu, mnv))
-    if mnwind is None:
-        return None
-    mnwind_ms = float(sp_utils.KTS2MS(mnwind))  # m/s
-
-    value = (
-        _api._MMP_A0
-        + _api._MMP_A1 * max_bulk_shear
-        + _api._MMP_A2 * lr38
-        + _api._MMP_A3 * mucape
-        + _api._MMP_A4 * mnwind_ms
-    )
-    return float(value) if np.isfinite(value) else None
+    return mmp_linear_predictor(sp)
 
 
 def _left_supercell_composite_impl(prof):

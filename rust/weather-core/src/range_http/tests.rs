@@ -130,7 +130,7 @@ async fn body(response: &mut RangeResponse) -> Vec<u8> {
 }
 
 #[tokio::test]
-async fn exposes_status_and_only_resume_headers_and_sends_exact_range_headers() {
+async fn exposes_status_transfer_headers_and_sends_exact_range_headers() {
     let server = Server::new(|_, stream| {
         reply(
             stream,
@@ -156,6 +156,7 @@ async fn exposes_status_and_only_resume_headers_and_sends_exact_range_headers() 
     assert_eq!(
         response.headers,
         HashMap::from([
+            ("content-length".into(), "4".into()),
             ("content-range".into(), "bytes 5-8/20".into()),
             ("etag".into(), "\"same-object\"".into()),
             (
@@ -183,7 +184,10 @@ async fn skips_non_utf8_headers_and_does_not_retry_http_errors() {
     assert_eq!(response.status, 503);
     assert_eq!(
         response.headers,
-        HashMap::from([("retry-after".into(), "0".into())])
+        HashMap::from([
+            ("retry-after".into(), "0".into()),
+            ("content-length".into(), "4".into())
+        ])
     );
     assert_eq!(body(&mut response).await, b"busy");
     assert_eq!(server.requests.lock().unwrap().len(), 1);

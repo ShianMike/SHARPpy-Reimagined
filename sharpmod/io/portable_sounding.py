@@ -8,11 +8,6 @@ contract small and Qt/SHARPpy independent.
 
 from __future__ import annotations
 
-import json
-import math
-import os
-import zipfile
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -21,70 +16,7 @@ DEFAULT_MAX_NPZ_BYTES = 64 * 1024 * 1024
 DEFAULT_MAX_PROFILE_LEVELS = 20_000
 DEFAULT_MAX_SIDECAR_BYTES = 1 * 1024 * 1024
 _PROFILE_FIELDS = ("pres", "hght", "tmpc", "dwpc", "wdir", "wspd", "omeg")
-_SCALAR_FIELDS = ("valid", "run", "loc", "lat")
-_DATETIME_FORMATS = ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S")
 _MISSING = -9999.0
-
-
-def _positive_env_int(name: str, default: int) -> int:
-    try:
-        value = int(os.environ.get(name, default))
-    except (TypeError, ValueError, OverflowError):
-        return default
-    return value if value > 0 else default
-
-
-def _scalar(data, key: str):
-    if key not in data:
-        raise ValueError(f"portable sounding is missing required field {key!r}")
-    value = np.asarray(data[key])
-    if value.dtype.hasobject or value.size != 1:
-        raise ValueError(
-            f"portable sounding field {key!r} must be one safe scalar"
-        )
-    return value.reshape(-1)[0].item()
-
-
-def _profile_array(data, key: str, expected_levels: int | None) -> int:
-    if key not in data:
-        raise ValueError(f"portable sounding is missing required field {key!r}")
-    value = np.asarray(data[key])
-    if value.dtype.hasobject or value.dtype.kind not in "fiu" or value.ndim != 1:
-        raise ValueError(
-            f"portable sounding field {key!r} must be a numeric 1-D array"
-        )
-    level_count = int(value.size)
-    max_levels = _positive_env_int(
-        "SHARPMOD_MAX_PROFILE_LEVELS", DEFAULT_MAX_PROFILE_LEVELS
-    )
-    if not 2 <= level_count <= max_levels:
-        raise ValueError(
-            f"portable sounding field {key!r} has an invalid level count"
-        )
-    if expected_levels is not None and level_count != expected_levels:
-        raise ValueError(
-            f"portable sounding field {key!r} has {level_count} levels; "
-            f"expected {expected_levels}"
-        )
-    return level_count
-
-
-def _validate_datetime(value, key: str) -> None:
-    text = str(value).strip()
-    if not any(
-        _datetime_matches(text, pattern) for pattern in _DATETIME_FORMATS
-    ):
-        raise ValueError(
-            f"portable sounding field {key!r} is not a supported date/time"
-        )
-
-
-def _datetime_matches(value: str, pattern: str) -> bool:
-    try:
-        datetime.strptime(value, pattern)
-    except ValueError:
-        return False
-    return True
 
 
 #: Physical issues that describe a *contaminated* sounding rather than an
@@ -157,84 +89,10 @@ def _physical_profile_issues(columns) -> tuple[str, ...]:
 
 
 def validate_portable_sounding_pair(npz_path) -> Path:
-    """Validate a pair and return its ``.npz`` path or raise ``ValueError``.
+    """Validate a portable pair through the shared native boundary."""
+    from sharpmod_rs import validate_portable_pair
 
-    Marked pairs require matching, nonempty ``pair_generation`` strings; legacy
-    pairs with neither marker remain valid. This detects mixed publication,
-    not an atomic snapshot or a lock on the returned path.
-    """
-    path = Path(npz_path).expanduser()
-    sidecar = path.with_suffix(".json")
-    if path.suffix.casefold() != ".npz":
-        raise ValueError("portable sounding cache payload must be an .npz file")
-
-    npz_limit = _positive_env_int(
-        "SHARPMOD_MAX_NPZ_BYTES", DEFAULT_MAX_NPZ_BYTES
-    )
-    sidecar_limit = _positive_env_int(
-        "SHARPMOD_MAX_SIDECAR_BYTES", DEFAULT_MAX_SIDECAR_BYTES
-    )
-    try:
-        if not path.is_file() or path.stat().st_size > npz_limit:
-            raise ValueError("portable sounding archive is missing or oversized")
-        if not sidecar.is_file() or sidecar.stat().st_size > sidecar_limit:
-            raise ValueError("portable sounding sidecar is missing or oversized")
-        with zipfile.ZipFile(path) as archive:
-            members = archive.infolist()
-            if len(members) > 64:
-                raise ValueError("portable sounding contains too many arrays")
-            if sum(member.file_size for member in members) > npz_limit:
-                raise ValueError("portable sounding expands beyond the safety limit")
-            if any(
-                member.file_size > npz_limit
-                or not member.filename.endswith(".npy")
-                for member in members
-            ):
-                raise ValueError("portable sounding has an invalid array member")
-    except (OSError, zipfile.BadZipFile) as exc:
-        raise ValueError(f"invalid portable sounding archive: {exc}") from exc
-
-    try:
-        with np.load(path, allow_pickle=False) as data:
-            level_count = None
-            profile_columns = {}
-            for field in _PROFILE_FIELDS:
-                level_count = _profile_array(data, field, level_count)
-                profile_columns[field] = np.asarray(data[field], dtype=float)
-            fatal = fatal_issues(_physical_profile_issues(profile_columns))
-            if fatal:
-                raise ValueError(
-                    "portable sounding failed physical quality control: "
-                    + ", ".join(fatal)
-                )
-            values = {field: _scalar(data, field) for field in _SCALAR_FIELDS}
-            _validate_datetime(values["valid"], "valid")
-            _validate_datetime(values["run"], "run")
-            latitude = float(values["lat"])
-            if not math.isfinite(latitude) or not -90.0 <= latitude <= 90.0:
-                raise ValueError("portable sounding latitude is out of range")
-            if "lon" in data:
-                longitude = float(_scalar(data, "lon"))
-                if (
-                    not math.isfinite(longitude)
-                    or not -180.0 <= longitude <= 180.0
-                ):
-                    raise ValueError("portable sounding longitude is out of range")
-            marked = "pair_generation" in data
-            generation = _scalar(data, "pair_generation") if marked else None
-        payload = json.loads(sidecar.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, TypeError, ValueError, zipfile.BadZipFile) as exc:
-        raise ValueError(f"invalid portable sounding pair: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError("portable sounding sidecar must contain a JSON object")
-    if (marked or "pair_generation" in payload) and (
-        not isinstance(generation, str) or not generation.strip()
-        or generation != payload.get("pair_generation")
-    ):
-        raise ValueError(
-            "portable sounding pair generation is missing or mismatched"
-        )
-    return path
+    return validate_portable_pair(npz_path)
 
 
 def portable_sounding_pair_valid(npz_path) -> bool:

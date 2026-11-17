@@ -51,9 +51,10 @@ Planned release: **v3.8.5**.
   picker its own shortcuts, a visible selection limit, and aligned profile
   tiles that keep each UTC timestamp together.
 - Use a compact restore dialog with source and valid time for each saved
-  sounding. Mark the last viewed profile and keep the main actions visible
-  while the list scrolls. Group recovery in the sounding sidebar and
-  distinguish a previous session from the current session's save status.
+  sounding. Mark the last viewed profile and scroll only the saved-soundings
+  list, keeping the heading, description and actions in place. Group recovery
+  in the sounding sidebar and distinguish a previous session from the current
+  session's save status.
 - Move observed-provider fallback, pre-save validation, NPZ/metadata assembly,
   observed bridge registration and opened-profile cache ownership into Rust.
   Retain the existing provider adapters, public schemas, archive decoders and

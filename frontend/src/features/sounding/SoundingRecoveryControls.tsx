@@ -35,14 +35,14 @@ function RecoveryDialog({ session }: { session: RecoverySession }): ReactNode {
         <p className={styles.detail}>Saved <time dateTime={savedAt.toJSON()}>{savedAt.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</time></p>
       </div>
     </header>
-    <div className={styles.body} role="region" aria-label="Saved session details" tabIndex={0}>
+    <div className={styles.body} role="region" aria-label="Saved session details">
       <p className={styles.intro}>Resume with your selected time, profile edits, and undo history.</p>
       <div className={styles.profiles}>
         <div className={styles.listHeading}>
           <h3>Saved soundings <span className={styles.count}>{session.open.length}</span></h3>
           <span className={styles.mode}><ModeIcon className="icon-sm" aria-hidden="true" />{winter ? "Winter view" : "Severe view"}</span>
         </div>
-        <ul className={styles.list} aria-label="Saved soundings">
+        <ul className={styles.list} aria-label="Saved soundings" tabIndex={0}>
           {session.open.map(item => {
             const Icon = SOURCE_ICONS[item.kind];
             const active = item.soundingId === session.activeId;

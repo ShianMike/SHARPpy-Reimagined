@@ -3,16 +3,70 @@
 .playback input { flex: 1; min-width: 0; accent-color: var(--accent-bright); }
 .playback span { flex-basis: 100%; font-size: var(--font-size-caption); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
-.profileActions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-2); }
-.profileActions > button { font-size: var(--font-size-small); }
-.hourGrid[role="group"] { grid-template-columns: repeat(auto-fill, minmax(min(100%, 7rem), 1fr)); }
-.hourGrid label > span {
-  display: grid;
-  place-content: center;
-  min-block-size: var(--control-h-lg);
-  height: 100%;
-  text-wrap: balance;
+.framePicker { min-width: 0; margin: 0; padding: 0; border: 0; }
+.framePicker > legend {
+  margin-block-end: var(--space-2);
+  padding: 0;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
 }
+.framePanel {
+  overflow: hidden;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+.frameToolbar, .frameActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.frameToolbar {
+  justify-content: space-between;
+  padding: var(--space-2);
+  border-block-end: var(--hairline) solid var(--border-subtle);
+  background: var(--control-fill);
+}
+.frameActions > button { white-space: nowrap; }
+.frameCount {
+  margin-inline-start: auto;
+  padding-inline: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.frameGrid {
+  --tile-min: 7rem;
+  --tile-height: calc(var(--control-h-lg) + var(--space-2));
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--tile-min)), 1fr));
+  grid-auto-rows: var(--tile-height);
+  gap: var(--space-1);
+  max-block-size: calc(3 * var(--tile-height) + 2 * var(--space-1) + 2 * var(--space-2));
+  padding: var(--space-2);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.frameGrid[data-model="true"] { --tile-min: calc(var(--control-h-sm) * 1.65); --tile-height: var(--control-h-md); }
+.frameOption { position: relative; min-width: 0; }
+.frameOption > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.frameTile {
+  display: grid;
+  align-content: center;
+  gap: var(--space-1);
+  height: 100%;
+  padding-inline: var(--space-1);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--control-fill);
+  text-align: center;
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+.frameTile > strong { font-weight: var(--font-weight-semibold); }
+.frameTile > small { overflow: hidden; color: var(--text-secondary); font-size: inherit; text-overflow: ellipsis; white-space: nowrap; }
+.frameOption:hover > input:enabled:not(:checked) + .frameTile { background: var(--fill-hover); }
+.frameOption > input:checked + .frameTile { border-color: var(--accent-bright); background: var(--accent-subtle); color: var(--accent-bright); }
+.frameOption > input:focus-visible + .frameTile { outline: var(--focus-ring-width) solid var(--accent-bright); outline-offset: 0; }
+.frameOption > input:disabled { cursor: default; }
+.frameOption > input:disabled + .frameTile { opacity: 0.65; }
 
 .footer {
   display: grid;

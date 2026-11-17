@@ -8,7 +8,7 @@
       },
       {
         "title": "Clearer sounding controls",
-        "description": "Review saved sounding times and your last viewed profile before restoring. The sidebar separates the previous session from the current save status. Sounding animation highlights Create GIF and puts Save and Copy beside the finished file."
+        "description": "Review saved sounding times and your last viewed profile before restoring. Pick animation frames with compact shortcuts, clear UTC times, and a visible selection limit. Create GIF is the primary action, with Save and Copy beside the finished file."
       },
       {
         "title": "Focused WRF point reads",

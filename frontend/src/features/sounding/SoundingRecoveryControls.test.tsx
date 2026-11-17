@@ -32,7 +32,7 @@ it("reports failed saves without claiming the current session is protected", () 
   useSoundingRecoveryStore.setState({ status: "error", message: "Storage full", retrySave });
   render(<SoundingRecoveryStatus />);
   expect(screen.getByText("Storage full")).toBeTruthy();
-  expect(screen.queryByText("Recovery copy saved on this device")).toBeNull();
+  expect(screen.queryByText("Saved on this device")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Retry recovery save" }));
   expect(retrySave).toHaveBeenCalledOnce();
 });

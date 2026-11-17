@@ -42,6 +42,10 @@ Planned release: **v3.8.5**.
 
 ### Changed
 
+- Use a compact restore dialog with source and valid time for each saved
+  sounding. Mark the last viewed profile and keep the main actions visible
+  while the list scrolls. Group recovery in the sounding sidebar and
+  distinguish a previous session from the current session's save status.
 - Move observed-provider fallback, pre-save validation, NPZ/metadata assembly,
   observed bridge registration and opened-profile cache ownership into Rust.
   Retain the existing provider adapters, public schemas, archive decoders and

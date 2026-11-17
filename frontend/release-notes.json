@@ -7,8 +7,8 @@
         "description": "Keep usable measurements when the archive repeats or misorders levels. Automatic provider selection checks the received data before accepting it and tries the next configured source when needed."
       },
       {
-        "title": "Safer sounding background work",
-        "description": "Keep open profiles available while background soundings load, including older profiles with edits. Renders and recovery saves keep their source files until finished. Failed or canceled observed opens clean up their temporary files, and unusable profiles report a data error."
+        "title": "Clearer sounding recovery",
+        "description": "See each saved sounding’s source and time and which profile you last viewed. The sidebar distinguishes a previous session from your current save status. Open profiles stay available during background loading, and failed observed opens clean up their temporary files."
       },
       {
         "title": "Focused WRF point reads",

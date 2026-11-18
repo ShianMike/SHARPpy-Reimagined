@@ -55,7 +55,8 @@ Planned release: **v3.8.5**.
   units, an active-panel indicator and selectable rows for switching map
   panels. Add coordinate copying with success and failure feedback, keeping
   the sounding action accessible while readings and source details scroll.
-  Keep secondary map controls clear of the inspector on narrow windows.
+  Keep secondary map controls clear of the inspector on narrow windows and
+  remove the redundant Layers shortcut from the inspector header.
 - Redesign Workspace settings with a compact saved-setup summary, current
   panel count and theme, and a distinct reset section that explains which
   work is kept and groups confirmation actions together. Align the saved

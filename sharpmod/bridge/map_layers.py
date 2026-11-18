@@ -96,6 +96,8 @@ def spc_outlook(params: dict[str, Any]) -> dict[str, Any]:
             if not shape.marker
         ],
     }
+    if layer.affected_states is not None:
+        result["outlook"]["affected_states"] = list(layer.affected_states)
     return result
 
 

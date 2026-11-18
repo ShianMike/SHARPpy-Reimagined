@@ -1,9 +1,6 @@
-import { ExternalLink, MapPin, RefreshCw } from "lucide-react";
+import { ExternalLink, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useLatestSpcOutlook } from "../../map/mapQueries";
-import { containsPoint, type LonLat } from "../../map/layers/outlookGeometry";
-import { useStationCatalog } from "../../stations/stationQueries";
-import { useAppStore } from "../../stores/appStore";
 import { OUTLOOK_DAYS, OUTLOOK_KEYS, type OutlookDay, type OutlookProductKey } from "../../types/map";
 import { IconAction } from "../../ui/Controls";
 import styles from "./SpcBriefing.module.css";
@@ -19,12 +16,6 @@ export function SpcBriefing(): ReactNode {
   const [now, setNow] = useState(Date.now);
   const dayLabel = `Day ${String(day)}`;
   const query = useLatestSpcOutlook(day, product);
-  const point = useAppStore((state) => state.selectedPoint);
-  const stationId = useAppStore((state) => state.selectedStationId);
-  const stations = useStationCatalog();
-  const station = stations.data?.stations.find((item) => item.id === stationId);
-  const coordinate: LonLat | null = point !== null ? [point.longitude, point.latitude] : station === undefined ? null : [station.longitude, station.latitude];
-  const locationName = point !== null ? `${point.latitude.toFixed(2)}°, ${point.longitude.toFixed(2)}°` : station?.name ?? "";
   useEffect(() => {
     const update = (): void => { setNow(Date.now()); };
     const timer = window.setInterval(update, 30_000);
@@ -43,9 +34,8 @@ export function SpcBriefing(): ReactNode {
   const areas = available ? outlook.areas : EMPTY_AREAS;
   const ranked = useMemo(() => [...areas].filter((area) => !area.hatch).sort((a, b) => b.rank - a.rank), [areas]);
   const highest = ranked[0];
-  const atPoint = coordinate === null ? undefined : ranked.find((area) => containsPoint(area.rings, coordinate));
-  const qualifier = coordinate === null ? false : areas.some((area) => area.hatch && containsPoint(area.rings, coordinate));
-  const outside = coordinate !== null && (coordinate[0] < -125 || coordinate[0] > -66 || coordinate[1] < 24 || coordinate[1] > 50);
+  const states = outlook?.affectedStates;
+  const affectedAreas = highest === undefined ? "None" : states === undefined ? "Unavailable" : states.join(", ") || "None";
   const headline = available ? highest?.description || highest?.label || "No areas outlined" : query.isPending ? `Loading ${dayLabel} outlook…` : "Outlook unavailable";
   const legend = ranked.filter((area, index) => ranked.findIndex((item) => item.label === area.label) === index).reverse();
   return <section className={styles.briefing} aria-labelledby="spc-briefing-title">
@@ -77,7 +67,10 @@ export function SpcBriefing(): ReactNode {
         <div><dt>Valid from</dt><dd><time dateTime={validFrom}>{utc.format(start)} UTC</time></dd></div>
         <div><dt>Valid until</dt><dd><time dateTime={validTo}>{utc.format(end)} UTC</time></dd></div>
       </dl> : <p className={styles.unavailable}>{query.isPending ? `Fetching the latest SPC ${dayLabel} outlook.` : query.isError ? "SPC could not be reached. Refresh to try again." : `SPC returned no active or upcoming outlook for ${dayLabel}.`}</p>}
-      <div className={styles.location}><MapPin className="icon-sm" aria-hidden="true" /><div><span>{coordinate === null ? "Your location" : locationName}</span><strong>{coordinate === null ? "Select a point or station on the map" : outside ? "Outside the contiguous U.S. outlook" : !available ? "Outlook risk unavailable" : atPoint?.description || atPoint?.label || "No outlined area at this point"}</strong>{qualifier ? <small>Significant-severe area also outlined</small> : null}</div></div>
+      {available ? <div className={styles.affected}>
+        <span>Affected areas</span>
+        <strong>{affectedAreas}</strong>
+      </div> : null}
       {query.isError && available ? <p className={styles.notice} role="status">Refresh failed. Showing the last valid outlook.</p> : null}
       <p className={styles.note}>{product === "cat" ? "Thunderstorm areas are separate from the five severe-risk categories." : product === "prob" ? "Combined probabilities cover tornadoes, damaging winds, or large hail within 25 miles of a point." : "Probabilities describe the chance of this hazard within 25 miles of a point."} Check local warnings for immediate hazards.</p>
     </div>

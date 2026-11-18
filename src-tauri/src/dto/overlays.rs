@@ -46,6 +46,9 @@ pub struct Outlook {
     pub covers: bool,
     pub source_url: String,
     pub attribution: String,
+    /// The highest risk tier's coverage for a latest-issuance request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub affected_states: Option<Vec<String>>,
     pub areas: Vec<OutlookArea>,
 }
 
@@ -67,6 +70,14 @@ impl SpcOutlook {
             return Ok(());
         };
         check_text("title", &outlook.title, 0, 300)?;
+        if let Some(states) = &outlook.affected_states {
+            if states.len() > 49 {
+                return Err("too many affected states".into());
+            }
+            for state in states {
+                check_text("affected state", state, 1, 32)?;
+            }
+        }
         if outlook.areas.len() > MAX_AREAS {
             return Err("too many outlook areas".into());
         }

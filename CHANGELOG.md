@@ -65,8 +65,10 @@ Planned release: **v3.8.5**.
   message in Settings, removing the separate schedule divider.
 - Replace the static Overview welcome cards with a compact SPC briefing for
   Day 1, Day 2, or Day 3. Show each day's latest issuance, official UTC times,
-  outlined risks and the selected location's outlook independently of model
-  and live-history selections. Include tornado, wind and hail for Days 1–2,
+  outlined risks and the states partially covered by the highest risk.
+  Match the SPC polygons to bundled Census boundaries. Follow the current
+  clock independently of model and live-history selections.
+  Include tornado, wind and hail for Days 1–2,
   plus combined severe probability for Day 3. Refresh while open and label
   upcoming guidance. Remove the embedded map and heading shield. Keep
   shortcuts to forecasts, live tracking and soundings.

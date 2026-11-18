@@ -245,6 +245,8 @@ export interface Outlook {
   covers: boolean;
   sourceUrl: string;
   attribution: string;
+  /** States with some coverage in the highest risk tier of a latest issuance. */
+  affectedStates?: readonly string[];
   areas: readonly OutlookArea[];
 }
 

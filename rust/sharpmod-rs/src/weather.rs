@@ -358,8 +358,12 @@ fn spc_outlook_fetch(
             .map_err(PyRuntimeError::new_err)?;
         layer
             .map(|item| {
-                serde_json::to_string(item.as_ref())
-                    .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+                let result = if day.is_some() {
+                    item.latest_json()
+                } else {
+                    serde_json::to_string(item.as_ref())
+                };
+                result.map_err(|error| PyRuntimeError::new_err(error.to_string()))
             })
             .transpose()
     })

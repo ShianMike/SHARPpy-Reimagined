@@ -190,6 +190,13 @@ impl Router {
                 covers: layer.covers(when),
                 source_url: layer.source_url.clone(),
                 attribution: layer.attribution.clone(),
+                affected_states: day.map(|_| {
+                    layer
+                        .affected_states()
+                        .into_iter()
+                        .map(Into::into)
+                        .collect()
+                }),
                 areas: layer
                     .areas
                     .iter()

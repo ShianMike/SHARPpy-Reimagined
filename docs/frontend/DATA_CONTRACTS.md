@@ -383,6 +383,7 @@ export interface SpcOutlook {
     validFrom: string | null; validTo: string | null; issued: string | null;
     covers: boolean;                       // false: the nearest outlook found does not cover the time
     sourceUrl: string; attribution: string;
+    affectedStates?: string[];             // latest issuance: states intersecting the highest non-hatched tier
     areas: { label: string; description: string;
              fill: string | null; stroke: string;   // SPC's colours
              rank: number; hatch: boolean; hatchLevel: number;

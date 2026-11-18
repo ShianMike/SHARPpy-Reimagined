@@ -1,5 +1,7 @@
 //! Time-aware SPC convective outlook resolution, GeoJSON decoding, and caching.
 
+mod affected_areas;
+
 use crate::format_rfc3339_utc;
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -69,6 +71,25 @@ pub struct OutlookLayer {
 }
 
 impl OutlookLayer {
+    /// State names for the highest non-hatched risk shown in the briefing.
+    pub fn affected_states(&self) -> Vec<&'static str> {
+        affected_areas::highest_risk_states(&self.areas)
+    }
+
+    /// The Python bridge forwards this field alongside the existing layer data.
+    pub fn latest_json(&self) -> Result<String, serde_json::Error> {
+        #[derive(Serialize)]
+        struct LatestOutlook<'a> {
+            #[serde(flatten)]
+            layer: &'a OutlookLayer,
+            affected_states: Vec<&'static str>,
+        }
+        serde_json::to_string(&LatestOutlook {
+            layer: self,
+            affected_states: self.affected_states(),
+        })
+    }
+
     pub fn covers(&self, when: OffsetDateTime) -> bool {
         if self.valid_from_dt.is_none() && self.valid_to_dt.is_none() {
             return true;

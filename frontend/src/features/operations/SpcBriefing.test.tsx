@@ -14,7 +14,7 @@ import { SpcBriefing } from "./SpcBriefing";
 const savedApp = useAppStore.getState(), savedForecast = useForecastStore.getState(), savedLive = useLiveTrackingStore.getState();
 const now = new Date("2026-10-04T23:58:00Z");
 const area = { ...sample.outlook.areas[0], label: "SLGT", description: "Slight Risk", rank: 2, rings: [[[-104, 30], [-88, 30], [-88, 42], [-104, 42]]] };
-const current = { ...sample, outlook: { ...sample.outlook, areas: [area, { ...area, hatch: true, rank: 10000, label: "SIGN", description: "Significant severe" }] } };
+const current = { ...sample, outlook: { ...sample.outlook, affectedStates: ["Kansas", "Oklahoma", "Texas"], areas: [area, { ...area, hatch: true, rank: 10000, label: "SIGN", description: "Significant severe" }] } };
 
 beforeEach(() => {
   vi.spyOn(Date, "now").mockReturnValue(now.getTime());
@@ -61,15 +61,14 @@ it("requests only the selected product using the current clock, independent of a
   queryClient.clear();
 });
 
-it("reports selected point risk and significant-severe qualifiers, respecting polygon holes", async () => {
-  useAppStore.setState({ selectedPoint: { longitude: -95, latitude: 35 } });
+it("lists the states in the headline risk independently of the selected map point", async () => {
   const { queryClient } = renderWithBackend(<SpcBriefing />, transportWith());
   await screen.findByRole("heading", { name: "Slight Risk" });
-  expect(screen.getByText("Significant-severe area also outlined")).toBeTruthy();
-  act(() => { useAppStore.setState({ selectedPoint: { longitude: -75, latitude: 30 } }); });
-  expect(screen.getByText("No outlined area at this point")).toBeTruthy();
-  act(() => { queryClient.setQueryData(["spc-latest", 1, "cat"], { ...current, outlook: { ...current.outlook, areas: [{ ...area, rings: [...area.rings.slice(0, 1), [[-98, 32], [-90, 32], [-90, 40], [-98, 40]]] }] } }); useAppStore.setState({ selectedPoint: { longitude: -95, latitude: 35 } }); });
-  expect(screen.getByText("No outlined area at this point")).toBeTruthy();
+  expect(screen.getByText("Affected areas")).toBeTruthy();
+  expect(screen.getByText("Kansas, Oklahoma, Texas")).toBeTruthy();
+  act(() => { useAppStore.setState({ selectedPoint: { longitude: -75, latitude: 30 }, selectedStationId: "72357" }); });
+  expect(screen.getByText("Kansas, Oklahoma, Texas")).toBeTruthy();
+  expect(screen.queryByText("Your location")).toBeNull();
   queryClient.clear();
 });
 
@@ -83,6 +82,7 @@ it.each([
   const { queryClient } = renderWithBackend(<SpcBriefing />, transportWith(reply));
   await screen.findByRole("heading", { name: "Outlook unavailable" });
   expect(screen.queryByText("Current", { exact: true })).toBeNull();
+  expect(screen.queryByText("Affected areas")).toBeNull();
   expect(screen.queryByRole("img")).toBeNull();
   queryClient.clear();
 });
@@ -91,6 +91,7 @@ it("handles empty valid guidance without inventing a risk category", async () =>
   const { queryClient } = renderWithBackend(<SpcBriefing />, transportWith({ ...current, outlook: { ...current.outlook, areas: [] } }));
   await screen.findByRole("heading", { name: "No areas outlined" });
   expect(screen.getByText("Current", { exact: true })).toBeTruthy();
+  expect(screen.getByText("None", { exact: true })).toBeTruthy();
   queryClient.clear();
 });
 
@@ -111,6 +112,7 @@ it("switches days and products together and shows upcoming guidance for the sele
         validFrom: day === 2 ? "2026-10-05T12:00:00Z" : "2026-10-06T12:00:00Z",
         validTo: day === 2 ? "2026-10-06T12:00:00Z" : "2026-10-07T12:00:00Z",
         areas: [{ ...area, description }],
+        affectedStates: day === 2 ? ["Florida"] : args?.product === "prob" ? ["Nebraska", "South Dakota"] : ["Iowa"],
       },
     });
   });
@@ -119,6 +121,7 @@ it("switches days and products together and shows upcoming guidance for the sele
   await userEvent.click(screen.getByRole("button", { name: "Wind" }));
   await userEvent.click(screen.getByRole("button", { name: "Day 2" }));
   await screen.findByRole("heading", { name: "Day 2 risk area" });
+  expect(screen.getByText("Florida", { exact: true })).toBeTruthy();
   expect(screen.getByText("Upcoming", { exact: true })).toBeTruthy();
   expect(screen.getByText("05 Oct, 12:00 UTC")).toBeTruthy();
   expect(screen.queryByText("Current", { exact: true })).toBeNull();
@@ -127,10 +130,12 @@ it("switches days and products together and shows upcoming guidance for the sele
 
   await userEvent.click(screen.getByRole("button", { name: "Day 3" }));
   await screen.findByRole("heading", { name: "Day 3 risk area" });
+  expect(screen.getByText("Iowa", { exact: true })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Wind" })).toBeNull();
   expect(screen.getByRole("button", { name: "Categorical" }).getAttribute("aria-pressed")).toBe("true");
   await userEvent.click(screen.getByRole("button", { name: "Severe probability" }));
   await screen.findByRole("heading", { name: "15% combined severe" });
+  expect(screen.getByText("Nebraska, South Dakota")).toBeTruthy();
   expect(transport.call).toHaveBeenCalledWith("get_spc_outlook", expect.objectContaining({ day: 3, product: "prob", validTime: "2026-10-04T23:58:00Z" }));
   expect(screen.getByRole("link", { name: "NOAA / NWS SPC" }).getAttribute("href")).toContain("day3otlk.html");
   expect(screen.queryByRole("heading", { name: "Day 2 risk area" })).toBeNull();

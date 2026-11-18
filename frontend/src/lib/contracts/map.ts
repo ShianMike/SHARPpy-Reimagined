@@ -170,7 +170,7 @@ function parseOutlook(value: unknown, path: string): Outlook {
   const obj = expectObject(value, path);
   expectExactKeys(obj, path, [
     "title", "subtitle", "validFrom", "validTo", "issued", "covers", "sourceUrl", "attribution", "areas",
-  ]);
+  ], ["affectedStates"]);
   const time = (v: unknown, p: string): string | null => expectNullable(v, p, expectTimestamp);
   return {
     title: expectString(obj.title, at(path, "title"), { maxLength: 300 }),
@@ -181,6 +181,10 @@ function parseOutlook(value: unknown, path: string): Outlook {
     covers: expectBoolean(obj.covers, at(path, "covers")),
     sourceUrl: prose(obj.sourceUrl, at(path, "sourceUrl")),
     attribution: expectString(obj.attribution, at(path, "attribution"), { maxLength: 300 }),
+    ...(obj.affectedStates === undefined ? {} : {
+      affectedStates: expectArray(obj.affectedStates, at(path, "affectedStates"), (state, p) =>
+        expectString(state, p, { minLength: 1, maxLength: 32 })),
+    }),
     areas: expectArray(obj.areas, at(path, "areas"), parseArea),
   };
 }

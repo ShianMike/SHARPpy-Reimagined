@@ -271,6 +271,7 @@ class OverlayLayer:
     #: bottom of the map -- a list of the data rather than a key to it. The
     #: title and the attribution are still drawn; only the swatches are dropped.
     legend: bool = True
+    affected_states: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "actual_times", tuple(

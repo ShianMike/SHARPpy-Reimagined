@@ -16,21 +16,22 @@ export function useLiveHistory() {
   const queryClient = useQueryClient();
   const sites = useRadarSites(true).data?.sites;
   const camera = useMapStore((state) => state.cameraSnapshot);
-  const site = nearestRadarSite(sites ?? [], camera?.center[1] ?? 39.8, camera?.center[0] ?? -98.6);
+  const site = nearestRadarSite(sites ?? [], camera?.center[1] ?? 0, camera?.center[0] ?? 0);
   const anchor = useSelectionAnchor();
   const { now, selectedTime, playing } = useLiveTrackingStore();
   const { speed, loop } = useUiStore();
   const panels = useMapStore((state) => state.livePanels);
   const layout = useMapStore((state) => state.panelLayout);
-  const pending = useIsFetching({ predicate: (query) => isLiveQuery(query.queryKey) && query.getObserversCount() > 0 });
+  const pending = useIsFetching({ predicate: (query) => isLiveQuery(query.queryKey) });
 
-  const load = useCallback(async (time: number): Promise<void> => {
-    await Promise.allSettled(liveRequests(client, useMapStore.getState(), site, anchor, liveTimestamp(time), sites).map((request) =>
+  const load = useCallback(async (time: number, followingLive: boolean) => {
+    const requests = liveRequests(client, useMapStore.getState(), site, anchor, liveTimestamp(time), sites, followingLive);
+    await Promise.allSettled(requests.map((request) =>
       fetchLiveRequest(queryClient, request).then(async (data) => {
         const frame = data as { png?: unknown } | undefined;
         if (frame?.png instanceof Blob) await decodePng(frame.png);
       })));
-    trimLiveCache(queryClient);
+    return requests.map(({ queryKey }) => queryKey);
   }, [client, queryClient, site, anchor, sites]);
 
   useEffect(() => {
@@ -38,19 +39,19 @@ export function useLiveHistory() {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const times = liveHistoryTimes(now);
-    const time = selectedTime ?? times[0] ?? now;
-    const next = times.find((step) => step > time) ?? (loop ? times[0] ?? now : null);
-    if (next === null) { useLiveTrackingStore.getState().setPlaying(false); return; }
-    const delay = new Promise<void>((resolve) => { timer = setTimeout(resolve, FRAME_INTERVAL_MS / speed); });
-    void Promise.all([!loop && next >= now ? Promise.resolve() : load(next), delay]).then(() => {
+    const next = selectedTime === null || selectedTime >= now ? times[0] : times.find((step) => step > selectedTime);
+    if (next === undefined) { useLiveTrackingStore.getState().setPlaying(false); return; }
+    const followingLive = !loop && next === now;
+    const delay = selectedTime === null ? Promise.resolve() : new Promise<void>((resolve) => { timer = setTimeout(resolve, FRAME_INTERVAL_MS / speed); });
+    void Promise.all([load(next, followingLive), delay]).then(([prepared]) => {
       if (stopped) return;
-      if (!loop && next >= now) {
-        useLiveTrackingStore.getState().setPlaying(false);
-        useLiveTrackingStore.getState().selectTime(null);
-      } else useLiveTrackingStore.getState().selectTime(next);
+      // Reused entries can be the oldest in the cache, even though they draw next.
+      trimLiveCache(queryClient, undefined, prepared);
+      if (followingLive) useLiveTrackingStore.setState({ playing: false, selectedTime: null });
+      else useLiveTrackingStore.getState().selectTime(next);
     });
     return () => { stopped = true; clearTimeout(timer); };
-  }, [now, selectedTime, playing, speed, loop, panels, layout, load]);
+  }, [now, selectedTime, playing, speed, loop, panels, layout, load, queryClient]);
   useEffect(() => () => { useLiveTrackingStore.getState().setPlaying(false); }, []);
 
   return { waiting: playing && pending > 0 };

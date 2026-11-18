@@ -1,4 +1,4 @@
-import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import { hashKey, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import type { BackendClient } from "../../lib/backend/client";
 import { BackendFailure, overlayAvailability } from "../../lib/backend/errors";
 import { BASE_QUERY_OPTIONS, mapKeys, RADAR_HISTORY_STALE_MS } from "../../lib/backend/queryOptions";
@@ -22,27 +22,26 @@ export function fetchLiveRequest(queryClient: QueryClient, request: LiveRequest,
 }
 
 /** Use the same source addresses as the displayed layers. */
-export function liveRequests(client: BackendClient, state: MapState, site: string | null, anchor: SurfaceAnchor | null, time: string, sites: readonly RadarSite[] = [], panel?: number): LiveRequest[] {
-  if (panel === undefined) {
-    const requests = Array.from({ length: state.panelLayout }, (_, index) => liveRequests(client, state, site, anchor, time, sites, index)).flat();
-    return [...new Map(requests.map((request) => [JSON.stringify(request.queryKey), request])).values()];
-  }
+export function liveRequests(client: BackendClient, state: MapState, site: string | null, anchor: SurfaceAnchor | null, time: string, sites: readonly RadarSite[] = [], followingLive = false): LiveRequest[] {
   const requests: LiveRequest[] = [];
   const liveState: MapState = { ...state, view: "live" };
-  const layers = panelLayers(liveState, panel);
-  const weather = panelWeather(liveState, panel);
-  const reports = panelReports(liveState, panel);
-  const { satelliteChannel: channel, radarScope } = weather;
-  const { site: selectedSite, product, tilt, supportedProducts } = panelRadar(weather, site, sites);
-  if (layers.radar.visible) {
-    if (radarScope === "site" && selectedSite !== null && supportedProducts?.length !== 0) requests.push({ queryKey: mapKeys.radarSite(product, selectedSite, time, tilt), queryFn: () => client.getRadarSiteFrame({ site: selectedSite }, product, time, tilt) });
-    if (radarScope === "mosaic") requests.push({ queryKey: mapKeys.radar(product, time), queryFn: () => client.getRadarFrame(product, time) });
+  const radarTime = followingLive ? null : time;
+  for (let panel = 0; panel < state.panelLayout; panel++) {
+    const layers = panelLayers(liveState, panel);
+    const weather = panelWeather(liveState, panel);
+    const reports = panelReports(liveState, panel);
+    const { satelliteChannel: channel, radarScope } = weather;
+    const { site: selectedSite, product, tilt, supportedProducts } = panelRadar(weather, site, sites);
+    if (layers.radar.visible) {
+      if (radarScope === "site" && selectedSite !== null && supportedProducts?.length !== 0) requests.push({ queryKey: mapKeys.radarSite(product, selectedSite, radarTime, tilt), queryFn: () => client.getRadarSiteFrame({ site: selectedSite }, product, radarTime, tilt) });
+      if (radarScope === "mosaic") requests.push({ queryKey: mapKeys.radar(product, radarTime), queryFn: () => client.getRadarFrame(product, radarTime) });
+    }
+    if (layers.satellite.visible) requests.push({ queryKey: mapKeys.satellite(channel, time), queryFn: () => client.getSatelliteFrame(time, channel) });
+    if (layers.warnings.visible || layers.watches.visible) requests.push({ queryKey: mapKeys.alerts(time), queryFn: () => client.getWeatherAlerts(time) });
+    if (layers["storm-reports"].visible) requests.push({ queryKey: mapKeys.reports(time, reports.reportWindowS, reports.reportFilter), queryFn: () => client.getStormReports(time, reports.reportWindowS, reports.reportFilter) });
+    if (layers["surface-plots"].visible && anchor !== null) requests.push({ queryKey: mapKeys.surface(anchor.latitude, anchor.longitude, time), queryFn: () => client.getSurfacePlots(anchor.latitude, anchor.longitude, time) });
   }
-  if (layers.satellite.visible) requests.push({ queryKey: mapKeys.satellite(channel, time), queryFn: () => client.getSatelliteFrame(time, channel) });
-  if (layers.warnings.visible || layers.watches.visible) requests.push({ queryKey: mapKeys.alerts(time), queryFn: () => client.getWeatherAlerts(time) });
-  if (layers["storm-reports"].visible) requests.push({ queryKey: mapKeys.reports(time, reports.reportWindowS, reports.reportFilter), queryFn: () => client.getStormReports(time, reports.reportWindowS, reports.reportFilter) });
-  if (layers["surface-plots"].visible && anchor !== null) requests.push({ queryKey: mapKeys.surface(anchor.latitude, anchor.longitude, time), queryFn: () => client.getSurfacePlots(anchor.latitude, anchor.longitude, time) });
-  return requests;
+  return [...new Map(requests.map((request) => [hashKey(request.queryKey), request])).values()];
 }
 
 const LIVE_PREFIXES = new Set(["radar", "radar-site", "satellite", "weather-alerts", "surface", "reports"]);
@@ -51,14 +50,20 @@ export function isLiveQuery(key: QueryKey): boolean {
 }
 
 /** Retain the compressed hour for playback; decoded bitmap memory is bounded separately. */
-export function trimLiveCache(client: QueryClient, budgetBytes = 128 * 1024 * 1024): void {
+export function trimLiveCache(client: QueryClient, budgetBytes = 128 * 1024 * 1024, keep: readonly QueryKey[] = []): void {
+  const prepared = new Set(keep.map((key) => hashKey(key)));
   const queries = client.getQueryCache().findAll({ predicate: (query) => isLiveQuery(query.queryKey) })
     .sort((a, b) => Math.max(b.state.dataUpdatedAt, b.state.errorUpdatedAt) - Math.max(a.state.dataUpdatedAt, a.state.errorUpdatedAt));
   let bytes = 0, count = 0;
   for (const query of queries) {
     const data = query.state.data as { png?: unknown } | undefined;
     const size = data?.png instanceof Blob ? data.png.size : 0;
-    if ((bytes + size > budgetBytes || count >= 128) && query.getObserversCount() === 0 && query.state.fetchStatus !== "fetching") client.removeQueries({ queryKey: query.queryKey, exact: true });
-    else { bytes += size; count++; }
+    const retained = prepared.has(query.queryHash) || query.getObserversCount() > 0 || query.state.fetchStatus === "fetching";
+    if (!retained && (bytes + size > budgetBytes || count >= 128)) {
+      client.removeQueries({ queryKey: query.queryKey, exact: true });
+      continue;
+    }
+    bytes += size;
+    count++;
   }
 }

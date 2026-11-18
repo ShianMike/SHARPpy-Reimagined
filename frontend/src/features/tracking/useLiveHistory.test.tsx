@@ -23,6 +23,7 @@ beforeEach(() => {
   useMapStore.setState(map, true); useAppStore.setState(app, true); useUiStore.setState({ ...ui, speed: 1, loop: false }, true);
   useLiveTrackingStore.setState({ ...clock, now, selectedTime: null, playing: false }, true);
   useAppStore.getState().setActiveWorkspace("live");
+  useLiveTrackingStore.getState().tick(now);
   vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: 2, height: 2 }));
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -62,6 +63,7 @@ it("updates the live clock at the UTC minute boundary", async () => {
 
 it("loads only the next playback time and waits for its image before advancing", async () => {
   vi.useFakeTimers(); vi.setSystemTime(now);
+  useLiveTrackingStore.getState().selectTime(now - 60 * LIVE_MINUTE);
   let ready: (image: { width: number; height: number }) => void = () => undefined;
   vi.stubGlobal("createImageBitmap", vi.fn().mockImplementation(() => new Promise((resolve) => { ready = resolve; })));
   const transport = createTransport(), original = transport.call.bind(transport);
@@ -79,6 +81,29 @@ it("loads only the next playback time and waits for its image before advancing",
   view.unmount(); queryClient.clear();
 });
 
+it.each(["start", "finish"] as const)("keeps the current live scene while playback prepares its %s frame", async (step) => {
+  vi.useFakeTimers(); vi.setSystemTime(now);
+  const current = step === "start" ? null : now - 5 * LIVE_MINUTE;
+  const target = step === "start" ? now - 60 * LIVE_MINUTE : now;
+  useLiveTrackingStore.getState().selectTime(current);
+  let ready: (image: { width: number; height: number }) => void = () => undefined;
+  vi.stubGlobal("createImageBitmap", vi.fn().mockImplementation(() => new Promise((resolve) => { ready = resolve; })));
+  const transport = createTransport(), original = transport.call.bind(transport);
+  const call = vi.spyOn(transport, "call").mockImplementation((command, args) =>
+    command === "get_radar_frame" ? Promise.resolve(frame(target)) : original(command, args));
+  const { view, queryClient } = renderWithBackend(<LiveTimeline />, transport);
+  fireEvent.click(screen.getByRole("button", { name: "Play" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(FRAME_INTERVAL_MS); });
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(current);
+  const calls = call.mock.calls.filter(([command]) => command === "get_radar_frame");
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.[1]?.validTime).toBe(step === "start" ? liveTimestamp(target) : undefined);
+  await act(async () => { ready({ width: 2, height: 2 }); await vi.advanceTimersByTimeAsync(0); });
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(step === "start" ? target : null);
+  expect(useLiveTrackingStore.getState().playing).toBe(step === "start");
+  view.unmount(); queryClient.clear();
+});
+
 it.each([3, 4])("advances loaded live frames at %s times speed", async (speed) => {
   vi.useFakeTimers(); vi.setSystemTime(now);
   useUiStore.getState().setSpeed(speed);
@@ -87,10 +112,28 @@ it.each([3, 4])("advances loaded live frames at %s times speed", async (speed) =
     ? Promise.resolve(frame(Date.parse(String(args?.validTime)))) : original(command, args));
   const { view, queryClient } = renderWithBackend(<LiveTimeline />, transport);
   fireEvent.click(screen.getByRole("button", { name: "Play" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
   const interval = Math.floor(FRAME_INTERVAL_MS / speed);
   await act(async () => { await vi.advanceTimersByTimeAsync(interval - 1); });
   expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 60 * LIVE_MINUTE);
   await act(async () => { await vi.advanceTimersByTimeAsync(1); });
   expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 55 * LIVE_MINUTE);
+  view.unmount(); queryClient.clear();
+});
+
+it("shows the final history frame for a full interval before looping", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(now);
+  useLiveTrackingStore.getState().selectTime(now);
+  useUiStore.getState().setLoop(true);
+  const transport = createTransport(), original = transport.call.bind(transport);
+  vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame"
+    ? Promise.resolve(frame(Date.parse(String(args?.validTime)))) : original(command, args));
+  const { view, queryClient } = renderWithBackend(<LiveTimeline />, transport);
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  fireEvent.click(screen.getByRole("button", { name: "Play" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(FRAME_INTERVAL_MS - 1); });
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(now);
+  await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 60 * LIVE_MINUTE);
   view.unmount(); queryClient.clear();
 });

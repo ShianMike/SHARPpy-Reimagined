@@ -1,8 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { BackendClient } from "../../lib/backend/client";
 import { mapKeys } from "../../lib/backend/queryOptions";
-import { fieldQueryOptions, reportQueryOptions, outlookQueryOptions, type FrameRequest } from "../../map/mapQueries";
+import { fieldQueryOptions, type FrameRequest } from "../../map/mapQueries";
 import { contourQueryOptions } from "../../map/contourQueries";
+import { forecastOverlayLoads } from "../../map/forecastOverlayLoads";
 import { prepareFieldImage } from "../../map/fieldImages";
 import { buildLut } from "../../map/field/colourize";
 import { queryFrame } from "../../map/queryFrame";
@@ -10,8 +11,7 @@ import { mapCaptureSources } from "../../map/runtime/mapCapture";
 import { useForecastStore } from "../../stores/forecastStore";
 import { panelLayers, panelReports, useMapStore } from "../../stores/mapStore";
 import type { ForecastContext } from "../forecast/useForecast";
-import { OUTLOOK_KEYS, type FieldProduct } from "../../types/map";
-import { addHours } from "../sounding/soundingTime";
+import type { FieldProduct } from "../../types/map";
 import { encodeAnimation, type AnimationFrame } from "../animation/encodeAnimation";
 import { composeForecast, type ForecastComposition } from "./forecastComposition";
 export interface ForecastExportOptions extends ForecastComposition {
@@ -79,18 +79,10 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
             throw new Error(`Panel ${String(part.panel + 1)} does not offer ${part.product.label} at F${String(hour).padStart(3, "0")}.`);
         const [frame] = await Promise.all([queryFrame(queryClient, fieldQueryOptions(client, queryClient, request), loadSignal),
             ...(part.product.contour !== null || part.product.wind ? [queryFrame(queryClient, contourQueryOptions(client, queryClient, request), loadSignal)] : [])]);
-        const layers = panelLayers(originalMap, part.panel), reports = panelReports(originalMap, part.panel);
-        const validTime = addHours(options.run, hour);
-        const overlays: Promise<unknown>[] = OUTLOOK_KEYS.filter(key => layers[`spc-${key}`].visible)
-            .map(key => queryFrame(queryClient, outlookQueryOptions(client, key, validTime), loadSignal));
-        if (layers["storm-reports"].visible) overlays.push(queryFrame(queryClient,
-            reportQueryOptions(client, validTime, reports.reportWindowS, reports.reportFilter), loadSignal));
-        if (layers.isobars.visible) {
-            if (!catalog.products.some(product => product.key === "mslp"))
-                throw new Error(`Panel ${String(part.panel + 1)} cannot load its enabled isobars at F${String(hour).padStart(3, "0")}.`);
-            overlays.push(queryFrame(queryClient, contourQueryOptions(client, queryClient, { ...request, product: "mslp" }), loadSignal));
-        }
-        await Promise.all(overlays);
+        const pressureAvailable = catalog.products.some(product => product.key === "mslp");
+        if (panelLayers(originalMap, part.panel).isobars.visible && !pressureAvailable)
+            throw new Error(`Panel ${String(part.panel + 1)} cannot load its enabled isobars at F${String(hour).padStart(3, "0")}.`);
+        await Promise.all(forecastOverlayLoads(client, queryClient, originalMap, part.panel, request, pressureAvailable, loadSignal));
         return { request, frame };
     };
     const frames: AnimationFrame[] = [];

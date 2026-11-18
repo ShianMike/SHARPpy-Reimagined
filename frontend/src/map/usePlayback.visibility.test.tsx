@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { BackendProvider } from "../lib/backend/BackendProvider";
 import { BackendClient } from "../lib/backend/client";
+import { createTransport } from "../lib/backend/fixtureTransport";
 import { createQueryClient, mapKeys, QUERY_KEYS } from "../lib/backend/queryOptions";
 import { parseFieldFrame } from "../lib/contracts/frames";
 import { parseMapCatalog } from "../lib/contracts/map";
@@ -91,6 +92,61 @@ it.each([1, 3, 4])("waits for both render modes across four panels at %s times s
     hook.unmount();
     pending.forEach(({ finish }) => { finish(); });
     await act(async () => { await vi.runAllTimersAsync(); });
+    queryClient.clear();
+  }
+});
+
+it("keeps the current hour until the next hour's enabled overlays settle for all visible panels", async () => {
+  vi.useFakeTimers();
+  const run = "2026-10-04T12:00:00Z", validTime = "2026-10-04T13:00:00Z";
+  useAppStore.getState().setActiveWorkspace("map");
+  useForecastStore.setState({ modelKey: "hrrr", runTime: run, forecastHour: 0, playing: true });
+  useUiStore.setState({ speed: 4, loop: true });
+  const map = useMapStore.getState();
+  map.setPanelLayout(4);
+  const filters = ["tornado", "hail", "wind", "significant"];
+  const windows = [7200, 21600, 43200, 86400];
+  for (const [panel, filter] of filters.entries()) {
+    map.setActivePanel(panel);
+    map.setLayerVisible("model-field", false);
+    map.setLayerVisible("storm-reports", true);
+    map.setLayerVisible("spc-cat", true);
+    map.setLayerVisible("isobars", true);
+    map.setReportFilter(filter);
+    map.setReportWindowS(windows[panel] ?? 21600);
+  }
+  const queryClient = createQueryClient();
+  queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
+  for (const hour of [0, 1]) queryClient.setQueryData(mapKeys.catalog("hrrr", run, hour), parseMapCatalog(catalog));
+  const client = new BackendClient(createTransport());
+  const fetchReports = client.getStormReports.bind(client);
+  const pendingReports: (() => void)[] = [];
+  const reports = vi.spyOn(client, "getStormReports").mockImplementation((...args) =>
+    args[0] === validTime ? new Promise((resolve, reject) => {
+      pendingReports.push(() => { void fetchReports(...args).then(resolve, reject); });
+    }) : fetchReports(...args));
+  const outlooks = vi.spyOn(client, "getSpcOutlook");
+  const pressure = vi.spyOn(client, "getFieldContours").mockRejectedValueOnce(new Error("Pressure layer temporarily unavailable"));
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
+  );
+  const hook = renderHook(usePlayback, { wrapper });
+  try {
+    await act(async () => { await vi.advanceTimersByTimeAsync(Math.ceil(FRAME_INTERVAL_MS / 4)); });
+    expect(reports).toHaveBeenCalledTimes(4);
+    filters.forEach((filter, panel) => {
+      expect(reports).toHaveBeenCalledWith(validTime, windows[panel], filter, expect.any(AbortSignal));
+    });
+    expect(outlooks).toHaveBeenCalledExactlyOnceWith("cat", validTime, expect.any(AbortSignal));
+    expect(pressure).toHaveBeenCalledExactlyOnceWith("mslp", run, 1, "hrrr", expect.any(AbortSignal));
+    expect(useForecastStore.getState().forecastHour).toBe(0);
+    await act(async () => { pendingReports.slice(0, 3).forEach((finish) => { finish(); }); await vi.advanceTimersByTimeAsync(1); });
+    expect(useForecastStore.getState().forecastHour).toBe(0);
+    await act(async () => { pendingReports[3]?.(); await vi.advanceTimersByTimeAsync(1); });
+    expect(useForecastStore.getState().forecastHour).toBe(1);
+  } finally {
+    hook.unmount();
+    pendingReports.forEach((finish) => { finish(); });
     queryClient.clear();
   }
 });

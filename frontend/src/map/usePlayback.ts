@@ -1,11 +1,12 @@
 // Forecast animation (REQUEST §13, Phase 7): the frontend owns it. While the
 // map is mounted this hook prefetches the next hours of every product the
 // visible panels draw in parallel within the profile's frame window. Playback
-// keeps the current hour visible until the next hour's fields and wind/contour
-// data have loaded or failed, and loops at the run's last hour.
+// keeps the current hour visible while the next hour's fields and enabled
+// overlays load, and loops at the run's last hour.
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "../stores/appStore";
 import { useForecastContext } from "../features/forecast/useForecast";
 import { useBackendClient } from "../lib/backend/BackendProvider";
@@ -19,6 +20,7 @@ import { productOf, useDrawnProducts } from "./panelField";
 import { contourQueryOptions } from "./contourQueries";
 import { queryFrame } from "./queryFrame";
 import { prepareFieldImage } from "./fieldImages";
+import { forecastOverlayLoads } from "./forecastOverlayLoads";
 
 /** Minimum time to display each loaded frame, divided by playback speed. */
 export const FRAME_INTERVAL_MS = 750;
@@ -52,6 +54,11 @@ export function usePlayback(): void {
   const catalogQuery = useMapCatalog();
   const catalog = catalogQuery.data;
   const checkingProducts = catalogQuery.isPending || catalogQuery.isPlaceholderData;
+  const pressureAvailable = context?.fieldsAvailable === true && catalog?.products.some((product) => product.key === "mslp") === true;
+  const overlays = useMapStore(useShallow((state) => ({
+    layout: state.panelLayout, layers: state.layers, panels: state.panels,
+    reportWindow: state.reportWindowS, reportFilter: state.reportFilter,
+  })));
   const sampling = useMapStore((state) => Array.from({ length: state.panelLayout }, (_, panel) => {
     const layer = panelLayers(state, panel)["model-field"];
     const product = productOf(catalog, panelProduct(state, panel), panel);
@@ -90,8 +97,12 @@ export function usePlayback(): void {
     if (playing) {
       const next = hourAfter(hours, hour, 1, loop);
       const delay = new Promise<void>((resolve) => { timer = setTimeout(resolve, FRAME_INTERVAL_MS / speed); });
-      // Loading and the frame's display interval overlap; neither adds a second wait.
-      void Promise.all([delay, frames[0]]).then(() => {
+      const map = useMapStore.getState();
+      const layers = next === null || next === hour ? [] : Array.from({ length: overlays.layout }, (_, panel) =>
+        forecastOverlayLoads(client, queryClient, map, panel, { model, runTime: run, forecastHour: next }, pressureAvailable, controller.signal),
+      ).flat();
+      // A failed layer must not cut short the wait for the remaining layers.
+      void Promise.all([delay, frames[0], Promise.allSettled(layers)]).then(() => {
         if (stopped) return;
         if (next === null) useForecastStore.getState().setPlaying(false);
         else useForecastStore.getState().setHour(next);
@@ -102,5 +113,5 @@ export function usePlayback(): void {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [active, exporting, model, run, hour, hours, products, sampling, settled, checkingProducts, ahead, playing, loop, speed, client, queryClient]);
+  }, [active, exporting, model, run, hour, hours, products, sampling, settled, checkingProducts, ahead, playing, loop, speed, client, queryClient, overlays, pressureAvailable]);
 }

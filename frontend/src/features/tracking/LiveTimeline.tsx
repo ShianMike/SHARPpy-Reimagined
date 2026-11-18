@@ -36,15 +36,12 @@ export function LiveTimeline({ className, scanTarget }: { className?: string | u
     tick();
     return () => { clearTimeout(timer); };
   }, []);
-  useEffect(() => { if (fetching === 0) trimLiveCache(queryClient); }, [fetching, queryClient]);
+  useEffect(() => { if (!playing && fetching === 0) trimLiveCache(queryClient); }, [playing, fetching, queryClient]);
   const status = failed > 0 ? `${String(failed)} layers unavailable · see Layers`
     : fetching > 0 || history.waiting ? "Fetching live data…"
     : "Past 60 minutes · session cache cleared on exit";
   const choose = (time: number | null): void => { setPlaying(false); selectTime(time); };
-  const toggle = (): void => {
-    if (!playing && (selectedTime === null || selectedTime >= now)) selectTime(times[0] ?? now);
-    setPlaying(!playing);
-  };
+  const toggle = (): void => { setPlaying(!playing); };
   return <Surface as="section" className={cx(styles.timeline, className)} aria-label="Live Tracking timeline" data-testid="live-timeline">
     {scanTarget == null ? null : createPortal(<RadarScanPicker onSelect={(frame) => { choose(frame >= now ? null : frame); }} />, scanTarget)}
     <MapInteractionControls />

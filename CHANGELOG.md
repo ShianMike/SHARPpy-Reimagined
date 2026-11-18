@@ -11,6 +11,10 @@ Planned release: **v3.8.5**.
 
 ### Fixed
 
+- Keep the current map visible during playback while the next frame's enabled
+  overlays load. Preload each forecast panel's outlooks, storm reports and
+  isobars, and prepare Live Tracking overlays before entering history or
+  returning to the live view.
 - Keep observed UWyo soundings usable when reported pressure or height repeats
   or arrives out of order. Select consistent measured levels before analysis
   without changing their values or relaxing portable sounding validation.

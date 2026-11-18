@@ -100,10 +100,10 @@ Planned release: **v3.8.5**.
   tiles that keep each UTC timestamp together. Separate sounding details,
   frame selection and timing controls with subtle divider lines.
 - Use a compact restore dialog with source and valid time for each saved
-  sounding. Mark the last viewed profile and scroll only the saved-soundings
-  list, keeping the heading, description and actions in place. Group recovery
-  in the sounding sidebar and distinguish a previous session from the current
-  session's save status.
+  sounding. Place Last viewed beside the title and wrap source details on the
+  line below. Scroll only the saved-soundings list, keeping the heading,
+  description and actions in place. Group recovery in the sounding sidebar
+  and distinguish a previous session from the current session's save status.
 - Move observed-provider fallback, pre-save validation, NPZ/metadata assembly,
   observed bridge registration and opened-profile cache ownership into Rust.
   Retain the existing provider adapters, public schemas, archive decoders and

@@ -50,10 +50,8 @@ function RecoveryDialog({ session }: { session: RecoverySession }): ReactNode {
             const detail = soundingMeta({ ...item, validTime });
             return <li key={item.soundingId} className={styles.profile} data-last-viewed={active}>
               <Icon className="icon-sm" aria-hidden="true" />
-              <div className={styles.profileText}>
-                <strong className={styles.profileTitle} title={item.title}>{item.title}</strong>
-                <span className={styles.profileDetail} title={detail}>{detail}</span>
-              </div>
+              <strong className={styles.profileTitle}>{item.title}</strong>
+              <span className={styles.profileDetail}>{detail}</span>
               {active ? <span className={styles.lastViewed}>Last viewed</span> : null}
             </li>;
           })}

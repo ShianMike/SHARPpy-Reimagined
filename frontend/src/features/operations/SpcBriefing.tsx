@@ -1,4 +1,4 @@
-import { ExternalLink, MapPin, RefreshCw, ShieldAlert } from "lucide-react";
+import { ExternalLink, MapPin, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useCurrentSpcOutlook } from "../../map/mapQueries";
 import { containsPoint, type LonLat } from "../../map/layers/outlookGeometry";
@@ -43,7 +43,10 @@ export function SpcBriefing(): ReactNode {
   const legend = ranked.filter((area, index) => ranked.findIndex((item) => item.label === area.label) === index).reverse();
   return <section className={styles.briefing} aria-labelledby="spc-briefing-title">
     <header className={styles.header}>
-      <div className={styles.heading}><span className={styles.headingIcon}><ShieldAlert className="icon" aria-hidden="true" /></span><div><div className={styles.eyebrow}>Storm Prediction Center · {outlookDay}</div><h2 id="spc-briefing-title">Current convective outlook</h2></div></div>
+      <div className={styles.heading}>
+        <div className={styles.eyebrow}>Storm Prediction Center · {outlookDay}</div>
+        <h2 id="spc-briefing-title">Current convective outlook</h2>
+      </div>
       <div className={styles.products} role="group" aria-label="SPC outlook product">{OUTLOOK_KEYS.map((key) => <button key={key} type="button" aria-pressed={product === key} onClick={() => { setProduct(key); }}>{PRODUCTS[key]}</button>)}</div>
       <div className={styles.currentTime}><time dateTime={new Date(now).toISOString()}>{utc.format(now)} UTC</time><IconAction icon={RefreshCw} label="Refresh current outlook" loading={query.isFetching} disabled={query.isFetching} onClick={() => { setNow(Date.now()); void query.refetch(); }} /></div>
     </header>

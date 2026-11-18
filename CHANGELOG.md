@@ -63,8 +63,8 @@ Planned release: **v3.8.5**.
   message in Settings, removing the separate schedule divider.
 - Replace the static Overview welcome cards with a compact current SPC briefing
   and Categorical, Tornado, Wind and Hail choices. Remove the embedded map and
-  show official issue and valid times, outlined risks and the selected location's
-  outlook, independently of archived model runs or live-history selections.
+  the heading's shield icon. Show official issue and valid times, outlined risks
+  and the selected location's outlook, independent of model or live-history selections.
   Refresh while open, with explicit unavailable, expired and failed-refresh
   states, and keep compact shortcuts to forecasts, live tracking and soundings.
 - Redesign Appearance, Units and Playback with consistent choice cards,

@@ -12,6 +12,8 @@
 
 [Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v384---2026-11-17)
 
+If SHARPpy Reimagined helps your weather analysis, select **Star** at the top of this GitHub page to support the project.
+
 </div>
 
 ## What's new in 3.8.4

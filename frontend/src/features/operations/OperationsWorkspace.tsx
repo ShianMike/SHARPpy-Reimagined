@@ -1,6 +1,7 @@
-import { ArrowUpRight, ChevronDown, FileUp, History, Layers, Map, RadioTower, ScanLine } from "lucide-react";
+import { ArrowUpRight, ChevronDown, FileUp, History, Layers, Map, RadioTower, ScanLine, Star } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { version } from "../../../package.json";
+import { cx } from "../../lib/cx";
 import { useMapCatalog } from "../../map/mapQueries";
 import { productOf } from "../../map/panelField";
 import { useStationCatalog } from "../../stations/stationQueries";
@@ -9,6 +10,7 @@ import { useLogStore } from "../../stores/logStore";
 import { panelProduct, useMapStore } from "../../stores/mapStore";
 import { useSoundingStore, type SoundingSource } from "../../stores/soundingStore";
 import { Action } from "../../ui/Controls";
+import actionStyles from "../../ui/Controls.module.css";
 import { BrandMark } from "../../ui/BrandMark";
 import { useForecast } from "../forecast/useForecast";
 import { compactUtc, forecastLabel, formatUtc } from "../sounding/soundingTime";
@@ -83,7 +85,12 @@ export function OperationsWorkspace(): ReactNode {
       </details>
     </div>
     <footer className={styles.footer}>
-      <div className={styles.preferences}><p>Your layers, panels, and preferences are saved on this device.</p><Action onClick={() => { navigate("settings"); }}>Open Settings</Action></div>
+      <div className={styles.repoPrompt}>
+        <p>Support SHARPpy Reimagined with a star on GitHub.</p>
+        <a className={cx(actionStyles.action, styles.repoLink)} href="https://github.com/ShianMike/SHARPpy-Reimagined" target="_blank" rel="noopener noreferrer">
+          <Star className="icon-sm" aria-hidden="true" /> Star the Repo
+        </a>
+      </div>
       <div className={styles.catalogue}><span>{forecast.status === "loading" ? "Models loading…" : context === null ? "Model catalogue unavailable" : `${String(context.models.length)} forecast models`}</span><span>{catalog.isError ? "Parameter catalogue unavailable" : catalog.data === undefined ? "Parameters loading…" : `${String(catalog.data.products.length)} map parameters`}</span><span>{stations.isError ? "Station catalogue unavailable" : stations.data === undefined ? "Stations loading…" : `${String(stations.data.stations.length)} stations`}</span><span>Times in UTC</span></div>
     </footer>
   </div>;

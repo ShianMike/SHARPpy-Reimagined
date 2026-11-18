@@ -63,9 +63,10 @@
 [data-level="warning"] > .eventDot { background: var(--warning); }
 .empty { color: var(--text-secondary); font-size: var(--font-size-small); padding-block: var(--space-4); }
 .footer { display: grid; gap: var(--space-3); }
-.preferences { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
-.preferences p { color: var(--text-secondary); font-size: var(--font-size-small); }
-.preferences button { flex: none; }
+.repoPrompt { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.repoPrompt p { color: var(--text-secondary); font-size: var(--font-size-small); }
+.repoLink { text-decoration: none; white-space: nowrap; }
+.repoLink svg { color: var(--accent-bright); }
 .catalogue { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); color: var(--text-tertiary); font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; }
 .catalogue span:last-child { margin-left: auto; }
 
@@ -109,7 +110,7 @@
 }
 @media (max-width: 700px) {
   .page { padding: var(--space-4); }
-  .heading, .preferences, .backendToolbar { flex-wrap: wrap; }
+  .heading, .repoPrompt, .backendToolbar { flex-wrap: wrap; }
   .workflows, .backendList { grid-template-columns: minmax(0, 1fr); }
   .diagnostics { grid-template-columns: minmax(0, 1fr); }
   .disclosure + .disclosure { border-left: 0; border-top: var(--hairline) solid var(--border-subtle); }

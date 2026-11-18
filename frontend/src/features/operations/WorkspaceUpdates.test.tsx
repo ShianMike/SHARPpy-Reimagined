@@ -98,8 +98,12 @@ it("keeps session errors visible in the activity summary and links to full logs"
   expect(summary?.closest("details")?.open).toBe(true);
   await user.click(screen.getByRole("button", { name: "View logs" }));
   expect(useAppStore.getState().activeWorkspace).toBe("status");
-  await user.click(screen.getByRole("button", { name: "Open Settings" }));
-  expect(useAppStore.getState().activeWorkspace).toBe("settings");
+  expect(screen.getByText("Support SHARPpy Reimagined with a star on GitHub.")).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Star the Repo" })).toMatchObject({
+    href: "https://github.com/ShianMike/SHARPpy-Reimagined",
+    target: "_blank",
+    rel: "noopener noreferrer",
+  });
   queryClient.clear();
 });
 

@@ -77,7 +77,8 @@ Planned release: **v3.8.5**.
   and 4× playback to both forecast and live timelines and save the selected
   speed across app restarts.
 - Show the current app version beside the Overview title, using the same
-  package metadata as Settings → Updates.
+  package metadata as Settings → Updates. Invite users to star the project
+  through the Overview footer's GitHub link and the repository README.
 - Align the winter Skew-T DGZ bracket and label with the −40 °C bottom-axis
   position.
 - Draw the Severe Skew-T hail growth zone as a solid cyan bracket at the

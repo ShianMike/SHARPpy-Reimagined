@@ -26,7 +26,7 @@ test("python-unavailable: the instruction, no Retry, and no station count (DR6-3
   await expect(search).toHaveAttribute("placeholder", "Stations unavailable");
   await page.keyboard.press("Escape");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Logs" }).click();
-  await expect(page.getByTestId("health-indicator")).toHaveText("Backend unavailable");
+  await expect(page.getByTestId("health-indicator")).toHaveAttribute("aria-description", "Backend unavailable");
   await page.getByTestId("health-indicator").click();
   const popover = page.getByRole("dialog", { name: "Backend status" });
   await expect(popover).toContainText("SHARPPY_PYTHON");
@@ -77,7 +77,7 @@ test("seed-fallback: the warning, newly reporting stations, and the seed list in
 test("restarting: the indicator and its popover say so, and the stations still load", async ({ page, consoleMessages }) => {
   await page.goto("/?scenario=restarting");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Logs" }).click();
-  await expect(page.getByTestId("health-indicator")).toHaveText("Restarting backend");
+  await expect(page.getByTestId("health-indicator")).toHaveAttribute("aria-description", "Restarting backend");
   await page.getByTestId("health-indicator").click();
   await expect(page.getByRole("dialog", { name: "Backend status" })).toContainText(
     "Reconnecting weather serviceReconnection attempt 1.",
@@ -109,7 +109,7 @@ test("health-error: Backend status unknown with the INTERNAL message, and the st
 }) => {
   await page.goto("/?scenario=health-error");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Logs" }).click();
-  await expect(page.getByTestId("health-indicator")).toHaveText("Backend status unknown");
+  await expect(page.getByTestId("health-indicator")).toHaveAttribute("aria-description", "Backend status unknown");
   await page.getByTestId("health-indicator").click();
   await expect(page.getByRole("dialog", { name: "Backend status" })).toContainText(
     "Something went wrong in get_backend_health. Details are in the log.",

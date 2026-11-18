@@ -25,11 +25,12 @@ const unavailableHealth = {
   scientificBackend: null,
 };
 
-async function openIndicator(transport: Transport, label: string) {
+async function openIndicator(transport: Transport, status: string | null = null) {
   const user = userEvent.setup();
   const harness = renderWithBackend(<HealthIndicator />, transport);
   // A generous wait: the first query of a file runs while parallel workers are still starting.
-  const indicator = await screen.findByRole("button", { name: label }, { timeout: 5000 });
+  const indicator = screen.getByRole("button", { name: "Backend info" });
+  await waitFor(() => { expect(indicator.getAttribute("aria-description")).toBe(status); }, { timeout: 5000 });
   expect(indicator.getAttribute("aria-haspopup")).toBe("dialog");
   expect(indicator.getAttribute("aria-expanded")).toBe("false");
   await user.click(indicator);
@@ -68,10 +69,10 @@ describe("HealthIndicator and HealthPopover (DR6-5)", () => {
       get_backend_health: [unavailableHealth, { ...healthOk, bridge: UP }],
       restart_backend: [UP],
     });
-    const { user, queryClient } = await openIndicator(transport, "Backend unavailable");
+    const { user, indicator, queryClient } = await openIndicator(transport, "Backend unavailable");
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
     await user.click(screen.getByRole("button", { name: "Restart service" }));
-    await screen.findByRole("button", { name: "Backend ready" });
+    await waitFor(() => { expect(indicator.getAttribute("aria-description")).toBeNull(); });
     expect(transport.calls("restart_backend")).toBe(1);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["backend", "health"] });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["stations", "catalog"] });
@@ -79,7 +80,7 @@ describe("HealthIndicator and HealthPopover (DR6-5)", () => {
   });
 
   it("shows the versions, the active backend, and the fallback reason, with no restart count at 0", async () => {
-    const { dialog } = await openIndicator(scriptedTransport({ get_backend_health: [healthFallback] }), "Backend ready");
+    const { dialog } = await openIndicator(scriptedTransport({ get_backend_health: [healthFallback] }));
     const text = dialog.textContent;
     expect(text).toContain(`SHARPpy Reimagined ${version}`);
     expect(text).toContain("3.11.14");
@@ -95,8 +96,11 @@ describe("HealthIndicator and HealthPopover (DR6-5)", () => {
     expect(dialog.textContent).toContain("Something went wrong in get_backend_health");
   });
 
-  it("names Rust and its version when the Rust backend is active", async () => {
-    const { dialog } = await openIndicator(createTransport(null), "Backend ready");
+  it("opens the ready backend's details from the icon without a ready banner", async () => {
+    const { indicator, dialog } = await openIndicator(createTransport(null));
+    expect(indicator.querySelector("svg")).not.toBeNull();
+    expect(indicator.textContent).toBe("");
+    expect(dialog.textContent).not.toContain(HEALTH_LABELS.ready);
     expect(dialog.textContent).toContain(`Rust, sharpmod_rs ${version}`);
     expect(dialog.querySelector("details")).toBeNull();
     expect(screen.queryByText("Service details")).toBeNull();
@@ -120,7 +124,7 @@ describe("healthView (DESIGN-contracts C3 mapping)", () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     renderWithBackend(<HealthIndicator />, createTransport("restarting"));
     await waitFor(() => {
-      expect(screen.getByTestId("health-indicator").textContent).toBe(HEALTH_LABELS.restarting);
+      expect(screen.getByRole("button", { name: "Backend info" }).getAttribute("aria-description")).toBe(HEALTH_LABELS.restarting);
     });
   });
 });

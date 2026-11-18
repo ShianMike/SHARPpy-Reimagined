@@ -129,9 +129,11 @@ test.describe("desktop measurements", () => {
   test("health popover shows the Python and sharpmod versions @load", async () => {
     test.skip(!(await isTauri()), "not running inside the Tauri app");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Logs" }).click();
-    await page.getByTestId("health-indicator").click();
+    const info = page.getByRole("button", { name: "Backend info", exact: true });
+    await expect(info).toHaveAttribute("data-health-tone", "success");
+    await info.click();
     const popover = page.getByRole("dialog", { name: "Backend status" });
-    await expect(popover).toContainText("Backend ready");
+    await expect(popover).not.toContainText("Backend ready");
     await expect(popover).toContainText(/3\.(?:11|12|13)\.\d+/u);
     await expect(popover).toContainText(appManifest.version);
     results.healthPopover = await popover.innerText();
@@ -282,7 +284,7 @@ test.describe("desktop measurements", () => {
     results.pythonMissing = { notice: await notice.innerText() };
     await shot("desktop-python-missing.png");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Logs" }).click();
-    await expect(page.getByTestId("health-indicator")).toHaveText("Backend unavailable");
+    await expect(page.getByTestId("health-indicator")).toHaveAttribute("aria-description", "Backend unavailable");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer" }).click();
   });
 });

@@ -79,6 +79,8 @@ Planned release: **v3.8.5**.
 - Show the current app version beside the Overview title, using the same
   package metadata as Settings → Updates. Invite users to star the project
   through the Overview footer's GitHub link and the repository README.
+- Open backend details from a compact info icon in Overview and Logs. Show
+  version and runtime details directly when the backend is ready.
 - Draw matching cyan Skew-T brackets with capped ends and labels directly on
   the plot, aligned to −35 °C for both the Severe HGZ and Winter DGZ.
 - Give the sounding locator a visible outline and remove its tiny color scale

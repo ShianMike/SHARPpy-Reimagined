@@ -135,7 +135,8 @@ fn winter_render_keeps_edit_targets_and_severe_render_is_unchanged() {
 
                 let result = configure_winter_view(args.py(), &win, &view, &app, &original)?;
                 // The fixture is within the DGZ at 725 hPa.
-                assert_eq!(bracket_pixel(-40., 725.)?, severe_hgz);
+                assert_eq!(bracket_pixel(-35., 725.)?, severe_hgz);
+                assert_ne!(bracket_pixel(-40., 725.)?, severe_hgz);
                 assert_ne!(bracket_pixel(-35., 650.)?, severe_hgz);
                 assert_eq!(hodo.getattr("hodomag")?.extract::<f64>()?, magnitude);
                 assert_eq!(hodo.getattr("scale")?.extract::<f64>()?, scale);

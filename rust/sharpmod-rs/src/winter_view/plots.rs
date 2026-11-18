@@ -169,7 +169,7 @@ pub(super) fn skew_layers(sound: &Bound<'_, PyAny>, data: &WinterProfile) -> PyR
         let right: f64 = sound.getattr("brx")?.extract()?;
         let scale: f64 = sound.getattr("scale")?.extract()?;
         let origin: f64 = sound.getattr("originy")?.extract()?;
-        let marker_left = temperature_column(sound, -40.0, scale)?;
+        let marker_x = temperature_column(sound, -35.0, scale)?;
         let top: f64 = sound.getattr("tpad")?.extract()?;
         let bottom: f64 = sound.getattr("bry")?.extract()?;
         let y = |p: f64| -> PyResult<f64> {
@@ -203,10 +203,10 @@ pub(super) fn skew_layers(sound: &Bound<'_, PyAny>, data: &WinterProfile) -> PyR
                 ),
             )?;
         }
-        if !bands.is_empty() && (left..=right).contains(&marker_left) {
+        if !bands.is_empty() && (left..=right).contains(&marker_x) {
             let color = growth_zone_color(sound)?;
             for (a, b) in bands {
-                draw_layer_bracket(sound, &painter, (marker_left, a, b), "DGZ", &color, false)?;
+                draw_layer_bracket(sound, &painter, (marker_x, a, b), "DGZ", &color, false)?;
             }
         }
         // Highlight warm layers with a slim marker beside the wind barbs.

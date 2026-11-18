@@ -6,7 +6,6 @@ import { useAppStore } from "../../stores/appStore";
 import { panelLayers, useMapStore } from "../../stores/mapStore";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { formatCoordinates } from "../../stations/stationFormat";
-import { useUiStore } from "../../stores/uiStore";
 import type { SoundingView } from "../../types/soundingView";
 import { composeSoundingLocator } from "./soundingLocatorImage";
 
@@ -23,7 +22,6 @@ export function useSoundingLocator(id: string, timeIndex: number, view: Sounding
   const station = useAppStore((state) => state.selectedStationId);
   const exporting = useForecastStore((state) => state.exporting);
   const context = useSyncExternalStore(subscribeSoundingMapContext, () => soundingMapContext(panel), () => null);
-  const units = useUiStore((state) => state.units);
   const bounds = view?.locatorBounds;
   const location = summary?.stationName?.trim() || bounds?.location || (
     summary?.latitude != null && summary.longitude != null
@@ -48,20 +46,20 @@ export function useSoundingLocator(id: string, timeIndex: number, view: Sounding
       return captureSoundingMap(context, summary.latitude, summary.longitude, size, AbortSignal.any([signal, AbortSignal.timeout(8_000)]));
     },
   });
-  const [composed, setComposed] = useState<{ view: SoundingView; snapshot: SoundingMapSnapshot; units: typeof units; location: string; result: SoundingView } | null>(null);
+  const [composed, setComposed] = useState<{ view: SoundingView; snapshot: SoundingMapSnapshot; location: string; result: SoundingView } | null>(null);
   const current = enabled && !snapshot.isFetching ? snapshot.data ?? null : null;
   useEffect(() => {
     if (view === undefined || current === null) return;
     let active = true;
-    void composeSoundingLocator(view, current, units, location).then((result) => {
-      if (active) setComposed({ view, snapshot: current, units, location, result });
+    void composeSoundingLocator(view, current, location).then((result) => {
+      if (active) setComposed({ view, snapshot: current, location, result });
     }, (error: unknown) => {
       console.warn("[sounding] locator image could not be composed", error);
-      if (active) setComposed({ view, snapshot: current, units, location, result: view });
+      if (active) setComposed({ view, snapshot: current, location, result: view });
     });
     return () => { active = false; };
-  }, [view, current, units, location]);
+  }, [view, current, location]);
   const finished = view !== undefined && current !== null && composed?.view === view && composed.snapshot === current
-    && composed.units === units && composed.location === location;
+    && composed.location === location;
   return { view: finished ? composed.result : view, pending: enabled && (snapshot.isFetching || current !== null && !finished) };
 }

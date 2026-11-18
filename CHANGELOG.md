@@ -7,13 +7,16 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Planned release: **v3.8.5**.
+Target version: **3.8.5** (not published).
 
 ### Fixed
 
 - Build the matching Rust sidecar for the frontend lifecycle check. Scope
   the sounding cancellation assertion to the source form so that recovery
   status can appear at the same time.
+- Restore the shared hover color on appearance, unit and playback choices.
+  Exercise the current layer editor, playback handoff, sounding sidebar and
+  Overview repository link in the browser suite.
 - Keep the current map visible during playback while the next frame's enabled
   overlays load. Use the destination hour's product inventory and retain the
   prepared fields and overlays until the panels draw them. Keep Live Tracking

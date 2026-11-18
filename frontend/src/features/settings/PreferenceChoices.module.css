@@ -25,7 +25,7 @@
 .card > small { color: var(--text-secondary); font-size: var(--font-size-caption); line-height: var(--line-height-body); overflow-wrap: anywhere; }
 .icon { display: grid; place-items: center; inline-size: var(--control-h-md); aspect-ratio: 1; border-radius: var(--radius-sm); color: var(--text-secondary); background: var(--control-selected); }
 .card:has(input:checked) .icon { color: var(--accent-bright); background: var(--accent-subtle); }
-.card:hover, .speedCard:hover { background: var(--fill-hover); }
+.card:hover, .speedCard:hover { background: var(--fill-hover); color: var(--accent-bright); }
 .card:has(input:checked), .speedCard:has(input:checked) { border-color: var(--accent-bright); background: var(--accent-subtle); color: var(--accent-bright); }
 .card:has(input:focus-visible), .speedCard:has(input:focus-visible) { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .unitCard { justify-items: center; padding-block: var(--space-4); text-align: center; }

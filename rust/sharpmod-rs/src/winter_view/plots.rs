@@ -1,4 +1,5 @@
 use super::*;
+use crate::skewt_annotations::{draw_layer_bracket, growth_zone_color, temperature_column};
 use crate::winter::diagnostics::WinterDiagnostics;
 
 // Keep winter markers clear of the existing omega meter, including bars whose
@@ -168,18 +169,9 @@ pub(super) fn skew_layers(sound: &Bound<'_, PyAny>, data: &WinterProfile) -> PyR
         let right: f64 = sound.getattr("brx")?.extract()?;
         let scale: f64 = sound.getattr("scale")?.extract()?;
         let origin: f64 = sound.getattr("originy")?.extract()?;
-        let origin_x: f64 = sound.getattr("originx")?.extract()?;
-        let bottom_pressure: f64 = sound.getattr("pmax")?.extract()?;
-        let marker_left = origin_x
-            + sound
-                .call_method1("tmpc_to_pix", (-40.0, bottom_pressure))?
-                .extract::<f64>()?
-                / scale;
+        let marker_left = temperature_column(sound, -40.0, scale)?;
         let top: f64 = sound.getattr("tpad")?.extract()?;
         let bottom: f64 = sound.getattr("bry")?.extract()?;
-        let font = gui.getattr("QFont")?.call0()?;
-        font.call_method1("setPixelSize", (12,))?;
-        painter.call_method1("setFont", (font,))?;
         let y = |p: f64| -> PyResult<f64> {
             Ok(
                 (origin + sound.call_method1("pres_to_pix", (p,))?.extract::<f64>()? / scale)
@@ -192,35 +184,29 @@ pub(super) fn skew_layers(sound: &Bound<'_, PyAny>, data: &WinterProfile) -> PyR
                 .getattr("QRectF")?
                 .call1((left, top, right - left, bottom - top))?,),
         )?;
+        let fill = gui.getattr("QColor")?.call1(("#70b9ec",))?;
+        fill.call_method1("setAlpha", (26,))?;
+        let mut bands = Vec::with_capacity(data.dgz.len());
         for layer in &data.dgz {
             let a = y(layer.top.p)?;
             let b = y(layer.bottom.p)?;
-            let fill = gui.getattr("QColor")?.call1(("#70b9ec",))?;
-            fill.call_method1("setAlpha", (26,))?;
+            if b <= a {
+                continue;
+            }
+            bands.push((a, b));
             painter.call_method1(
                 "fillRect",
                 (
                     core.getattr("QRectF")?
                         .call1((left, a, right - left, b - a))?,
-                    fill,
+                    &fill,
                 ),
             )?;
-            painter.call_method1("setPen", (gui.getattr("QColor")?.call1(("#70b9ec",))?,))?;
-            painter.call_method1(
-                "drawLine",
-                (core
-                    .getattr("QLineF")?
-                    .call1((marker_left, a, marker_left, b))?,),
-            )?;
-            if b - a > 15. {
-                painter.call_method1(
-                    "drawText",
-                    (
-                        core.getattr("QPointF")?
-                            .call1((marker_left + 8., (a + b) * 0.5 + 4.))?,
-                        "DGZ",
-                    ),
-                )?;
+        }
+        if !bands.is_empty() && (left..=right).contains(&marker_left) {
+            let color = growth_zone_color(sound)?;
+            for (a, b) in bands {
+                draw_layer_bracket(sound, &painter, (marker_left, a, b), "DGZ", &color, false)?;
             }
         }
         // Highlight warm layers with a slim marker beside the wind barbs.

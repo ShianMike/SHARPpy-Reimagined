@@ -1,7 +1,11 @@
 //! Fixed display anchors; science values remain owned by the profile.
 use pyo3::{prelude::*, types::PyModule};
 
-fn temperature_column(widget: &Bound<'_, PyAny>, temperature: f64, scale: f64) -> PyResult<f64> {
+pub(crate) fn temperature_column(
+    widget: &Bound<'_, PyAny>,
+    temperature: f64,
+    scale: f64,
+) -> PyResult<f64> {
     let origin: f64 = widget.getattr("originx")?.extract()?;
     let offset: f64 = widget
         .call_method1("tmpc_to_pix", (temperature, widget.getattr("pmax")?))?
@@ -83,20 +87,7 @@ fn draw_fixed_hgz_layer(
 
     let color = match edge_color {
         Some(color) => color.clone(),
-        None => {
-            let lightness: i32 = widget
-                .getattr("bg_color")?
-                .call_method0("lightness")?
-                .extract()?;
-            let (green, blue) = if lightness > 127 {
-                (117, 153)
-            } else {
-                (200, 255)
-            };
-            PyModule::import(widget.py(), "qtpy.QtGui")?
-                .getattr("QColor")?
-                .call1((0, green, blue))?
-        }
+        None => growth_zone_color(widget)?,
     };
     painter.call_method0("save")?;
     let result = (|| {
@@ -108,7 +99,22 @@ fn draw_fixed_hgz_layer(
     Ok(true)
 }
 
-fn draw_layer_bracket(
+pub(crate) fn growth_zone_color<'py>(widget: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let lightness: i32 = widget
+        .getattr("bg_color")?
+        .call_method0("lightness")?
+        .extract()?;
+    let (green, blue) = if lightness > 127 {
+        (117, 153)
+    } else {
+        (200, 255)
+    };
+    PyModule::import(widget.py(), "qtpy.QtGui")?
+        .getattr("QColor")?
+        .call1((0, green, blue))
+}
+
+pub(crate) fn draw_layer_bracket(
     widget: &Bound<'_, PyAny>,
     painter: &Bound<'_, PyAny>,
     (x, top, bottom): (f64, f64, f64),

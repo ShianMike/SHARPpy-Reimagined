@@ -1,6 +1,6 @@
-//! Hodograph background ring configuration, shared by both sounding views.
+//! Hodograph background styling, shared by both sounding views.
 
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyModule};
 
 const RING_LIMIT_KNOTS: u16 = 200;
 const RING_LIMIT_METERS_PER_SECOND: u16 = 105;
@@ -26,8 +26,45 @@ fn configure_hodograph_rings(widget: &Bound<'_, PyAny>) -> PyResult<()> {
     widget.setattr("rings", values)
 }
 
+fn grid_pen<'py>(widget: &Bound<'py, PyAny>, opacity: f64) -> PyResult<Bound<'py, PyAny>> {
+    let gui = PyModule::import(widget.py(), "qtpy.QtGui")?;
+    let color = gui
+        .getattr("QColor")?
+        .call1((widget.getattr("fg_color")?,))?;
+    let alpha: f64 = color.call_method0("alphaF")?.extract()?;
+    color.call_method1("setAlphaF", (alpha * opacity,))?;
+    gui.getattr("QPen")?.call1((color,))
+}
+
+#[pyfunction]
+fn hodograph_speed_label_pen<'py>(widget: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    grid_pen(widget, 0.72)
+}
+
+#[pyfunction]
+fn draw_hodograph_axes(widget: &Bound<'_, PyAny>, painter: &Bound<'_, PyAny>) -> PyResult<()> {
+    let coordinate = |name| widget.getattr(name)?.extract::<f64>();
+    let x = coordinate("centerx")?;
+    let y = coordinate("centery")?;
+    let line = PyModule::import(widget.py(), "qtpy.QtCore")?.getattr("QLineF")?;
+    let pen = grid_pen(widget, 0.55)?;
+    pen.call_method1("setWidthF", (1.0,))?;
+    painter.call_method1("setPen", (pen,))?;
+    painter.call_method1(
+        "drawLine",
+        (line.call1((x, coordinate("tly")?, x, coordinate("bry")?))?,),
+    )?;
+    painter.call_method1(
+        "drawLine",
+        (line.call1((coordinate("tlx")?, y, coordinate("brx")?, y))?,),
+    )?;
+    Ok(())
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(configure_hodograph_rings, module)?)
+    module.add_function(wrap_pyfunction!(configure_hodograph_rings, module)?)?;
+    module.add_function(wrap_pyfunction!(hodograph_speed_label_pen, module)?)?;
+    module.add_function(wrap_pyfunction!(draw_hodograph_axes, module)?)
 }
 
 #[cfg(test)]
@@ -146,6 +183,26 @@ mod tests {
                 widget.getattr("rings")?.extract::<Vec<u16>>()?,
                 rings(5, true).unwrap()
             );
+
+            let gui = PyModule::import(py, "qtpy.QtGui")?;
+            let picture = gui.getattr("QPicture")?.call0()?;
+            let painter = gui.getattr("QPainter")?.call1((&picture,))?;
+            for foreground in ["#ffffff", "#151922"] {
+                let color = gui.getattr("QColor")?.call1((foreground,))?;
+                widget.setattr("fg_color", &color)?;
+                widget.call_method1("draw_axes", (&painter,))?;
+                let pen = painter.call_method0("pen")?;
+                assert_eq!(pen.call_method0("widthF")?.extract::<f64>()?, 1.0);
+                let tint = pen.call_method0("color")?;
+                assert!((tint.call_method0("alphaF")?.extract::<f64>()? - 0.55).abs() < 1e-3);
+                assert_eq!(tint.call_method0("name")?.extract::<String>()?, foreground);
+                widget.call_method1("draw_ring", (10, &painter))?;
+                let tint = painter.call_method0("pen")?.call_method0("color")?;
+                assert!((tint.call_method0("alphaF")?.extract::<f64>()? - 0.72).abs() < 1e-3);
+                assert_eq!(tint.call_method0("name")?.extract::<String>()?, foreground);
+                assert_eq!(color.call_method0("alpha")?.extract::<u8>()?, 255);
+            }
+            painter.call_method0("end")?;
             widget.call_method0("close")?;
             Ok(())
         })

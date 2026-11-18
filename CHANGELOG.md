@@ -79,11 +79,9 @@ Planned release: **v3.8.5**.
 - Show the current app version beside the Overview title, using the same
   package metadata as Settings → Updates. Invite users to star the project
   through the Overview footer's GitHub link and the repository README.
-- Align the winter Skew-T DGZ bracket and label with the −40 °C bottom-axis
-  position.
-- Draw the Severe and Winter Skew-T hail growth zones with the same solid
-  cyan bracket at the −35 °C bottom-axis position and a label directly on
-  the plot.
+- Draw matching cyan Skew-T brackets with capped ends and labels directly on
+  the plot for the Severe HGZ at −35 °C and Winter DGZ at −40 °C.
+- Use thinner, softer center axes and dimmer speed labels in both hodographs.
 - Move the Severe sounding's wet-bulb zero height from the Skew-T annotation
   to a text readout directly below ECAPE.
 - Space the Severe sounding's SFC, LCL–EL and EHI layer labels so the range

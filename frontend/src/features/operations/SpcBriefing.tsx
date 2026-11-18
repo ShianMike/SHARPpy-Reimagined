@@ -6,7 +6,6 @@ import { useStationCatalog } from "../../stations/stationQueries";
 import { useAppStore } from "../../stores/appStore";
 import { OUTLOOK_KEYS, type OutlookKey } from "../../types/map";
 import { IconAction } from "../../ui/Controls";
-import { SpcBriefingMap } from "./SpcBriefingMap";
 import styles from "./SpcBriefing.module.css";
 
 const PRODUCTS: Record<OutlookKey, string> = { cat: "Categorical", torn: "Tornado", wind: "Wind", hail: "Hail" };
@@ -48,20 +47,19 @@ export function SpcBriefing(): ReactNode {
       <div className={styles.products} role="group" aria-label="SPC outlook product">{OUTLOOK_KEYS.map((key) => <button key={key} type="button" aria-pressed={product === key} onClick={() => { setProduct(key); }}>{PRODUCTS[key]}</button>)}</div>
       <div className={styles.currentTime}><time dateTime={new Date(now).toISOString()}>{utc.format(now)} UTC</time><IconAction icon={RefreshCw} label="Refresh current outlook" loading={query.isFetching} disabled={query.isFetching} onClick={() => { setNow(Date.now()); void query.refetch(); }} /></div>
     </header>
-    <div className={styles.body}>
-      <SpcBriefingMap areas={areas} point={outside ? null : coordinate} label={`SPC ${PRODUCTS[product]} outlook${current ? ": current valid period" : ": no current data"}`} />
-      <div className={styles.summary} aria-live="polite" aria-busy={query.isPending}>
+    <div className={styles.summary} aria-live="polite" aria-busy={query.isPending}>
+      <div className={styles.risk}>
         <div className={styles.riskHeading}><span>{current ? "Highest outlined area" : "Current guidance"}</span><span className={styles.badge} data-current={current}>{current ? "Current" : query.isPending ? "Checking" : "Unavailable"}</span></div>
         <h3>{highest === undefined ? null : <i className={styles.swatch} style={{ "--risk-color": highest.fill ?? highest.stroke } as CSSProperties} aria-hidden="true" />}{headline}</h3>
-        {current ? <dl className={styles.times}>
-          <div><dt>Issued</dt><dd>{outlook.issued === null ? "Not supplied" : <time dateTime={outlook.issued}>{utc.format(Date.parse(outlook.issued))} UTC</time>}</dd></div>
-          <div><dt>Valid from</dt><dd><time dateTime={outlook.validFrom ?? undefined}>{utc.format(Date.parse(outlook.validFrom ?? ""))} UTC</time></dd></div>
-          <div><dt>Valid until</dt><dd><time dateTime={outlook.validTo ?? undefined}>{utc.format(Date.parse(outlook.validTo ?? ""))} UTC</time></dd></div>
-        </dl> : <p className={styles.unavailable}>{query.isPending ? "Fetching the latest published outlook for the current UTC time." : query.isError ? "SPC could not be reached. Refresh to try again." : "A valid outlook for the current UTC time was not returned. Refresh to check again."}</p>}
-        <div className={styles.location}><MapPin className="icon-sm" aria-hidden="true" /><div><span>{coordinate === null ? "Your location" : locationName}</span><strong>{coordinate === null ? "Select a point or station on the map" : outside ? "Outside the contiguous U.S. outlook" : !current ? "Current risk unavailable" : atPoint?.description || atPoint?.label || "No outlined area at this point"}</strong>{qualifier ? <small>Significant-severe area also outlined</small> : null}</div></div>
-        {query.isError && current ? <p className={styles.notice} role="status">Refresh failed. Showing the last valid outlook.</p> : null}
-        <p className={styles.note}>{product === "cat" ? "Thunderstorm areas are separate from the five severe-risk categories." : "Probabilities describe the chance of a hazard within 25 miles of a point."} Outlooks are guidance; check local warnings.</p>
       </div>
+      {current ? <dl className={styles.times}>
+        <div><dt>Issued</dt><dd>{outlook.issued === null ? "Not supplied" : <time dateTime={outlook.issued}>{utc.format(Date.parse(outlook.issued))} UTC</time>}</dd></div>
+        <div><dt>Valid from</dt><dd><time dateTime={outlook.validFrom ?? undefined}>{utc.format(Date.parse(outlook.validFrom ?? ""))} UTC</time></dd></div>
+        <div><dt>Valid until</dt><dd><time dateTime={outlook.validTo ?? undefined}>{utc.format(Date.parse(outlook.validTo ?? ""))} UTC</time></dd></div>
+      </dl> : <p className={styles.unavailable}>{query.isPending ? "Fetching the latest published outlook for the current UTC time." : query.isError ? "SPC could not be reached. Refresh to try again." : "A valid outlook for the current UTC time was not returned. Refresh to check again."}</p>}
+      <div className={styles.location}><MapPin className="icon-sm" aria-hidden="true" /><div><span>{coordinate === null ? "Your location" : locationName}</span><strong>{coordinate === null ? "Select a point or station on the map" : outside ? "Outside the contiguous U.S. outlook" : !current ? "Current risk unavailable" : atPoint?.description || atPoint?.label || "No outlined area at this point"}</strong>{qualifier ? <small>Significant-severe area also outlined</small> : null}</div></div>
+      {query.isError && current ? <p className={styles.notice} role="status">Refresh failed. Showing the last valid outlook.</p> : null}
+      <p className={styles.note}>{product === "cat" ? "Thunderstorm areas are separate from the five severe-risk categories." : "Probabilities describe the chance of a hazard within 25 miles of a point."} Outlooks are guidance; check local warnings.</p>
     </div>
     <footer className={styles.footer}>
       <div className={styles.legend} aria-label="Outlined areas">{legend.length === 0 ? <span>Updated every 5 minutes while open</span> : legend.map((area) => <span key={area.label}><i className={styles.swatch} style={{ "--risk-color": area.fill ?? area.stroke } as CSSProperties} aria-hidden="true" />{area.label}</span>)}</div>

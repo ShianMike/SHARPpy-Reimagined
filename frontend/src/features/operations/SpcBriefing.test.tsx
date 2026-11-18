@@ -18,12 +18,11 @@ const current = { ...sample, outlook: { ...sample.outlook, areas: [area, { ...ar
 
 beforeEach(() => {
   vi.spyOn(Date, "now").mockReturnValue(now.getTime());
-  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ type: "FeatureCollection", features: [] }) })));
   useAppStore.setState({ selectedPoint: null, selectedStationId: null });
 });
 afterEach(() => {
   cleanup(); useAppStore.setState(savedApp); useForecastStore.setState(savedForecast); useLiveTrackingStore.setState(savedLive);
-  vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals();
+  vi.useRealTimers(); vi.restoreAllMocks();
 });
 
 function transportWith(reply: unknown = current) {
@@ -32,10 +31,10 @@ function transportWith(reply: unknown = current) {
   return { ...base, call };
 }
 
-it("shows issue and valid times with a real vector preview and ignores hatch rank in the headline", async () => {
+it("shows issue and valid times without an embedded map and ignores hatch rank in the headline", async () => {
   const { queryClient } = renderWithBackend(<SpcBriefing />, transportWith());
   await screen.findByRole("heading", { name: "Slight Risk" });
-  expect(screen.getByRole("img", { name: "SPC Categorical outlook: current valid period" }).querySelector('path[fill-rule="evenodd"]')).toBeTruthy();
+  expect(screen.queryByRole("img")).toBeNull();
   expect(screen.getByText("04 Oct, 12:50 UTC")).toBeTruthy();
   expect(screen.getByText("05 Oct, 12:00 UTC")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Significant severe" })).toBeNull();
@@ -84,7 +83,7 @@ it.each([
   const { queryClient } = renderWithBackend(<SpcBriefing />, transportWith(reply));
   await screen.findByRole("heading", { name: "No current outlook available" });
   expect(screen.queryByText("Current", { exact: true })).toBeNull();
-  expect(screen.getByRole("img", { name: "SPC Categorical outlook: no current data" }).querySelector('path[fill-rule="evenodd"]')).toBeNull();
+  expect(screen.queryByRole("img")).toBeNull();
   queryClient.clear();
 });
 
@@ -102,8 +101,7 @@ it("labels a provider fallback by its actual outlook day instead of calling it D
   queryClient.clear();
 });
 
-it("keeps guidance available without the basemap, retries failures, and identifies failed refreshes", async () => {
-  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: false })));
+it("retries unavailable guidance and identifies failed refreshes", async () => {
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   const transport = transportWith();
   const base = createTransport();
@@ -113,7 +111,6 @@ it("keeps guidance available without the basemap, retries failures, and identifi
     ? Promise.reject({ code: "OVERLAY_FETCH_FAILED", message: "SPC unavailable", retryable: false }) : command === "get_spc_outlook" ? Promise.resolve(current) : base.call(command, args));
   const { queryClient } = renderWithBackend(<SpcBriefing />, transport);
   await screen.findByRole("heading", { name: "Outlook unavailable" });
-  expect(screen.getByText(/Basemap unavailable/)).toBeTruthy();
   fail = false;
   await userEvent.click(screen.getByRole("button", { name: "Refresh current outlook" }));
   await screen.findByRole("heading", { name: "Slight Risk" });

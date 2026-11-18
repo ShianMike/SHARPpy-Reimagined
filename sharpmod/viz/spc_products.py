@@ -195,10 +195,10 @@ def attach_hgz_overlay(
 
 
 def attach_thermal_levels(skewt):
-    """Keep temperature levels, wet-bulb zero and growth zone on every panel.
+    """Keep temperature levels and the growth zone on every Severe panel.
 
     Use the native non-winter pass for the blue 0/-20/-30 degree markers and
-    lapse-rate layer, then add the growth zone and wet-bulb zero. The blue 0 C
+    lapse-rate layer, then add the growth zone. The blue 0 C
     marker already labels the freezing level, so skip the winter branch's
     duplicate FRZ label.
 
@@ -212,8 +212,8 @@ def attach_thermal_levels(skewt):
     if not callable(original_plot_data):
         return False
 
-    def _draw_growth_zone_and_levels(qp, prof):
-        """Draw the growth zone and wet-bulb zero without a duplicate FRZ."""
+    def _draw_growth_zone(qp, prof):
+        """Draw the dendritic growth trace and its boundary ticks."""
         import numpy as np
 
         import sharppy.sharptab as tab
@@ -237,14 +237,6 @@ def attach_thermal_levels(skewt):
                         qp, plevel=level,
                         color=QtGui.QColor(_api._DGZ_TICK_COLOR))
 
-        # Drawn even when there is no growth zone, which is the other half of the
-        # repair: the vendored code skipped the whole block in that case, so a
-        # sounding with no -12 to -17 layer lost its wet-bulb zero as well.
-        with suppress(Exception):
-            skewt.draw_sig_levels(
-                qp, plevel=tab.params.temp_lvl(prof, 0, wetbulb=True),
-                color=QtGui.QColor(skewt.dewp_color), var_id="WBZ=")
-
     def _wrapped_plot_data(*args, **kwargs):
         plotdgz = getattr(skewt, "plotdgz", False)
         try:
@@ -265,7 +257,7 @@ def attach_thermal_levels(skewt):
                     qp.setClipRect(clip)
                 qp.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
                 qp.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing)
-                _draw_growth_zone_and_levels(qp, prof)
+                _draw_growth_zone(qp, prof)
             finally:
                 qp.end()
         except Exception:

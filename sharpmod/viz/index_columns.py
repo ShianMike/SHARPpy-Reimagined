@@ -419,9 +419,6 @@ class IndexColumnsMixin:
             lw = fm.horizontalAdvance(ltext)
             self._text(qp, QRect(cx + lw, cy, cw - lw - 2, rh), val, color, Qt.AlignLeft)
 
-        def row(lbl, val, color):
-            row_at(x, w, y, lbl, val, color)
-
         # The core Severe Weather Composite (SCP / STP / SHIP / DCP) lives
         # beside the lapse rates in the convective column. LRGHAIL is retained
         # here directly below MOSHE.
@@ -459,8 +456,7 @@ class IndexColumnsMixin:
                  self._wyrp(ecape, 1000, 2500, 4000, higher=True))),
                (("LSCP", f1(lscp), "",
                  self._wyrp(lscp, -1.0, -4.0, -8.0, higher=False)),
-                None),
-               (("WBZ Height", i0(wbz), " m AGL", self.fg), None)]
+                ("WBZ", i0(wbz), " m AGL", self.fg))]
         # SHIP box-and-whisker chart at the TOP (above the EHI indices), then
         # the indices, then the CAPE block pushed to the bottom.
         # The composite indices are laid out in two columns, so they only take
@@ -489,7 +485,7 @@ class IndexColumnsMixin:
             y += CHART_DIV - 2
         # Restore the normal row font (the SHIP chart set the small header font).
         qp.setFont(self.rf)
-        # Keep a compact, predictable right readout column for NSTP and ECAPE.
+        # Keep a compact right readout column for NSTP, ECAPE and WBZ.
         col_gutter = 6
         min_right_w = max(60, int(w * 0.32))
         right_x = x + int(w * 0.54)
@@ -507,15 +503,10 @@ class IndexColumnsMixin:
         qp.setPen(QtGui.QPen(self.rule, 1)); qp.drawLine(x, y, x + w, y)
         y += mid_gap - mid_gap // 2
         for left, right in bot:
-            lbl, val, sfx, c = left
-            if right is None:
-                row(lbl, (val + sfx) if val != MISS else MISS, c)
-            else:
-                row_at(x, left_w, y, lbl,
-                       (val + sfx) if val != MISS else MISS, c)
-                r_lbl, r_val, r_sfx, r_c = right
-                row_at(col_x[1], right_w, y, r_lbl,
-                       (r_val + r_sfx) if r_val != MISS else MISS, r_c)
+            label, value, suffix, color = left
+            row_at(x, left_w, y, label, value + suffix if value != MISS else MISS, color)
+            label, value, suffix, color = right
+            row_at(right_x, right_w, y, label, value + suffix if value != MISS else MISS, color)
             y += rh
 
     def _ship_chart(self, qp, R):

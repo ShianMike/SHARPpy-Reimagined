@@ -80,6 +80,8 @@ Planned release: **v3.8.5**.
   position.
 - Draw the Severe Skew-T hail growth zone as a solid cyan bracket at the
   −35 °C bottom-axis position, with a label drawn directly on the plot.
+- Move the Severe sounding's wet-bulb zero height from the Skew-T annotation
+  to a text readout directly below ECAPE.
 - Keep the sounding source form at its full height above the open profiles.
   Put the observed date and launch on one row on short windows and use the
   sidebar to reach content when it needs more room.

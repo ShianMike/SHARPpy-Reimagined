@@ -120,8 +120,8 @@ def test_only_the_blue_freezing_level_is_labelled_on_every_panel(skewt_window, p
 
 
 @pytest.mark.parametrize("panel", PANELS)
-def test_the_wet_bulb_zero_is_labelled_on_every_panel(skewt_window, panel):
-    assert "WBZ=" in _repaint(skewt_window, panel).ticks
+def test_severe_panels_keep_wet_bulb_zero_in_the_table(skewt_window, panel):
+    assert "WBZ=" not in _repaint(skewt_window, panel).ticks
 
 
 @pytest.mark.parametrize("panel", PANELS)
@@ -146,8 +146,7 @@ def test_the_maximum_lapse_rate_layer_survives(skewt_window, panel):
 # --------------------------------------------------------------------------- #
 # No double-drawing where the vendored branch already did the work
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("kind", ["WBZ=", "temp_levels",
-                                  "max_lapse_rate"])
+@pytest.mark.parametrize("kind", ["temp_levels", "max_lapse_rate"])
 def test_nothing_is_annotated_twice_on_the_winter_panel(skewt_window, kind):
     """The winter panel is where both routes are live at once."""
     record = _repaint(skewt_window, "WINTER")

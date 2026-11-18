@@ -432,8 +432,8 @@ def test_three_column_stats_leave_one_line_between_lapse_rows(qt_app):
     assert min(b - a for a, b in zip(lapse_ys, lapse_ys[1:])) >= row_height
 
 
-def test_composite_reorders_ecape_lscp_and_wbz(qt_app):
-    """ECAPE shares NCAPE's row, then LSCP precedes WBZ Height below it."""
+def test_composite_places_wbz_directly_below_ecape(qt_app):
+    """Keep WBZ aligned with ECAPE in the right diagnostic column."""
     from qtpy.QtCore import QRect, Qt
 
     from sharpmod.viz.index_board import IndexBoard
@@ -450,7 +450,7 @@ def test_composite_reorders_ecape_lscp_and_wbz(qt_app):
     records = {}
 
     def capture_text(qp, rect, text, color=None, align=Qt.AlignLeft):
-        if text in {"LSCP = ", "WBZ Height = ", "ECAPE = ", "NCAPE = "}:
+        if text in {"LSCP = ", "WBZ = ", "ECAPE = ", "NCAPE = ", "4106 m AGL"}:
             records[text] = QRect(rect)
 
     board._text = capture_text
@@ -463,8 +463,9 @@ def test_composite_reorders_ecape_lscp_and_wbz(qt_app):
 
     assert records["ECAPE = "].y() == records["NCAPE = "].y()
     assert records["ECAPE = "].x() > records["NCAPE = "].x()
-    assert records["LSCP = "].y() < records["WBZ Height = "].y()
-    assert records["WBZ Height = "].y() - records["LSCP = "].y() == 18
+    assert records["WBZ = "].x() == records["ECAPE = "].x()
+    assert records["WBZ = "].y() == records["LSCP = "].y() == records["ECAPE = "].y() + 18
+    assert records["4106 m AGL"].y() == records["WBZ = "].y()
 
 
 def test_index_board_sfc500m_kinematics_row_is_neutral_white(qt_app):

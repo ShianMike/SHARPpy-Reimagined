@@ -10,7 +10,7 @@ Columns:
      first -- a SHARPpy Reimagined-derived addition).
   2. Kinematics  -- SRH/Shear/MnWind/SRW table (SFC-500m first -- derived),
      BRN Shear / 4-6km SR wind, the Storm-Motion vectors, and the coloured
-     Supercell / STP(cin) / STP(fix) / SHIP / DCP severe box.
+     Supercell / STP (cin) / STP (fix) / SHIP / DCP severe box.
   3. Composite Indices -- the SHARPpy Reimagined-derived composites: EHI 0-1/0-3km,
      VGP, Peskov, MCS, HGZ CAPE / NCAPE / WBZ Height / ECAPE.
 
@@ -288,7 +288,7 @@ class IndexBoard(IndexColumnsMixin, QFrame):
             return MISS
         if self.temp_units == "Celsius":
             return "%d\u00b0C" % int(round((v - 32.0) * 5.0 / 9.0))
-        return "%d\u00b0F" % int(round(v))
+        return "%d \u00b0F" % int(round(v))
 
     def _pwat(self, inches):
         v = _f(inches)
@@ -296,7 +296,8 @@ class IndexBoard(IndexColumnsMixin, QFrame):
             return MISS
         if self.pw_units == "cm":
             return "%.1f cm" % (v * IN_TO_CM)
-        return "%.2f in" % v
+        # Keep PWAT inches joined to the value in one full-size text run.
+        return "%.2f\u00a0in" % v
 
     def _peskov_color(self, v):
         return self._theme_qcolor(colors.peskov_color(v))

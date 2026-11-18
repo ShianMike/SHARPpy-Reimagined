@@ -80,8 +80,8 @@ class IndexColumnsMixin:
 
         col1 = [("PWAT", self._pwat(self._sf("pwat"))),
                 ("MeanW", suf(f2(self._sf("mean_mixr")), " g/kg")),
-                ("LowRH", suf(i0(self._sf("low_rh")), "%")),
-                ("MidRH", suf(i0(self._sf("mid_rh")), "%")),
+                ("LowRH", suf(i0(self._sf("low_rh")), " %")),
+                ("MidRH", suf(i0(self._sf("mid_rh")), " %")),
                 ("DCAPE", i0(self._sf("dcape"))),
                 ("DownT", self._temp(self._sf("drush")))]
         col2 = [("K", i0(self._sf("k_idx"))), ("TT", i0(self._sf("totals_totals"))),
@@ -183,8 +183,8 @@ class IndexColumnsMixin:
         lrgh_v = self._d("lrghail")
         dcp_v = self._d("dcp")
         severe = [("Supercell Comp", f1(scp_v), self._scp_color(scp_v)),
-                  ("STP(cin)", f1(stpc_v), _svr_color("stp_cin", stpc_v)),
-                  ("STP(fix)", f1(stpf_v), _svr_color("stp_fixed", stpf_v)),
+                  ("STP (cin)", f1(stpc_v), _svr_color("stp_cin", stpc_v)),
+                  ("STP (fix)", f1(stpf_v), _svr_color("stp_fixed", stpf_v)),
                   ("SHIP", f1(ship_v), _svr_color("ship", ship_v)),
                   ("Derecho Comp", f1(dcp_v), self._dcp_color(dcp_v))]
         fm_l = QtGui.QFontMetrics(self.rf)
@@ -277,7 +277,7 @@ class IndexColumnsMixin:
         # the unit-bearing headers never overlap their neighbours horizontally.
         qp.setFont(self.hfs)
         wunit = self._wind_unit()
-        units = ["m2/s2", wunit, "\u00b0/" + wunit, "\u00b0/" + wunit]
+        units = ["m²/s²", wunit, "\u00b0/" + wunit, "\u00b0/" + wunit]
         for i, hh in enumerate(["SRH", "Shear", "MnWind", "SRW"]):
             cx, cw = value_xs[i], value_ws[i]
             self._text(qp, QRect(cx, y, cw, rh), hh, self.hdr, Qt.AlignHCenter)
@@ -342,10 +342,10 @@ class IndexColumnsMixin:
         # rows; the AGL wind barbs are anchored here so they occupy that empty
         # region instead of floating low beside the storm-motion vectors.
         barb_top = y
-        # BRN Shear (m2/s2) and 4-6km SR wind; drawn neutral (no coloring).
+        # BRN Shear (m²/s²) and 4-6km SR wind use neutral text.
         brn = self._p("mupcl", "brnshear")
         for lbl, val, unit in [
-                ("BRN Shear", i0(brn), " m2/s2"),
+                ("BRN Shear", i0(brn), " m²/s²"),
                 ("4-6km SR Wind", self._dirspd(self._s("right_srw_4_5km")),
                  " " + wunit)]:
             lt = lbl + " = "
@@ -446,13 +446,13 @@ class IndexColumnsMixin:
         wbz = self._d("wbz_height")
         ecape = self._d("ecape")
         # CAPE-energy rows use the white->yellow->red->pink scale; WBZ is neutral.
-        bot = [(("HGZ CAPE", i0(hgz), " J/kg",
+        bot = [(("HGZ CAPE", i0(hgz), " J kg⁻¹",
                  self._wyrp(hgz, 1000, 2500, 4000, higher=True)),
                 ("NSTP", f1(nstp), "",
                  self._wyrp(nstp, 1.0, 2.0, 4.0, higher=True))),
-               (("NCAPE", f2(ncape), " J/kg/m",
+               (("NCAPE", f2(ncape), " J kg⁻¹ m⁻¹",
                  self._wyrp(ncape, 0.1, 0.2, 0.3, higher=True)),
-               ("ECAPE", i0(ecape), " J/kg",
+               ("ECAPE", i0(ecape), " J kg⁻¹",
                  self._wyrp(ecape, 1000, 2500, 4000, higher=True))),
                (("LSCP", f1(lscp), "",
                  self._wyrp(lscp, -1.0, -4.0, -8.0, higher=False)),

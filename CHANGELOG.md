@@ -84,6 +84,10 @@ Planned release: **v3.8.5**.
   to a text readout directly below ECAPE.
 - Space the Severe sounding's SFC, LCL–EL and EHI layer labels so the range
   endpoints and units are easier to read.
+- Draw the green mixing-ratio labels directly on the Skew-T grid.
+- Space Fahrenheit and humidity units and STP qualifiers in the Severe
+  diagnostics. Use superscripts for shear, significant-severe and CAPE-family
+  units. Set PWAT's inch unit in the same size as its value.
 - Keep the sounding source form at its full height above the open profiles.
   Put the observed date and launch on one row on short windows and use the
   sidebar to reach content when it needs more room.

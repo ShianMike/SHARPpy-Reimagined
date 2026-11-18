@@ -322,6 +322,9 @@ def test_index_board_formats_display_units(qt_app):
     assert board._wind_scalar(20.0) == "10"
     assert board._dirspd((180.0, 20.0)) == "180/10"
     assert board._uv_dirspd((10.0, 0.0)) == "270/05"
+    board.setPreferences(update_gui=False, temp_units="Fahrenheit", pw_units="in")
+    assert board._temp(68.0) == "68 °F"
+    assert board._pwat(2.23) == "2.23\u00a0in"
 
 
 def test_index_board_preserves_primary_widths_with_compact_composites(qt_app):
@@ -617,7 +620,7 @@ def test_index_board_uses_five_lapse_rows_and_places_lrghail_below_moshe(qt_app)
 
     def capture_text(qp, rect, s, color=None, align=Qt.AlignLeft):
         records.append((s, rect.y(), rect.height()))
-        if s in {"Supercell Comp = ", "STP(cin) = ", "STP(fix) = ",
+        if s in {"Supercell Comp = ", "STP (cin) = ", "STP (fix) = ",
                  "SHIP = ", "Derecho Comp = "}:
             severe_colors[s] = QtGui.QColor(color).name()
 
@@ -647,18 +650,18 @@ def test_index_board_uses_five_lapse_rows_and_places_lrghail_below_moshe(qt_app)
 
     severe_y = {
         text: y for text, y, _h in records
-        if text in {"Supercell Comp = ", "STP(cin) = ", "STP(fix) = ",
+        if text in {"Supercell Comp = ", "STP (cin) = ", "STP (fix) = ",
                     "SHIP = ", "Derecho Comp = "}
     }
     lapse_step = lapse_y["SFC - 1 km LR = "] - lapse_y["SFC - 500 m LR = "]
-    severe_step = severe_y["STP(cin) = "] - severe_y["Supercell Comp = "]
+    severe_step = severe_y["STP (cin) = "] - severe_y["Supercell Comp = "]
     assert severe_step == lapse_step
     assert lapse_step <= 21
     assert severe_y["Derecho Comp = "] - severe_y["SHIP = "] == severe_step
     for lapse_label, severe_label in zip(
             ("SFC - 500 m LR = ", "SFC - 1 km LR = ", "SFC - 3 km LR = ",
              "850-500 LR = ", "700-500 LR = "),
-            ("Supercell Comp = ", "STP(cin) = ", "STP(fix) = ",
+            ("Supercell Comp = ", "STP (cin) = ", "STP (fix) = ",
              "SHIP = ", "Derecho Comp = ")):
         assert lapse_y[lapse_label] == severe_y[severe_label]
     top_gap = severe_y["Supercell Comp = "] - lapse_y["SFC - 500 m LR = "]

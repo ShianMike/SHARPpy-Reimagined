@@ -94,7 +94,10 @@ def apply_render_font_quality(font, scaled=None):
 _UNIT_SUFFIXES = tuple(sorted((
     " degrees C/km",
     " degrees C",
+    " J kg⁻¹ m⁻¹",
+    " J kg⁻¹",
     " m\u00b3/s\u00b3",
+    " m²/s²",
     " J/kg/m",
     " m AGL",
     " m2/s2",
@@ -107,7 +110,7 @@ _UNIT_SUFFIXES = tuple(sorted((
     " in",
     " m",
 ), key=len, reverse=True))
-_DEGREE_SUFFIXES = ("\u00b0F", "\u00b0C")
+_DEGREE_SUFFIXES = (" \u00b0F", "\u00b0F", "\u00b0C")
 
 
 def split_value_unit(text: str) -> tuple[str, str] | None:

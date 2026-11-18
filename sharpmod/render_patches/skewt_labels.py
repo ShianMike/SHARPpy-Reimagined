@@ -10,15 +10,10 @@ from sharpmod.rendering import cli as _render_api
 
 
 def _install_skewt_mixratio_mask():
-    """Size the skew-T mixing-ratio label's background mask to its text.
+    """Draw green mixing-ratio labels directly on the Skew-T grid.
 
-    The vendored ``backgroundSkewT.draw_mixing_ratios`` masks each green
-    mixing-ratio value with a fixed 10x10 px background rect before drawing it.
-    The wider/taller bundled font overflows that box, so the dry-adiabat and
-    isotherm lines behind bleed through the digits. This replaces the method
-    with a faithful port whose mask rect is sized from the label's font metrics
-    (so it always fully covers the text), leaving everything else identical.
-    Idempotent + fully guarded (per-call fallback to the vendored method).
+    Size the text rectangles from the active font so each label stays centered
+    at the end of its mixing-ratio line.
     """
     try:
         import sharppy.viz.skew as _skew
@@ -48,11 +43,6 @@ def _install_skewt_mixratio_mask():
                 rectF = _QtCore.QRectF(
                     x2 - tw / 2.0 - pad, y2 - th - pad,
                     tw + 2 * pad, th + 2 * pad)
-                pen = _QtGui.QPen(self.bg_color, 1, _QtCore.Qt.SolidLine)
-                brush = _QtGui.QBrush(self.bg_color, _QtCore.Qt.SolidPattern)
-                qp.setPen(pen)
-                qp.setBrush(brush)
-                qp.drawRect(rectF)
                 pen = _QtGui.QPen(self.mixr_color, 1, _QtCore.Qt.SolidLine)
                 qp.setPen(pen)
                 qp.drawLine(int(x1), int(y1), int(x2), int(y2))
@@ -60,7 +50,7 @@ def _install_skewt_mixratio_mask():
                             _QtCore.Qt.AlignBottom | _QtCore.Qt.AlignCenter,
                             label)
             except Exception:
-                _orig(self, w, pmin, qp)
+                _orig(self, w, pmin, _render_api._RectSuppressingPainter(qp))
 
         _cls.draw_mixing_ratios = draw_mixing_ratios
         _cls._sharpmod_mixr_mask = True

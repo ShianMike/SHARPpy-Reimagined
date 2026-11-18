@@ -386,12 +386,11 @@ NetCDF backend. The CLI equivalent is [`wrf-extract`](#4-wrf-arw-model-output-wr
 
 The viewer displays the native Skew-T, hodograph, and scientific panels. When
 the sounding location is visible in Model Viewer, the image can include a
-locator captured from that map. It retains the OpenStreetMap-based basemap,
-displayed layers, location marker and parameter scale. The locator shows a
-4× closer crop around the sounding point. The map fills the inset
-without tiny title/time or attribution bands. The locator also appears in saved
-and copied sounding PNGs.
-Hidden model fields produce a basemap locator without a parameter legend.
+locator captured from that map. It uses the OpenStreetMap-based basemap and
+displayed layers, with a point marker, a border and a place name in the header.
+The 6.4× crop is centered near the sounding point. The locator also appears
+in saved and copied sounding PNGs. Hidden model fields produce a basemap
+locator.
 Mismatched model runs or valid times, off-screen locations and unavailable map
 captures leave the original sounding image usable. Live Tracking locators are
 not included.

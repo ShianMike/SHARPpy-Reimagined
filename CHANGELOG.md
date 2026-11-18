@@ -100,7 +100,8 @@ Target version: **3.8.5** (not published).
 - Draw matching cyan Skew-T brackets with capped ends and labels directly on
   the plot, aligned to −35 °C for both the Severe HGZ and Winter DGZ.
 - Give the sounding locator a visible outline and remove its tiny color scale
-  from displayed, copied and saved images.
+  from displayed, copied and saved images. Document the current locator in
+  the user and image integration guides.
 - Use thinner, softer center axes and dimmer speed labels in both hodographs.
 - Move the Severe sounding's wet-bulb zero height from the Skew-T annotation
   to a text readout directly below ECAPE.

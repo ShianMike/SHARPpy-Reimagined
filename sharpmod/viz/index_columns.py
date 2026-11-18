@@ -156,9 +156,9 @@ class IndexColumnsMixin:
         qp.setPen(QtGui.QPen(self.rule, 1)); qp.drawLine(x, y, x + w, y)
         y += per_div - per_div // 2
 
-        lapse = [("SFC-500m LR", self._d("lapserate_sfc_500m"), True),
-                 ("SFC-1km LR", self._d("lapserate_sfc_1km"), True),
-                 ("SFC-3km LR", self._sf("lapserate_3km"), False),
+        lapse = [("SFC - 500 m LR", self._d("lapserate_sfc_500m"), True),
+                 ("SFC - 1 km LR", self._d("lapserate_sfc_1km"), True),
+                 ("SFC - 3 km LR", self._sf("lapserate_3km"), False),
                  ("850-500 LR", self._sf("lapserate_850_500"), False),
                  ("700-500 LR", self._sf("lapserate_700_500"), False)]
         # Severe Weather Composite drawn BESIDE the lapse rates, using the free
@@ -288,14 +288,14 @@ class IndexColumnsMixin:
         mw500 = self._dr("mean_wind_sfc_500m")
         srw500 = self._dr("srw_sfc_500m")
         rows = [
-            ("SFC-500m", i0(self._d("srh500")),
+            ("SFC - 500 m", i0(self._d("srh500")),
              self._wind_scalar(self._d("shear_sfc_500m")),
              self._uv_dirspd(mw500), self._uv_dirspd(srw500), False),
-            ("SFC-1km", i0(self._sf("srh1km")),
+            ("SFC - 1 km", i0(self._sf("srh1km")),
              self._wind_scalar(_mag(self._s("sfc_1km_shear"))),
              self._dirspd(self._s("mean_1km")),
              self._dirspd(self._s("srw_1km")), False),
-            ("SFC-3km", i0(self._sf("srh3km")),
+            ("SFC - 3 km", i0(self._sf("srh3km")),
              self._wind_scalar(_mag(self._s("sfc_3km_shear"))),
              self._dirspd(self._s("mean_3km")),
              self._dirspd(self._s("srw_3km")), False),
@@ -303,13 +303,13 @@ class IndexColumnsMixin:
              self._wind_scalar(_mag(self._s("eff_shear"))),
              self._uv_dirspd(self._s("mean_eff")),
              self._uv_dirspd(self._s("srw_eff")), False),
-            ("SFC-6km", MISS, self._wind_scalar(_mag(self._s("sfc_6km_shear"))),
+            ("SFC - 6 km", MISS, self._wind_scalar(_mag(self._s("sfc_6km_shear"))),
              self._dirspd(self._s("mean_6km")),
              self._dirspd(self._s("srw_6km")), False),
-            ("SFC-8km", MISS, self._wind_scalar(_mag(self._s("sfc_8km_shear"))),
+            ("SFC - 8 km", MISS, self._wind_scalar(_mag(self._s("sfc_8km_shear"))),
              self._dirspd(self._s("mean_8km")),
              self._dirspd(self._s("srw_8km")), False),
-            ("LCL-EL", MISS, self._wind_scalar(_mag(self._s("lcl_el_shear"))),
+            ("LCL - EL", MISS, self._wind_scalar(_mag(self._s("lcl_el_shear"))),
              self._dirspd(self._s("mean_lcl_el")),
              self._dirspd(self._s("srw_lcl_el")), False),
             ("Eff Shear", MISS, self._wind_scalar(self._sf("ebwspd")),
@@ -433,8 +433,8 @@ class IndexColumnsMixin:
         mshe = self._d("modified_sherbe")
         lrgh = self._d("lrghail")
         swt = self._sweat()
-        top = [("EHI 0-1km", f1(ehi1), self._ehi_color(ehi1)),
-               ("EHI 0-3km", f1(ehi3), self._ehi_color(ehi3)),
+        top = [("EHI 0 - 1 km", f1(ehi1), self._ehi_color(ehi1)),
+               ("EHI 0 - 3 km", f1(ehi3), self._ehi_color(ehi3)),
                ("VGP", f2(self._d("vgp")), self.fg),
                ("Peskov Index", f1(pesk), self._peskov_color(pesk)),
                ("MCS Index", f1(mcs), self._mcs_color(mcs)),

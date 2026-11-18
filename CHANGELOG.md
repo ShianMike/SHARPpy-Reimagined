@@ -82,6 +82,8 @@ Planned release: **v3.8.5**.
   −35 °C bottom-axis position, with a label drawn directly on the plot.
 - Move the Severe sounding's wet-bulb zero height from the Skew-T annotation
   to a text readout directly below ECAPE.
+- Space the Severe sounding's SFC, LCL–EL and EHI layer labels so the range
+  endpoints and units are easier to read.
 - Keep the sounding source form at its full height above the open profiles.
   Put the observed date and launch on one row on short windows and use the
   sidebar to reach content when it needs more room.

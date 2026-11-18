@@ -50,6 +50,7 @@ it("requests only the selected product using the current clock, independent of a
   const requests = () => transport.call.mock.calls.filter(([command]) => command === "get_spc_outlook");
   expect(requests()).toHaveLength(1);
   expect(requests()[0]?.[1]?.product).toBe("cat");
+  expect(requests()[0]?.[1]?.day).toBe(1);
   expect(requests()[0]?.[1]?.validTime).toBe("2026-10-04T23:58:00Z");
   await userEvent.click(screen.getByRole("button", { name: "Tornado" }));
   await waitFor(() => { expect(requests()).toHaveLength(2); });
@@ -67,21 +68,20 @@ it("reports selected point risk and significant-severe qualifiers, respecting po
   expect(screen.getByText("Significant-severe area also outlined")).toBeTruthy();
   act(() => { useAppStore.setState({ selectedPoint: { longitude: -75, latitude: 30 } }); });
   expect(screen.getByText("No outlined area at this point")).toBeTruthy();
-  act(() => { queryClient.setQueryData(["spc-current", "cat"], { ...current, outlook: { ...current.outlook, areas: [{ ...area, rings: [...area.rings.slice(0, 1), [[-98, 32], [-90, 32], [-90, 40], [-98, 40]]] }] } }); useAppStore.setState({ selectedPoint: { longitude: -95, latitude: 35 } }); });
+  act(() => { queryClient.setQueryData(["spc-latest", 1, "cat"], { ...current, outlook: { ...current.outlook, areas: [{ ...area, rings: [...area.rings.slice(0, 1), [[-98, 32], [-90, 32], [-90, 40], [-98, 40]]] }] } }); useAppStore.setState({ selectedPoint: { longitude: -95, latitude: 35 } }); });
   expect(screen.getByText("No outlined area at this point")).toBeTruthy();
   queryClient.clear();
 });
 
 it.each([
   { ...current, outlook: null },
-  { ...current, outlook: { ...current.outlook, covers: false } },
   { ...current, outlook: { ...current.outlook, validTo: "2026-10-04T12:00:00Z" } },
-  { ...current, outlook: { ...current.outlook, validFrom: "2026-10-05T01:00:00Z" } },
+  { ...current, outlook: { ...current.outlook, validFrom: "2026-10-05T12:00:00Z" } },
   { ...current, outlook: { ...current.outlook, issued: "2026-10-05T01:00:00Z" } },
   { ...current, outlook: { ...current.outlook, validTo: null } },
-])("never presents missing, expired, future or uncovered outlooks as current", async (reply) => {
+])("withholds missing, expired and invalid issuances", async (reply) => {
   const { queryClient } = renderWithBackend(<SpcBriefing />, transportWith(reply));
-  await screen.findByRole("heading", { name: "No current outlook available" });
+  await screen.findByRole("heading", { name: "Outlook unavailable" });
   expect(screen.queryByText("Current", { exact: true })).toBeNull();
   expect(screen.queryByRole("img")).toBeNull();
   queryClient.clear();
@@ -94,10 +94,46 @@ it("handles empty valid guidance without inventing a risk category", async () =>
   queryClient.clear();
 });
 
-it("labels a provider fallback by its actual outlook day instead of calling it Day 1", async () => {
-  const { queryClient } = renderWithBackend(<SpcBriefing />, transportWith({ ...current, outlook: { ...current.outlook, title: "SPC convective outlook — Day 2 categorical risk" } }));
-  await screen.findByText("Storm Prediction Center · Day 2");
-  expect(screen.queryByText("Storm Prediction Center · Day 1")).toBeNull();
+it("switches days and products together and shows upcoming guidance for the selected day", async () => {
+  const base = createTransport();
+  const transport = transportWith();
+  transport.call.mockImplementation((command, args) => {
+    if (command !== "get_spc_outlook") return base.call(command, args);
+    if (args?.day === 1) return Promise.resolve(current);
+    const day = args?.day === 2 ? 2 : 3;
+    const description = args?.product === "prob" ? "15% combined severe" : `Day ${String(day)} risk area`;
+    return Promise.resolve({
+      ...current,
+      product: args?.product,
+      outlook: {
+        ...current.outlook,
+        covers: false,
+        validFrom: day === 2 ? "2026-10-05T12:00:00Z" : "2026-10-06T12:00:00Z",
+        validTo: day === 2 ? "2026-10-06T12:00:00Z" : "2026-10-07T12:00:00Z",
+        areas: [{ ...area, description }],
+      },
+    });
+  });
+  const { queryClient } = renderWithBackend(<SpcBriefing />, transport);
+  await screen.findByRole("heading", { name: "Slight Risk" });
+  await userEvent.click(screen.getByRole("button", { name: "Wind" }));
+  await userEvent.click(screen.getByRole("button", { name: "Day 2" }));
+  await screen.findByRole("heading", { name: "Day 2 risk area" });
+  expect(screen.getByText("Upcoming", { exact: true })).toBeTruthy();
+  expect(screen.getByText("05 Oct, 12:00 UTC")).toBeTruthy();
+  expect(screen.queryByText("Current", { exact: true })).toBeNull();
+  expect(screen.getByRole("button", { name: "Wind" }).getAttribute("aria-pressed")).toBe("true");
+  expect(transport.call).toHaveBeenCalledWith("get_spc_outlook", expect.objectContaining({ day: 2, product: "wind", validTime: "2026-10-04T23:58:00Z" }));
+
+  await userEvent.click(screen.getByRole("button", { name: "Day 3" }));
+  await screen.findByRole("heading", { name: "Day 3 risk area" });
+  expect(screen.queryByRole("button", { name: "Wind" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Categorical" }).getAttribute("aria-pressed")).toBe("true");
+  await userEvent.click(screen.getByRole("button", { name: "Severe probability" }));
+  await screen.findByRole("heading", { name: "15% combined severe" });
+  expect(transport.call).toHaveBeenCalledWith("get_spc_outlook", expect.objectContaining({ day: 3, product: "prob", validTime: "2026-10-04T23:58:00Z" }));
+  expect(screen.getByRole("link", { name: "NOAA / NWS SPC" }).getAttribute("href")).toContain("day3otlk.html");
+  expect(screen.queryByRole("heading", { name: "Day 2 risk area" })).toBeNull();
   queryClient.clear();
 });
 
@@ -112,10 +148,10 @@ it("retries unavailable guidance and identifies failed refreshes", async () => {
   const { queryClient } = renderWithBackend(<SpcBriefing />, transport);
   await screen.findByRole("heading", { name: "Outlook unavailable" });
   fail = false;
-  await userEvent.click(screen.getByRole("button", { name: "Refresh current outlook" }));
+  await userEvent.click(screen.getByRole("button", { name: "Refresh Day 1 outlook" }));
   await screen.findByRole("heading", { name: "Slight Risk" });
   fail = true;
-  await userEvent.click(screen.getByRole("button", { name: "Refresh current outlook" }));
+  await userEvent.click(screen.getByRole("button", { name: "Refresh Day 1 outlook" }));
   await screen.findByText("Refresh failed. Showing the last valid outlook.");
   expect(screen.getByRole("heading", { name: "Slight Risk" })).toBeTruthy();
   queryClient.clear();
@@ -133,7 +169,7 @@ it("rechecks the current UTC clock at midnight and hides guidance once its valid
   expect(requests[1]?.[1]?.validTime).toBe("2026-10-05T00:03:00Z");
   vi.setSystemTime(new Date("2026-10-05T12:00:00Z"));
   await act(async () => { window.dispatchEvent(new Event("focus")); await vi.advanceTimersByTimeAsync(1); });
-  expect(screen.getByRole("heading", { name: "No current outlook available" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Outlook unavailable" })).toBeTruthy();
   expect(within(screen.getByRole("group", { name: "SPC outlook product" })).getAllByRole("button")).toHaveLength(4);
   queryClient.clear();
 });

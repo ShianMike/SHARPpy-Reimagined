@@ -162,6 +162,7 @@ const OUTLOOKS: Readonly<Record<string, unknown>> = { cat: outlookCat, torn: out
 function outlookFor(args: Readonly<Record<string, unknown>> | undefined): unknown {
   const product = String(args?.product);
   const validTime = String(args?.validTime);
+  if (args?.day !== undefined && args.day !== 1) return { product, validTime, outlook: null };
   const base = copy(OUTLOOKS[product] ?? { ...outlookWind, product }) as Record<string, unknown>;
   const outlook = base.outlook as { validFrom: string; validTo: string; covers: boolean } | null;
   if (outlook !== null) {

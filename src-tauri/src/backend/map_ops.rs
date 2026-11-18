@@ -141,11 +141,12 @@ impl Router {
         Ok(frame)
     }
 
-    /// The SPC outlook of one product covering a time; `outlook` is null when none does.
+    /// Read one outlook by valid time or by its current issuance day.
     pub async fn spc_outlook(
         &self,
         product: &str,
         valid_time: &str,
+        day: Option<u8>,
     ) -> Result<SpcOutlook, BackendError> {
         let context = context(OP_OUTLOOK, &format!("SPC {product} outlook"));
         if !key_ok(product) || !time_ok(valid_time) {
@@ -156,21 +157,26 @@ impl Router {
         }
         let when = OffsetDateTime::parse(valid_time, &Rfc3339)
             .map_err(|_| invalid(&context, "validTime must be an RFC 3339 time"))?;
+        if day.is_some_and(|day| !(1..=3).contains(&day)) {
+            return Err(invalid(&context, "day must be 1, 2, or 3"));
+        }
         let product = if matches!(product, "cat" | "torn" | "wind" | "hail" | "prob") {
             product
         } else {
             "cat"
         };
-        let layer = sharpmod_weather::spc_outlook::client()
-            .fetch(when, OffsetDateTime::now_utc(), product)
-            .await
-            .map_err(|error| BackendError {
-                code: ErrorCode::OverlayFetchFailed,
-                message: format!("The SPC outlook could not be read: {error}."),
-                retryable: true,
-                context: Some(Box::new(context.clone())),
-                details: None,
-            })?;
+        let client = sharpmod_weather::spc_outlook::client();
+        let layer = match day {
+            Some(day) => client.fetch_latest(day, product).await,
+            None => client.fetch(when, OffsetDateTime::now_utc(), product).await,
+        }
+        .map_err(|error| BackendError {
+            code: ErrorCode::OverlayFetchFailed,
+            message: format!("The SPC outlook could not be read: {error}."),
+            retryable: true,
+            context: Some(Box::new(context.clone())),
+            details: None,
+        })?;
         let round4 = |v: f64| (v * OUTLOOK_VERTEX_SCALE).round() / OUTLOOK_VERTEX_SCALE;
         let outlook = SpcOutlook {
             product: product.to_owned(),

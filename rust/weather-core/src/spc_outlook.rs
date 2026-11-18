@@ -162,6 +162,16 @@ fn issuances_for(day: u8, day_start: OffsetDateTime) -> Vec<OffsetDateTime> {
         .collect()
 }
 
+fn live_request(day: u8, product: &str) -> OutlookRequest {
+    OutlookRequest {
+        url: format!("{BASE}/day{day}otlk_{product}.nolyr.geojson"),
+        day,
+        issued: None,
+        label: format!("Day {day} (current)"),
+        live: true,
+    }
+}
+
 fn candidates_internal(
     valid_time: OffsetDateTime,
     now: OffsetDateTime,
@@ -180,16 +190,7 @@ fn candidates_internal(
         if offset == i64::from(day) - 1
             || (offset == i64::from(day) && now_utc.hour() < CONVECTIVE_DAY_START_HOUR)
         {
-            requests.push((
-                OutlookRequest {
-                    url: format!("{BASE}/day{day}otlk_{}.nolyr.geojson", spec.key),
-                    day,
-                    issued: None,
-                    label: format!("Day {day} (current)"),
-                    live: true,
-                },
-                None,
-            ));
+            requests.push((live_request(day, spec.key), None));
         }
         let mut issuances: Vec<OffsetDateTime> = issuances_for(day, day_start)
             .into_iter()
@@ -735,50 +736,15 @@ impl OutlookClient {
         let mut fallback: Option<Arc<OutlookLayer>> = None;
         let mut exhausted = true;
         for (request, _) in &candidates {
-            if let Some(cached) = self.cache_get(&request.url) {
-                let Some(layer) = cached else {
-                    continue;
-                };
-                if layer.covers(valid_time) {
-                    return Ok(Some(layer));
-                }
-                if fallback.is_none() {
-                    fallback = Some(layer);
-                }
-                continue;
-            }
-            match self.download(&request.url).await {
-                Ok(Some(bytes)) => {
-                    let Ok(parsed) =
-                        parse_outlook(&bytes, &request.url, request.day, &request.label, product)
-                    else {
-                        exhausted = false;
-                        continue;
-                    };
-                    if parsed.valid_from_dt.is_none() || parsed.valid_to_dt.is_none() {
-                        exhausted = false;
-                        continue;
-                    }
-                    let layer = Arc::new(parsed);
-                    let ttl = if request.live {
-                        LIVE_CACHE_TTL
-                    } else {
-                        ARCHIVE_CACHE_TTL
-                    };
-                    self.cache_put(&request.url, Some(Arc::clone(&layer)), ttl);
+            match self.fetch_candidate(request, product, miss_ttl).await {
+                Ok(Some(layer)) => {
                     if layer.covers(valid_time) {
                         return Ok(Some(layer));
                     }
-                    if fallback.is_none() {
-                        fallback = Some(layer);
-                    }
+                    fallback.get_or_insert(layer);
                 }
-                Ok(None) => {
-                    self.cache_put(&request.url, None, miss_ttl);
-                }
-                Err(_) => {
-                    exhausted = false;
-                }
+                Ok(None) => {}
+                Err(_) => exhausted = false,
             }
         }
         if fallback.is_some() {
@@ -795,6 +761,48 @@ impl OutlookClient {
             );
         }
         Ok(None)
+    }
+
+    /// Read the latest issuance of this day and product, including future validity windows.
+    pub async fn fetch_latest(
+        &self,
+        day: u8,
+        product: &str,
+    ) -> Result<Option<Arc<OutlookLayer>>, String> {
+        let spec = product_spec(product);
+        if !spec.days.contains(&day) {
+            return Ok(None);
+        }
+        self.fetch_candidate(&live_request(day, spec.key), spec.key, LIVE_CACHE_TTL)
+            .await
+    }
+
+    async fn fetch_candidate(
+        &self,
+        request: &OutlookRequest,
+        product: &str,
+        miss_ttl: Duration,
+    ) -> Result<Option<Arc<OutlookLayer>>, String> {
+        if let Some(cached) = self.cache_get(&request.url) {
+            return Ok(cached);
+        }
+        let Some(bytes) = self.download(&request.url).await? else {
+            self.cache_put(&request.url, None, miss_ttl);
+            return Ok(None);
+        };
+        let parsed = parse_outlook(&bytes, &request.url, request.day, &request.label, product)?;
+        if !matches!((parsed.valid_from_dt, parsed.valid_to_dt), (Some(from), Some(to)) if from < to)
+        {
+            return Err("the outlook has no valid issuance window".into());
+        }
+        let layer = Arc::new(parsed);
+        let ttl = if request.live {
+            LIVE_CACHE_TTL
+        } else {
+            ARCHIVE_CACHE_TTL
+        };
+        self.cache_put(&request.url, Some(Arc::clone(&layer)), ttl);
+        Ok(Some(layer))
     }
 
     fn is_day_missed(&self, key: &str) -> bool {
@@ -953,6 +961,39 @@ mod tests {
 
         let overnight = candidates_for(instant("2023-04-01T06:00:00Z"), now, "cat");
         assert!(overnight[0].url.contains("day1otlk_20230401_0100_cat"));
+    }
+
+    #[tokio::test]
+    async fn latest_day_returns_its_published_window_even_before_it_starts() {
+        let client = OutlookClient {
+            client: Err("the test must use the live endpoint cache".into()),
+            layers: Mutex::default(),
+            day_misses: Mutex::default(),
+        };
+        let now = instant("2025-05-14T09:00:00Z");
+        for (day, product, valid, expires) in [
+            (1, "cat", "202505140100", "202505141200"),
+            (2, "cat", "202505151200", "202505161200"),
+            (3, "prob", "202505161200", "202505171200"),
+        ] {
+            let request = live_request(day, product);
+            let layer = parse_outlook(
+                &sample_payload(valid, expires, "202505140100"),
+                &request.url,
+                day,
+                &request.label,
+                product,
+            )
+            .unwrap();
+            client.cache_put(&request.url, Some(Arc::new(layer)), LIVE_CACHE_TTL);
+            let actual = client.fetch_latest(day, product).await.unwrap().unwrap();
+            assert_eq!(
+                actual.source_url,
+                format!("{BASE}/day{day}otlk_{product}.nolyr.geojson")
+            );
+            assert_eq!(actual.covers(now), day == 1);
+        }
+        assert!(client.fetch_latest(3, "torn").await.unwrap().is_none());
     }
 
     #[test]

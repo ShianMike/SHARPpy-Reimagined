@@ -11,7 +11,7 @@ import { useLiveTrackingStore } from "../stores/liveTrackingStore";
 import { panelWeather, useMapStore } from "../stores/mapStore";
 import { useSoundingStore } from "../stores/soundingStore";
 import { releaseTime } from "../features/sounding/soundingTime";
-import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
+import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type OutlookDay, type OutlookProductKey, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
 import { nearestRadarSite } from "./nearestSite";
 import { panelRadar } from "./panelRadar";
 
@@ -98,13 +98,13 @@ export function outlookQueryOptions(client: BackendClient, product: typeof OUTLO
   };
 }
 
-/** The Overview briefing always follows the clock, independently of forecast or history selections. */
-export function useCurrentSpcOutlook(product: typeof OUTLOOK_KEYS[number]): UseQueryResult<SpcOutlook> {
+/** Keep each day's latest issuance separate from the map's time-based outlooks. */
+export function useLatestSpcOutlook(day: OutlookDay, product: OutlookProductKey): UseQueryResult<SpcOutlook> {
   const client = useBackendClient();
   return useQuery({
     ...BASE_QUERY_OPTIONS,
-    queryKey: ["spc-current", product],
-    queryFn: ({ signal }) => client.getSpcOutlook(product, `${new Date(Date.now()).toISOString().slice(0, 19)}Z`, signal),
+    queryKey: ["spc-latest", day, product],
+    queryFn: ({ signal }) => client.getSpcOutlook(product, `${new Date(Date.now()).toISOString().slice(0, 19)}Z`, signal, day),
     staleTime: SPC_REFRESH_MS,
     gcTime: 3 * SPC_REFRESH_MS,
     refetchInterval: SPC_REFRESH_MS,

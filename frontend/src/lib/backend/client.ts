@@ -21,7 +21,7 @@ import type { WeatherAlerts } from "../../types/weatherAlerts";
 import { parseStationCatalog } from "../contracts/stations";
 import { parseThresholdEvaluation, thresholdArgs } from "../contracts/thresholds";
 import { parseThresholdCsv, parseThresholdMetrics } from "../contracts/thresholdCatalog";
-import type { AvailabilityReport, ContourLines, FieldFrame, MapCatalog, OutlookKey, PlaceLabels, RadarFrame, RadarSiteCatalog, RadarSiteFrame, RadarTilts, ReportOptions, SatelliteFrame, SatelliteChannel, SpcOutlook, StormReports } from "../../types/map";
+import type { AvailabilityReport, ContourLines, FieldFrame, MapCatalog, OutlookDay, OutlookProductKey, PlaceLabels, RadarFrame, RadarSiteCatalog, RadarSiteFrame, RadarTilts, ReportOptions, SatelliteFrame, SatelliteChannel, SpcOutlook, StormReports } from "../../types/map";
 import type { SurfacePlots } from "../../types/surface";
 import type {
   ThresholdCsv,
@@ -145,8 +145,8 @@ export class BackendClient {
     return this.request("get_weather_field", parseFieldFrame, { product, runTime, forecastHour, model }, signal);
   }
 
-  getSpcOutlook(product: OutlookKey, validTime: string, signal?: AbortSignal): Promise<SpcOutlook> {
-    return this.request("get_spc_outlook", parseSpcOutlook, { product, validTime }, signal);
+  getSpcOutlook(product: OutlookProductKey, validTime: string, signal?: AbortSignal, day?: OutlookDay): Promise<SpcOutlook> {
+    return this.request("get_spc_outlook", parseSpcOutlook, { product, validTime, ...(day === undefined ? {} : { day }) }, signal);
   }
 
   getWeatherAlerts(validTime: string): Promise<WeatherAlerts> {

@@ -11,8 +11,8 @@
         "description": "Scan compact readouts with aligned units and an active-panel highlight. Select a reading to switch panels, copy the point’s coordinates, and keep Open sounding within reach while viewing source details."
       },
       {
-        "title": "A current weather briefing on Overview",
-        "description": "See current SPC categorical, tornado, wind and hail summaries in a compact card with a simpler heading. The card shows the published outlook day, official UTC issue and valid times, and guidance for your selected location. The briefing follows the current clock even when your forecast is archived. Compact shortcuts keep your forecast, live layers and soundings close by."
+        "title": "Day 1–3 SPC outlooks on Overview",
+        "description": "Choose Day 1, Day 2 or Day 3 to see the latest SPC issuance, its UTC validity window and guidance for your selected location. Days 1 and 2 include tornado, wind and hail probabilities. Day 3 includes combined severe probability. Upcoming outlooks are labeled, and the briefing follows the current clock even when your forecast is archived."
       },
       {
         "title": "Observed soundings open reliably",

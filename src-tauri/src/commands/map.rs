@@ -100,14 +100,15 @@ pub async fn get_weather_field(
     Ok(tauri::ipc::Response::new(frame))
 }
 
-/// The SPC outlook of one product covering `valid_time`.
+/// The SPC outlook covering `valid_time` or the latest issuance for `day`.
 #[tauri::command]
 pub async fn get_spc_outlook(
     state: tauri::State<'_, AppState>,
     product: String,
     valid_time: String,
+    day: Option<u8>,
 ) -> Result<SpcOutlook, BackendError> {
-    state.router.spc_outlook(&product, &valid_time).await
+    state.router.spc_outlook(&product, &valid_time, day).await
 }
 
 /// The latest or requested recent radar scan, as an SHRF frame holding a PNG.

@@ -81,8 +81,9 @@ Planned release: **v3.8.5**.
   through the Overview footer's GitHub link and the repository README.
 - Align the winter Skew-T DGZ bracket and label with the −40 °C bottom-axis
   position.
-- Draw the Severe Skew-T hail growth zone as a solid cyan bracket at the
-  −35 °C bottom-axis position, with a label drawn directly on the plot.
+- Draw the Severe and Winter Skew-T hail growth zones with the same solid
+  cyan bracket at the −35 °C bottom-axis position and a label directly on
+  the plot.
 - Move the Severe sounding's wet-bulb zero height from the Skew-T annotation
   to a text readout directly below ECAPE.
 - Space the Severe sounding's SFC, LCL–EL and EHI layer labels so the range

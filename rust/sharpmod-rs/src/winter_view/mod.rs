@@ -144,8 +144,7 @@ fn configure_winter_view<'py>(
     ] {
         hodo.setattr(name, &noop)?;
     }
-    // The instance wrappers add CAPE/HGZ and severe thermal labels. Use the same
-    // underlying Skew-T painter, then add only the winter layers in Rust.
+    // Start with the shared Skew-T painter and draw the winter layers.
     let base = sound.get_type().getattr("plotData")?.unbind();
     let winter_hodo = hodo.clone().unbind();
     let paint = PyCFunction::new_closure(
@@ -171,6 +170,16 @@ fn configure_winter_view<'py>(
     )?;
     let partial = PyModule::import(py, "functools")?.getattr("partial")?;
     sound.setattr("plotData", partial.call1((paint, &sound))?)?;
+    // Replacing plotData removed the mounted overlay. Wrap the winter painter
+    // with the same unfilled HGZ pass used by the severe view.
+    sound.setattr("_sharpmod_hgz_attached", false)?;
+    let hgz_options = PyDict::new(py);
+    hgz_options.set_item("draw_fill", false)?;
+    PyModule::import(py, "sharpmod.viz.spc_products")?.call_method(
+        "attach_hgz_overlay",
+        (&sound,),
+        Some(&hgz_options),
+    )?;
     sound.setattr("plotdgz", false)?;
     sound.setattr("pcl", py.None())?;
     // Retain the severe view's zoom and selected center. The native resize

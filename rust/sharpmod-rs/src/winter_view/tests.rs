@@ -111,8 +111,31 @@ fn winter_render_keeps_edit_targets_and_severe_render_is_unchanged() {
                 let skew_background = sound.getattr("backgroundBitMap")?.call_method0("toImage")?;
                 let advection = sw.getattr("inferred_temp_advection")?;
                 let advection_image = advection.getattr("plotBitMap")?.call_method0("toImage")?;
+                let hgz_pixel = || -> PyResult<u32> {
+                    let bitmap = sound.getattr("plotBitMap")?;
+                    let density: f64 = bitmap.call_method0("devicePixelRatioF")?.extract()?;
+                    let scale: f64 = sound.getattr("scale")?.extract()?;
+                    let x: f64 = sound.getattr("originx")?.extract::<f64>()?
+                        + sound
+                            .call_method1("tmpc_to_pix", (-35., sound.getattr("pmax")?))?
+                            .extract::<f64>()?
+                            / scale;
+                    // The fixture is about −22 °C at 650 hPa, inside its HGZ.
+                    let y = sound.getattr("originy")?.extract::<f64>()?
+                        + sound
+                            .call_method1("pres_to_pix", (650.,))?
+                            .extract::<f64>()?
+                            / scale;
+                    bitmap
+                        .call_method0("toImage")?
+                        .call_method1("pixel", ((x * density) as i32, (y * density) as i32))?
+                        .extract()
+                };
+                let severe_hgz = hgz_pixel()?;
+                assert!(matches!(severe_hgz, 0xff00c8ff | 0xff007599));
 
                 let result = configure_winter_view(args.py(), &win, &view, &app, &original)?;
+                assert_eq!(hgz_pixel()?, severe_hgz, "winter lost the HGZ bracket");
                 assert_eq!(hodo.getattr("hodomag")?.extract::<f64>()?, magnitude);
                 assert_eq!(hodo.getattr("scale")?.extract::<f64>()?, scale);
                 assert_eq!(

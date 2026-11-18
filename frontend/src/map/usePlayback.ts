@@ -7,6 +7,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { shallow } from "zustand/shallow";
 import { useAppStore } from "../stores/appStore";
 import { useForecastContext } from "../features/forecast/useForecast";
 import { useBackendClient } from "../lib/backend/BackendProvider";
@@ -14,9 +15,11 @@ import { profileSettings } from "../lib/graphics/profileSettings";
 import { useForecastStore } from "../stores/forecastStore";
 import { useGraphicsStore } from "../stores/graphicsStore";
 import { useUiStore } from "../stores/uiStore";
-import { panelLayers, panelProduct, useMapStore } from "../stores/mapStore";
+import { panelLayers, panelProduct, useMapStore, type MapState } from "../stores/mapStore";
+import type { FieldProduct } from "../types/map";
 import { fieldQueryOptions, useFieldFrames, useMapCatalog } from "./mapQueries";
-import { productOf, useDrawnProducts } from "./panelField";
+import { fieldAuxiliaries, productOf, useDrawnProducts } from "./panelField";
+import { mapCatalogQueryOptions } from "./catalogQuery";
 import { contourQueryOptions } from "./contourQueries";
 import { queryFrame } from "./queryFrame";
 import { prepareFieldImage } from "./fieldImages";
@@ -38,6 +41,11 @@ export function hourAfter(hours: readonly number[], hour: number, steps: number,
   return wrap ? (hours[((target % hours.length) + hours.length) % hours.length] ?? null) : null;
 }
 
+const playbackLayout = (state: MapState) => ({
+  count: state.panelLayout, layers: state.layers, panels: state.panels, product: state.productKey,
+  reportWindow: state.reportWindowS, reportFilter: state.reportFilter,
+});
+
 export function usePlayback(): void {
   const active = useAppStore((state) => state.activeWorkspace === "map");
   const context = useForecastContext();
@@ -52,18 +60,8 @@ export function usePlayback(): void {
   const run = context?.run ?? null;
   const model = context?.model.key ?? "hrrr";
   const catalogQuery = useMapCatalog();
-  const catalog = catalogQuery.data;
   const checkingProducts = catalogQuery.isPending || catalogQuery.isPlaceholderData;
-  const pressureAvailable = context?.fieldsAvailable === true && catalog?.products.some((product) => product.key === "mslp") === true;
-  const overlays = useMapStore(useShallow((state) => ({
-    layout: state.panelLayout, layers: state.layers, panels: state.panels,
-    reportWindow: state.reportWindowS, reportFilter: state.reportFilter,
-  })));
-  const sampling = useMapStore((state) => Array.from({ length: state.panelLayout }, (_, panel) => {
-    const layer = panelLayers(state, panel)["model-field"];
-    const product = productOf(catalog, panelProduct(state, panel), panel);
-    return layer.visible && product !== null ? `${product.key}/${layer.smoothing === true && product.palette.units !== "flag" ? "smooth" : "sharp"}` : "";
-  }).join("|"));
+  const layout = useMapStore(useShallow(playbackLayout));
   const hour = context?.hour ?? null;
   const hours = context?.hours ?? null;
   const current = useFieldFrames(
@@ -80,32 +78,66 @@ export function usePlayback(): void {
     let stopped = false;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const map = useMapStore.getState();
+    const panels = Array.from({ length: layout.count }, (_, panel) => panel);
+    const next = playing ? hourAfter(hours, hour, 1, loop) : null;
+    const forecast = useForecastStore.getState();
     const upcoming = [...new Set(Array.from({ length: ahead }, (_, i) => hourAfter(hours, hour, i + 1, playing && loop)).filter(
       (next): next is number => next !== null && next !== hour,
     ))];
-    const frames = upcoming.map((next) => Promise.all(products.map((product) => {
-      const request = { model, product: product.key, runTime: run, forecastHour: next };
-      // Failed queries retain their error state for the panel when that hour is shown.
-      return Promise.all([
-        queryFrame(queryClient, fieldQueryOptions(client, queryClient, request), controller.signal, (frame) =>
-          Promise.all([false, true].filter((smooth) => sampling.split("|").includes(`${product.key}/${smooth ? "smooth" : "sharp"}`))
-            .map((smooth) => prepareFieldImage(frame, product.palette, smooth, controller.signal)))).catch(() => undefined),
-        ...(product.contour !== null || product.wind
-          ? [queryFrame(queryClient, contourQueryOptions(client, queryClient, request), controller.signal).catch(() => undefined)] : []),
-      ]);
-    })));
-    if (playing) {
-      const next = hourAfter(hours, hour, 1, loop);
-      const delay = new Promise<void>((resolve) => { timer = setTimeout(resolve, FRAME_INTERVAL_MS / speed); });
-      const map = useMapStore.getState();
-      const layers = next === null || next === hour ? [] : Array.from({ length: overlays.layout }, (_, panel) =>
-        forecastOverlayLoads(client, queryClient, map, panel, { model, runTime: run, forecastHour: next }, pressureAvailable, controller.signal),
-      ).flat();
+    const frames = upcoming.map(async (forecastHour) => {
+      const handoff = forecastHour === next;
+      if (!handoff && products.length === 0) return;
+      const keepUntil = handoff ? controller.signal : undefined;
+      // The target hour can offer a different field or pressure overlay, particularly on a loop.
+      const inventory = await queryFrame(queryClient, mapCatalogQueryOptions(client, model, run, forecastHour),
+        controller.signal, { keepUntil }).catch(() => undefined);
+      if (stopped) return;
+      const fields = new Map<FieldProduct, Set<boolean>>();
+      if (inventory?.fieldModel === model) {
+        for (const panel of panels) {
+          const layer = panelLayers(map, panel)["model-field"];
+          const product = productOf(inventory, panelProduct(map, panel), panel);
+          if (!layer.visible || product === null) continue;
+          const modes = fields.get(product) ?? new Set<boolean>();
+          modes.add(layer.smoothing === true && product.palette.units !== "flag");
+          fields.set(product, modes);
+        }
+      }
+      const frame = { model, runTime: run, forecastHour };
+      const tasks: Promise<unknown>[] = [];
+      for (const [product, modes] of fields) {
+        const request = { ...frame, product: product.key };
+        tasks.push(queryFrame(queryClient, fieldQueryOptions(client, queryClient, request), controller.signal, {
+          keepUntil,
+          prepare: (data) => Promise.all([...modes].sort().map((smooth) =>
+            prepareFieldImage(data, product.palette, smooth, controller.signal))),
+        }));
+        if (fieldAuxiliaries(product)) {
+          tasks.push(queryFrame(queryClient, contourQueryOptions(client, queryClient, request), controller.signal, { keepUntil }));
+        }
+      }
+      if (handoff) {
+        const pressure = inventory?.fieldModel === model && inventory.products.some((product) => product.key === "mslp");
+        for (const panel of panels) {
+          tasks.push(...forecastOverlayLoads(client, queryClient, map, panel, frame, pressure, controller.signal, keepUntil));
+        }
+      }
       // A failed layer must not cut short the wait for the remaining layers.
-      void Promise.all([delay, frames[0], Promise.allSettled(layers)]).then(() => {
-        if (stopped) return;
-        if (next === null) useForecastStore.getState().setPlaying(false);
-        else useForecastStore.getState().setHour(next);
+      await Promise.allSettled(tasks);
+    });
+    if (playing) {
+      const delay = new Promise<void>((resolve) => { timer = setTimeout(resolve, FRAME_INTERVAL_MS / speed); });
+      void Promise.all([delay, frames[0]]).then(() => {
+        const latest = useForecastStore.getState();
+        const settings = useUiStore.getState();
+        if (stopped || !latest.playing || latest.exporting || latest.modelKey !== forecast.modelKey
+          || latest.runTime !== forecast.runTime || latest.forecastHour !== forecast.forecastHour
+          || useAppStore.getState().activeWorkspace !== "map"
+          || !shallow(layout, playbackLayout(useMapStore.getState()))
+          || settings.loop !== loop || settings.speed !== speed) return;
+        if (next === null || next === hour) latest.setPlaying(false);
+        else latest.setHour(next);
       });
     }
     return () => {
@@ -113,5 +145,5 @@ export function usePlayback(): void {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [active, exporting, model, run, hour, hours, products, sampling, settled, checkingProducts, ahead, playing, loop, speed, client, queryClient, overlays, pressureAvailable]);
+  }, [active, exporting, model, run, hour, hours, products, settled, checkingProducts, ahead, playing, loop, speed, client, queryClient, layout]);
 }

@@ -50,7 +50,7 @@ it.each([false, true])("retains a cached field through preparation and releases 
   let finish = (): void => undefined;
   const prepare = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
   let settled = false;
-  const result = queryFrame(client, options, controller.signal, prepare).finally(() => { settled = true; });
+  const result = queryFrame(client, options, controller.signal, { prepare }).finally(() => { settled = true; });
   const checked = abort ? expect(result).rejects.toMatchObject({ name: "AbortError" }) : expect(result).resolves.toBe(42);
   await vi.waitFor(() => { expect(prepare).toHaveBeenCalledWith(42); });
   expect(settled).toBe(false);
@@ -60,5 +60,16 @@ it.each([false, true])("retains a cached field through preparation and releases 
   await checked;
   expect(client.getQueryCache().find({ queryKey: options.queryKey })?.getObserversCount()).toBe(0);
   finish();
+  client.clear();
+});
+
+it("keeps the completed query owned until the display handoff ends", async () => {
+  const client = new QueryClient();
+  const handoff = new AbortController();
+  const options = { queryKey: ["fields", "handoff"], queryFn: () => Promise.resolve(42), staleTime: Infinity };
+  await expect(queryFrame(client, options, handoff.signal, { keepUntil: handoff.signal })).resolves.toBe(42);
+  expect(client.getQueryCache().find({ queryKey: options.queryKey })?.getObserversCount()).toBe(1);
+  handoff.abort();
+  expect(client.getQueryCache().find({ queryKey: options.queryKey })?.getObserversCount()).toBe(0);
   client.clear();
 });

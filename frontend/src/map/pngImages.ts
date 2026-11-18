@@ -4,6 +4,7 @@ import { decodeRadarValues, type RadarValues } from "./radarValues";
 
 interface DecodedPng { promise: Promise<ImageBitmap>; image?: ImageBitmap; values?: Promise<RadarValues | null>; samples?: RadarValues | null }
 const images = new Map<Blob, DecodedPng>();
+const owners = new Map<Blob, number>();
 
 function trim(): void {
   const budget = profileSettings(useGraphicsStore.getState().effective.profile).cpuFieldCacheMb * 1024 * 1024 / 2;
@@ -11,7 +12,7 @@ function trim(): void {
   let bytes = [...images.values()].reduce((total, item) => total + size(item), 0);
   for (const [key, item] of images) {
     if (bytes <= budget) break;
-    if (item.image === undefined) continue;
+    if (item.image === undefined || owners.has(key)) continue;
     bytes -= size(item);
     images.delete(key);
     // shortcut: GC releases evicted bitmaps still drawn by panels; add reference counting if eager close is needed.
@@ -19,7 +20,19 @@ function trim(): void {
 }
 
 /** Share PNG decoding across panels and prepare playback before changing the clock. */
-export function decodePng(png: Blob): Promise<ImageBitmap> {
+export function decodePng(png: Blob, keepUntil?: AbortSignal): Promise<ImageBitmap> {
+  if (keepUntil !== undefined) {
+    keepUntil.throwIfAborted();
+    owners.set(png, (owners.get(png) ?? 0) + 1);
+    keepUntil.addEventListener("abort", () => {
+      const count = owners.get(png) ?? 1;
+      if (count === 1) {
+        owners.delete(png);
+        // Give the panel's display effect time to take over the prepared bitmap.
+        queueMicrotask(trim);
+      } else owners.set(png, count - 1);
+    }, { once: true });
+  }
   const cached = images.get(png);
   if (cached !== undefined) {
     images.delete(png); images.set(png, cached);

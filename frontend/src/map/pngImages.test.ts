@@ -37,6 +37,26 @@ it("bounds decoded pixels by the graphics profile without closing images a panel
   expect(close).not.toHaveBeenCalled();
 });
 
+it("retains every prepared raster through a multi-panel playback handoff", async () => {
+  useGraphicsStore.setState({ effective: { ...graphics.effective, profile: "low" } });
+  const bitmap = { width: 8192, height: 4096 };
+  const create = vi.fn().mockResolvedValue(bitmap);
+  vi.stubGlobal("createImageBitmap", create);
+  const first = new Blob(["history mosaic"]), second = new Blob(["satellite"]);
+  const playback = new AbortController(), panel = new AbortController();
+  try {
+    await Promise.all([decodePng(first, playback.signal), decodePng(second, playback.signal)]);
+    expect(cachedPng(first)).toBe(bitmap);
+    expect(cachedPng(second)).toBe(bitmap);
+    await decodePng(first, panel.signal);
+    playback.abort();
+    await Promise.resolve();
+    expect(cachedPng(first)).toBe(bitmap);
+    expect(cachedPng(second)).toBeUndefined();
+    expect(create).toHaveBeenCalledTimes(2);
+  } finally { playback.abort(); panel.abort(); }
+});
+
 it("shares native samples across observers and counts their memory in the existing image budget", async () => {
   useGraphicsStore.setState({ effective: { ...graphics.effective, profile: "low" } });
   vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: 4096, height: 4096 }));

@@ -1,6 +1,6 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { Radio, Repeat } from "lucide-react";
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../../lib/cx";
 import { LIVE_HISTORY_MINUTES, LIVE_MINUTE, liveHistoryTimes, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
@@ -25,7 +25,10 @@ export function LiveTimeline({ className, scanTarget }: { className?: string | u
   const previous = times.findLast((step) => step < time), next = times.find((step) => step > time);
   const queryClient = useQueryClient();
   const fetching = useIsFetching({ predicate: (query) => isLiveQuery(query.queryKey) && query.getObserversCount() > 0 });
-  const failed = queryClient.getQueryCache().findAll({ predicate: (query) => isLiveQuery(query.queryKey) && query.getObserversCount() > 0 && query.state.status === "error" }).length;
+  const failed = useSyncExternalStore(
+    useCallback((notify: () => void) => queryClient.getQueryCache().subscribe(notify), [queryClient]),
+    useCallback(() => queryClient.getQueryCache().findAll({ predicate: (query) => isLiveQuery(query.queryKey) && query.getObserversCount() > 0 && query.state.status === "error" }).length, [queryClient]),
+  );
   const history = useLiveHistory();
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;

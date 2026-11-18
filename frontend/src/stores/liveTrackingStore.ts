@@ -31,7 +31,12 @@ export const useLiveTrackingStore = create<LiveTrackingState>((set) => ({
   tick: (now = Date.now()) => {
     if (!Number.isFinite(now)) return;
     const minute = Math.floor(now / LIVE_MINUTE) * LIVE_MINUTE;
-    set((state) => ({ now: minute, selectedTime: state.selectedTime === null ? null : Math.min(minute, Math.max(state.selectedTime, minute - LIVE_HISTORY_MINUTES * LIVE_MINUTE)) }));
+    set((state) => {
+      if (state.selectedTime === null) return { now: minute };
+      // The playback loop advances only after loading the new timestamp.
+      const oldest = state.playing ? state.selectedTime : minute - LIVE_HISTORY_MINUTES * LIVE_MINUTE;
+      return { now: minute, selectedTime: Math.min(minute, Math.max(state.selectedTime, oldest)) };
+    });
   },
   selectTime: (time) => {
     if (time !== null && !Number.isFinite(time)) return;

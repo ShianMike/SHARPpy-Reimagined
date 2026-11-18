@@ -21,6 +21,11 @@ const AVAILABILITY_STALE_MS = 10 * 60_000;
 /** Used until the first radar frame states its own update interval. */
 const RADAR_DEFAULT_REFRESH_MS = 120_000;
 
+function radarRefreshMs(frame: RadarFrame | undefined): number {
+  const seconds = frame?.updateIntervalS ?? 0;
+  return seconds > 0 ? seconds * 1000 : RADAR_DEFAULT_REFRESH_MS;
+}
+
 export { useMapCatalog } from "./catalogQuery";
 
 export interface FrameRequest {
@@ -135,13 +140,9 @@ export function useRadarFrame(product: string | null, enabled: boolean, validTim
     queryKey: mapKeys.radar(product, time),
     queryFn: () => client.getRadarFrame(product, time),
     enabled,
-    staleTime: time === null ? 0 : RADAR_HISTORY_STALE_MS,
+    staleTime: (query) => time === null ? radarRefreshMs(query.state.data) : RADAR_HISTORY_STALE_MS,
     gcTime: Number.POSITIVE_INFINITY,
-    refetchInterval: (query) => {
-      if (time !== null) return false;
-      const seconds = query.state.data?.updateIntervalS ?? 0;
-      return seconds > 0 ? seconds * 1000 : RADAR_DEFAULT_REFRESH_MS;
-    },
+    refetchInterval: (query) => time === null ? radarRefreshMs(query.state.data) : false,
   });
 }
 
@@ -191,13 +192,9 @@ export function useRadarSiteFrame(
     queryKey: mapKeys.radarSite(effectiveProduct, site ?? "", time, effectiveTilt),
     queryFn: () => client.getRadarSiteFrame({ site: site ?? "" }, effectiveProduct, time, effectiveTilt),
     enabled: enabled && site !== null && selection.supportedProducts?.length !== 0,
-    staleTime: time === null ? 0 : RADAR_HISTORY_STALE_MS,
+    staleTime: (query) => time === null ? radarRefreshMs(query.state.data) : RADAR_HISTORY_STALE_MS,
     gcTime: Number.POSITIVE_INFINITY,
-    refetchInterval: (query) => {
-      if (time !== null) return false;
-      const seconds = query.state.data?.updateIntervalS ?? 0;
-      return seconds > 0 ? seconds * 1000 : RADAR_DEFAULT_REFRESH_MS;
-    },
+    refetchInterval: (query) => time === null ? radarRefreshMs(query.state.data) : false,
   });
 }
 

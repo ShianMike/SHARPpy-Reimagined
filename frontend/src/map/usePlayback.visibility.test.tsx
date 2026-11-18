@@ -20,6 +20,7 @@ import { defaultLayerStates } from "./layers/registry";
 import { useGraphicsStore } from "../stores/graphicsStore";
 import { useUiStore } from "../stores/uiStore";
 import * as fieldImages from "./fieldImages";
+import { trimFieldCache } from "./mapQueries";
 import { FRAME_INTERVAL_MS, usePlayback } from "./usePlayback";
 
 const savedApp = useAppStore.getState(), savedMap = useMapStore.getState(), savedForecast = useForecastStore.getState();
@@ -147,6 +148,62 @@ it("keeps the current hour until the next hour's enabled overlays settle for all
   } finally {
     hook.unmount();
     pendingReports.forEach((finish) => { finish(); });
+    queryClient.clear();
+  }
+});
+
+it("prepares and retains the next hour's actual products and isobars when a run wraps", async () => {
+  vi.useFakeTimers();
+  const run = "2026-10-04T16:00:00Z";
+  useAppStore.getState().setActiveWorkspace("map");
+  useForecastStore.setState({ modelKey: "hrrr", runTime: run, forecastHour: 18, playing: true });
+  useUiStore.setState({ speed: 4, loop: true });
+  const layers = defaultLayerStates();
+  layers["model-field"].visible = true;
+  layers.isobars.visible = true;
+  useMapStore.setState({ panelLayout: 1, productKey: "uh-2-5km-3h", layers });
+  useGraphicsStore.setState({ effective: { ...savedGraphics.effective, profile: "low" } });
+  const client = new BackendClient(createTransport());
+  const queryClient = createQueryClient();
+  const inventory = parseMapCatalog(catalog);
+  queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
+  queryClient.setQueryData(mapKeys.catalog("hrrr", run, 18), { ...inventory, products: inventory.products.filter((product) => product.key !== "mslp") });
+  const frame = parseFieldFrame(Uint8Array.from(atob(field.split(",")[1] ?? ""), (c) => c.charCodeAt(0)).buffer);
+  queryClient.setQueryData(mapKeys.field("uh-2-5km-3h", run, 18), { ...frame, forecastHour: 18, product: "uh-2-5km-3h" });
+  const first = mapKeys.field(inventory.defaultProduct, run, 0);
+  queryClient.setQueryData(first, { ...frame, forecastHour: 0, product: inventory.defaultProduct });
+  const fetch = vi.spyOn(client, "getWeatherField");
+  let showInventory: () => void = () => undefined;
+  vi.spyOn(client, "getMapCatalog").mockImplementation(() => new Promise((resolve) => { showInventory = () => {
+    resolve({ ...inventory, products: inventory.products.filter((product) => product.key !== "uh-2-5km-3h") });
+  }; }));
+  let showPressure: () => void = () => undefined;
+  const contours = client.getFieldContours.bind(client);
+  const fetchPressure = vi.spyOn(client, "getFieldContours").mockImplementation((...args) => new Promise((resolve, reject) => {
+    showPressure = () => { void contours(...args).then(resolve, reject); };
+  }));
+  const prepare = vi.spyOn(fieldImages, "prepareFieldImage").mockResolvedValue(undefined);
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
+  );
+  const hook = renderHook(usePlayback, { wrapper });
+  try {
+    await act(async () => { await vi.advanceTimersByTimeAsync(Math.ceil(FRAME_INTERVAL_MS / 4)); });
+    expect(useForecastStore.getState().forecastHour).toBe(18);
+    expect(prepare).not.toHaveBeenCalled();
+    await act(async () => { showInventory(); await vi.advanceTimersByTimeAsync(0); });
+    expect(prepare).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ product: inventory.defaultProduct, forecastHour: 0 }),
+      expect.anything(), expect.any(Boolean), expect.any(AbortSignal));
+    expect(fetchPressure).toHaveBeenCalledExactlyOnceWith("mslp", run, 0, "hrrr", expect.any(AbortSignal));
+    expect(fetch).not.toHaveBeenCalled();
+    expect(useForecastStore.getState().forecastHour).toBe(18);
+    trimFieldCache(queryClient, 0);
+    expect(queryClient.getQueryData(first)).toBeDefined();
+    await act(async () => { showPressure(); await vi.advanceTimersByTimeAsync(0); });
+    expect(useForecastStore.getState().forecastHour).toBe(0);
+  } finally {
+    hook.unmount();
+    showInventory(); showPressure();
     queryClient.clear();
   }
 });

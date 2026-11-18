@@ -9,17 +9,17 @@ import { queryFrame } from "./queryFrame";
 
 /** Load the exact overlays drawn at this time with the panel's own layer settings. */
 export function forecastOverlayLoads(client: BackendClient, queryClient: QueryClient, map: MapState,
-  panel: number, frame: Omit<FrameRequest, "product">, pressureAvailable: boolean, signal: AbortSignal): Promise<unknown>[] {
+  panel: number, frame: Omit<FrameRequest, "product">, pressureAvailable: boolean, signal: AbortSignal, keepUntil?: AbortSignal): Promise<unknown>[] {
   const layers = panelLayers(map, panel);
   const validTime = addHours(frame.runTime, frame.forecastHour);
   const loads: Promise<unknown>[] = OUTLOOK_KEYS.filter((key) => layers[`spc-${key}`].visible)
-    .map((key) => queryFrame(queryClient, outlookQueryOptions(client, key, validTime), signal));
+    .map((key) => queryFrame(queryClient, outlookQueryOptions(client, key, validTime), signal, { keepUntil }));
   if (layers["storm-reports"].visible) {
     const { reportWindowS, reportFilter } = panelReports(map, panel);
-    loads.push(queryFrame(queryClient, reportQueryOptions(client, validTime, reportWindowS, reportFilter), signal));
+    loads.push(queryFrame(queryClient, reportQueryOptions(client, validTime, reportWindowS, reportFilter), signal, { keepUntil }));
   }
   if (pressureAvailable && layers.isobars.visible) {
-    loads.push(queryFrame(queryClient, contourQueryOptions(client, queryClient, { ...frame, product: "mslp" }), signal));
+    loads.push(queryFrame(queryClient, contourQueryOptions(client, queryClient, { ...frame, product: "mslp" }), signal, { keepUntil }));
   }
   return loads;
 }

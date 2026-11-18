@@ -18,7 +18,7 @@ import type { FieldImage, RasterImage } from "./layers/registry";
 import { useFieldContours } from "./contourQueries";
 import { usePanelRadar, usePlaceLabels, useRadarFrame, useRadarSiteFrame, useRadarSites, useSatelliteFrame, useStormReports, useSpcOutlooks } from "./mapQueries";
 import { useSelectionAnchor, useSurfacePlots } from "./surfaceQueries";
-import { usePanelField, type PanelField } from "./panelField";
+import { fieldAuxiliaries, usePanelField, type PanelField } from "./panelField";
 import type { MapRuntime } from "./runtime/MapRuntime";
 import { useFieldTransition } from "./useFieldTransition";
 import { useWeatherAlerts } from "./weatherAlertsQuery";
@@ -70,24 +70,22 @@ export function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data" | "isEr
     if (frame === undefined) {
       return;
     }
-    let live = true;
-    decodePng(frame.png).then(
+    const display = new AbortController();
+    decodePng(frame.png, display.signal).then(
       (image) => {
-        if (live) {
+        if (!display.signal.aborted) {
           setDecoded({ frame, source, image: { image, bounds: frame.bounds } });
           setFailure(null);
         }
       },
       (error: unknown) => {
-        if (live) {
+        if (!display.signal.aborted) {
           setFailure(frame);
           console.warn("[map] the frame could not be decoded", error);
         }
       },
     );
-    return () => {
-      live = false;
-    };
+    return () => { display.abort(); };
   }, [frame, source, attempt]);
   const ready = frame === undefined ? undefined : cachedPng(frame.png);
   const image = useMemo(() => {
@@ -163,11 +161,12 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   // Pressure lines belong to the independent Isobars control, including when
   // the coloured product itself is MSLP; do not draw a second copy underneath.
   const contourSpec = live || field.product?.key === "mslp" ? null : field.product?.contour ?? null;
+  const auxiliaryWanted = field.request !== null && field.product !== null && fieldAuxiliaries(field.product);
   const contourQuery = useFieldContours(
     field.request?.product ?? null,
     field.request?.runTime ?? null,
     field.request?.forecastHour ?? null,
-    (contourSpec !== null || field.product?.wind === true) && field.request !== null,
+    auxiliaryWanted,
     field.request?.model,
   );
   const contourLines = contourQuery.isError ? null : contourQuery.data ?? null;
@@ -187,7 +186,6 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   const places = usePlaceLabels(import.meta.env.MODE === "fixture" && placesVisible).data?.places ?? NO_PLACES;
   const model = live ? undefined : context?.model;
   const domain = useMemo(() => (model === undefined ? null : domainPath(model)), [model]);
-  const auxiliaryWanted = !live && field.request !== null && (contourSpec !== null || field.product?.wind === true);
   const captureReady = (live || outlookState.ready)
     && (!reportsVisible || reportQuery.isSuccess && !reportQuery.isFetching)
     && (!auxiliaryWanted || contourQuery.isSuccess && !contourQuery.isFetching)

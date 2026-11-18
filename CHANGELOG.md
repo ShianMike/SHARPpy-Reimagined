@@ -12,9 +12,13 @@ Planned release: **v3.8.5**.
 ### Fixed
 
 - Keep the current map visible during playback while the next frame's enabled
-  overlays load. Preload each forecast panel's outlooks, storm reports and
-  isobars, and prepare Live Tracking overlays before entering history or
-  returning to the live view.
+  overlays load. Use the destination hour's product inventory and retain the
+  prepared fields and overlays until the panels draw them. Keep Live Tracking
+  frames through minute changes and bitmap cache eviction, and reuse the
+  freshly loaded radar scan when playback returns to Live.
+- Keep prepared fields and overlays available throughout forecast export
+  capture. Discard a capture if its forecast selection or layer settings
+  change during rendering.
 - Keep observed UWyo soundings usable when reported pressure or height repeats
   or arrives out of order. Select consistent measured levels before analysis
   without changing their values or relaxing portable sounding validation.

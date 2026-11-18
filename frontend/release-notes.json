@@ -4,7 +4,7 @@
     "highlights": [
       {
         "title": "Less scrolling in Layers",
-        "description": "Keep the layer list compact while a separate area shows product, opacity, pixel rendering and the color key. Expand Details & source for the longer explanation and provenance. On narrow windows, open one layer editor at a time and return to the list with a back action. Forecast and live playback prepare enabled overlays before changing the displayed frame."
+        "description": "Keep the layer list compact while a separate area shows product, opacity, pixel rendering and the color key. Expand Details & source for the longer explanation and provenance. On narrow windows, open one layer editor at a time and return to the list with a back action. Forecast and live playback keep prepared layers available through the frame change, including when looping or returning to Live. Forecast exports retain the matching layers while capturing each frame."
       },
       {
         "title": "A clearer point inspector",

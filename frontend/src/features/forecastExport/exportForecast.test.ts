@@ -3,6 +3,8 @@ import { expect, it, vi } from "vitest";
 import { map, state, setup as setupExport } from "../../test/forecastExportHarness";
 import { createTransport } from "../../lib/backend/fixtureTransport";
 import { mapCaptureSources } from "../../map/runtime/mapCapture";
+import { trimFieldCache } from "../../map/mapQueries";
+import { mapKeys } from "../../lib/backend/queryOptions";
 import { panelLayers, useMapStore } from "../../stores/mapStore";
 import { useForecastStore } from "../../stores/forecastStore";
 import { exportForecast, forecastExportFilename } from "./exportForecast";
@@ -33,6 +35,34 @@ it("fails before capture when any selected hour is unavailable and restores the 
   expect(captureFrame).not.toHaveBeenCalled(); expect(state.writes).toEqual([]);
   expect(useForecastStore.getState()).toMatchObject({ forecastHour: 5, exporting: false });
   expect(state.events).not.toContain("encoder:start"); expect(state.closes).toBe(0); queryClient.clear();
+});
+
+it("protects a prepared field until capture takes ownership", async () => {
+  const { client, queryClient, options, captureFrame } = setup();
+  captureFrame.mockImplementation((request) => {
+    trimFieldCache(queryClient, 0);
+    expect(queryClient.getQueryData(mapKeys.field(options.product.key, options.run, request.forecastHour))).toBeDefined();
+    return Promise.resolve(document.createElement("canvas"));
+  });
+  await exportForecast({ ...options, format: "png", hours: [2] }, client, queryClient,
+    new AbortController().signal, document.createElement("canvas"), () => undefined);
+  trimFieldCache(queryClient, 0);
+  expect(queryClient.getQueryData(mapKeys.field(options.product.key, options.run, 2))).toBeUndefined();
+  queryClient.clear();
+});
+
+it("discards a capture if its layer settings change during rendering", async () => {
+  const { client, queryClient, options, captureFrame } = setup();
+  captureFrame.mockImplementation(() => {
+    useMapStore.getState().setLayerVisible("storm-reports", true);
+    return Promise.resolve(document.createElement("canvas"));
+  });
+  await expect(exportForecast({ ...options, format: "png", hours: [2] }, client, queryClient,
+    new AbortController().signal, document.createElement("canvas"), () => undefined)).rejects.toThrow("changed during export");
+  expect(state.events).not.toContain("png");
+  expect(panelLayers(useMapStore.getState(), 0)["storm-reports"].visible).toBe(true);
+  expect(useForecastStore.getState()).toMatchObject({ forecastHour: 5, exporting: false });
+  queryClient.clear();
 });
 
 it("restores export controls and map settings when the GIF worker cannot start", async () => {

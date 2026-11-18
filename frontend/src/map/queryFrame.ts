@@ -1,8 +1,14 @@
 import { QueryObserver, type QueryClient, type QueryExecuteOptions } from "@tanstack/react-query";
 
+interface FramePreparation<T> {
+  prepare?: (data: T) => Promise<unknown>;
+  /** Keep the prepared frame available until the display has taken ownership. */
+  keepUntil?: AbortSignal | undefined;
+}
+
 /** Stop an imperative preload only when no other preload or visible panel owns it. */
 export async function queryFrame<T>(client: QueryClient, options: QueryExecuteOptions<T>, signal?: AbortSignal,
-  prepare?: (data: T) => Promise<unknown>): Promise<T> {
+  preparation?: FramePreparation<T>): Promise<T> {
   signal?.throwIfAborted();
   // A real observer also protects this owner when the last visible panel leaves.
   const observer = new QueryObserver<T>(client, { ...options, enabled: false });
@@ -15,11 +21,20 @@ export async function queryFrame<T>(client: QueryClient, options: QueryExecuteOp
     };
     signal?.addEventListener("abort", abort, { once: true });
   });
+  let kept = false;
   try {
     const data = await Promise.race([client.query(options), stopped]);
     // Retain the same owner while its image is prepared, including cache hits.
-    if (prepare !== undefined) await Promise.race([prepare(data), stopped]);
+    if (preparation?.prepare !== undefined) await Promise.race([preparation.prepare(data), stopped]);
+    const keepUntil = preparation?.keepUntil;
+    if (keepUntil !== undefined && !keepUntil.aborted) {
+      keepUntil.addEventListener("abort", release, { once: true });
+      kept = true;
+    }
     return data;
   }
-  finally { signal?.removeEventListener("abort", abort); release(); }
+  finally {
+    signal?.removeEventListener("abort", abort);
+    if (!kept) release();
+  }
 }

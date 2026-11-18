@@ -75,6 +75,8 @@ Planned release: **v3.8.5**.
   package metadata as Settings → Updates.
 - Align the winter Skew-T DGZ bracket and label with the −40 °C bottom-axis
   position.
+- Draw the Severe Skew-T hail growth zone as a solid cyan bracket at the
+  −35 °C bottom-axis position, with a label drawn directly on the plot.
 - Keep the sounding source form at its full height above the open profiles.
   Put the observed date and launch on one row on short windows and use the
   sidebar to reach content when it needs more room.

@@ -9,8 +9,7 @@ from contextlib import suppress
 from qtpy import QtGui
 from qtpy.QtCore import QObject
 from qtpy.QtCore import QRect
-from sharpmod.viz.skew import draw_cape_fill
-from sharpmod.viz.skew import draw_hgz_overlay
+from sharpmod.viz.skew import HGZOverlay, draw_cape_fill, draw_hgz_overlay
 from sharppy.viz.SPCWindow import SPCWidget as _VendoredSPCWidget
 from sharpmod.viz import SPCWindow as _api
 
@@ -102,9 +101,9 @@ def attach_hgz_overlay(
 
     This is the concrete mount seam for Requirements 19.9-19.11: it wraps the
     skew-T's ``plotData`` so that, *after* the vendored widget renders its
-    temperature/dewpoint traces onto its backing pixmap, the HGZ band is drawn
-    over the -10 degrees C to -30 degrees C layer via
-    :func:`sharpmod.viz.skew.draw_hgz_overlay`, using the widget's own
+    temperature/dewpoint traces onto its backing pixmap, the -10 to -30 °C layer
+    is marked by a shaded band or a native bracket (when `draw_fill` is false).
+    Both use the widget's own
     pressure->pixel transform (``originy + pres_to_pix(p) / scale`` -- the same
     composition the vendored widget applies to every plotted level) and its plot
     rectangle (``tlx/tly/brx/bry``). The overlay draws nothing when
@@ -127,6 +126,10 @@ def attach_hgz_overlay(
         return False
     if profile is not None:
         skewt._sharpmod_derived_profile = profile
+    draw_bracket = None
+    if not draw_fill:
+        with suppress(ImportError):
+            from sharpmod_rs import draw_fixed_hgz_layer as draw_bracket
 
     def _plot_rect():
         tlx = getattr(skewt, "tlx", None)
@@ -139,7 +142,7 @@ def attach_hgz_overlay(
         # When the omega meter is drawn it sits at the cold (left) end of the
         # skew-T (~-49..-41 C at 1000 mb). Start the HGZ band to the right of it
         # so the translucent fill does not wash out the omega bars.
-        if getattr(skewt, "plot_omega", False):
+        if draw_bracket is None and getattr(skewt, "plot_omega", False):
             try:
                 omega_right = skewt.tmpc_to_pix(-39, 1000)
                 if omega_right == omega_right:  # NaN guard
@@ -168,11 +171,17 @@ def attach_hgz_overlay(
                 qp = QtGui.QPainter()
                 qp.begin(bitmap)
                 try:
-                    draw_hgz_overlay(
-                        qp, prof, rect, _transform,
-                        fill_color=fill_color, edge_color=edge_color,
-                        draw_fill=draw_fill,
-                    )
+                    if draw_bracket is None:
+                        draw_hgz_overlay(
+                            qp, prof, rect, _transform,
+                            fill_color=fill_color, edge_color=edge_color,
+                            draw_fill=draw_fill,
+                        )
+                    else:
+                        draw_bracket(
+                            skewt, qp, rect, HGZOverlay(rect, _transform).band_pixels(prof),
+                            edge_color,
+                        )
                 finally:
                     qp.end()
         except Exception:

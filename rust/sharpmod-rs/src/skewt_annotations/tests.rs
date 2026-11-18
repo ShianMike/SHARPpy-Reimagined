@@ -2,7 +2,7 @@ use pyo3::{prelude::*, types::PyList};
 
 #[test]
 #[ignore = "requires the pinned offscreen Qt rendering environment"]
-fn fixed_lapse_column_is_minus_thirty_across_sizes_omega_and_inflow_layers() {
+fn fixed_layer_columns_follow_axis_across_sizes_omega_and_inflow_layers() {
     let _lock = crate::lock_python_backend_test();
     Python::initialize();
     Python::attach(|py| -> PyResult<()> {
@@ -24,6 +24,7 @@ fn fixed_lapse_column_is_minus_thirty_across_sizes_omega_and_inflow_layers() {
             .call1((&fixture,))?;
         let profile = widget.getattr("prof")?;
         let original_top = profile.getattr("etop")?;
+        let core = PyModule::import(py, "qtpy.QtCore")?;
         for (width, height) in [(900, 700), (1200, 850), (700, 560), (560, 460)] {
             tests.call_method1("_sized", (&widget, &app, width, height))?;
             let scale: f64 = widget.getattr("scale")?.extract()?;
@@ -39,8 +40,41 @@ fn fixed_lapse_column_is_minus_thirty_across_sizes_omega_and_inflow_layers() {
                     .call_method1("tmpc_to_pix", (-20.0, &reference))?
                     .extract::<f64>()?
                     / scale;
+            let hgz_column = origin
+                + widget
+                    .call_method1("tmpc_to_pix", (-35.0, &reference))?
+                    .extract::<f64>()?
+                    / scale;
+            let plot = core.getattr("QRect")?.call1((0, 0, width, height))?;
             for omega in [false, true] {
                 widget.setattr("plot_omega", omega)?;
+                let hgz = tests.getattr("_Recorder")?.call0()?;
+                let (top, bottom) = (125., 230.);
+                assert!(super::draw_fixed_hgz_layer(
+                    &widget,
+                    &hgz,
+                    &plot,
+                    Some((top, bottom)),
+                    None
+                )?);
+                let lines: Vec<(f64, f64, f64, f64)> = hgz.getattr("lines")?.extract()?;
+                assert_eq!(
+                    lines,
+                    [
+                        (hgz_column - 10., bottom, hgz_column + 10., bottom),
+                        (hgz_column - 10., top, hgz_column + 10., top),
+                        (hgz_column, bottom, hgz_column, top),
+                    ]
+                );
+                let label = hgz.getattr("texts")?.get_item(0)?;
+                assert_eq!(label.get_item(1)?.extract::<String>()?, "HGZ");
+                let rect = label.get_item(0)?;
+                let center: f64 = rect.call_method0("center")?.call_method0("x")?.extract()?;
+                assert!((center - hgz_column).abs() < 1e-6);
+                assert!((rect.call_method0("bottom")?.extract::<f64>()? - top).abs() < 1e-6);
+                let color = hgz.getattr("colors")?.get_item(0)?;
+                assert_eq!(color.call_method0("alpha")?.extract::<u8>()?, 255);
+                assert_eq!(hgz.getattr("rects")?.len()?, 0);
                 for inflow_top in [
                     &original_top,
                     &profile.getattr("max_lapse_rate_2_6")?.get_item(2)?,

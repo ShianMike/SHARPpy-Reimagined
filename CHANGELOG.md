@@ -58,7 +58,8 @@ Planned release: **v3.8.5**.
   Keep secondary map controls clear of the inspector on narrow windows.
 - Redesign Workspace settings with a compact saved-setup summary, current
   panel count and theme, and a distinct reset section that explains which
-  work is kept and groups confirmation actions together.
+  work is kept and groups confirmation actions together. Align the saved
+  status and retained-work note with the card padding using text-only labels.
 - Combine update availability and automatic check timing into one concise
   message in Settings, removing the separate schedule divider.
 - Replace the static Overview welcome cards with a compact current SPC briefing

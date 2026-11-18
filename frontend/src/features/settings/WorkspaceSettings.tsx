@@ -1,4 +1,4 @@
-import { Check, HardDrive, Map, RotateCcw, Settings2, ShieldCheck } from "lucide-react";
+import { Check, Map, RotateCcw, Settings2 } from "lucide-react";
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useMapStore } from "../../stores/mapStore";
 import { resetAllSettings } from "../../stores/preferences";
@@ -16,7 +16,6 @@ export function WorkspaceSettings(): ReactNode {
   return <div className={styles.workspace}>
     <section className={styles.saved} aria-labelledby="workspace-saved-title">
       <header className={styles.heading}>
-        <span className={styles.icon}><HardDrive className="icon" aria-hidden="true" /></span>
         <div><h3 id="workspace-saved-title">Saved automatically</h3><p>Your workspace is remembered here.</p></div>
         <span className={styles.badge}>On this device</span>
       </header>
@@ -32,7 +31,7 @@ export function WorkspaceSettings(): ReactNode {
         <div><h3 id="workspace-reset-title">Restore default settings</h3><p>Reset preferences and setup for every panel.</p></div>
       </header>
       <div className={styles.resetFooter}>
-        <p className={styles.kept}><ShieldCheck className="icon" aria-hidden="true" /><span><strong>Your work stays</strong><span>Files, open soundings, cache and map location.</span></span></p>
+        <p className={styles.kept}><strong>Your work stays</strong><span>Files, open soundings, cache and map location.</span></p>
         <Action ref={resetButton} className={styles.resetAction} aria-expanded={confirm} aria-controls={confirm ? confirmationId : undefined} onClick={() => { setReset(false); setConfirm(true); }}>Reset all settings…</Action>
       </div>
       {confirm ? <div id={confirmationId} className={styles.confirm} role="group" aria-labelledby={`${confirmationId}-title`}>

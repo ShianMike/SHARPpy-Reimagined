@@ -1,6 +1,6 @@
 # SHARPpy Reimagined Usage Guide
 
-This guide describes the **v3.8.4 desktop interface** and the
+This guide describes the **v3.8.5 desktop interface** and the
 command-line tools. For installation, see the [README](../README.md#get-started)
 and [dependency reference](../installation.txt). The previous Qt interface has
 its own [v2.0.0 Legacy guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/USAGE.md).
@@ -75,7 +75,7 @@ and portable copies that you downloaded elsewhere remain under your control.
 If cleanup is blocked by a running process or an unsafe linked directory, close
 the app, check the installation folder and run the installer again.
 
-In v3.8.4, wait for **Recovery copy saved on this device**
+Wait for **Recovery copy saved on this device**
 before closing or updating if you want to restore completed sounding work.
 Unapplied editor inputs and unfinished recalculations are not included.
 
@@ -449,7 +449,7 @@ for links and the distinction between research context and implemented methods.
 Opening a file and rendering its image are separate operations. The first image
 can take longer while the render worker starts.
 
-#### Recovering a sounding session (v3.8.4)
+#### Recovering a sounding session
 
 Open soundings are saved automatically on this device. After an accidental exit,
 Alt+F4 or a normal close, reopening offers **Restore previous session**. This

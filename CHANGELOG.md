@@ -50,6 +50,8 @@ Planned release: **v3.8.5**.
 
 ### Changed
 
+- Align the application, frontend, native packages and health metadata at
+  v3.8.5. Update the README, usage guide and in-app release highlights.
 - Replace solid grey fills in the recent Overview, Settings, point inspector,
   session recovery and export panels with a shared translucent glass inset.
   Keep one blur layer per sheet and opaque surfaces for low graphics,

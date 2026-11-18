@@ -1,10 +1,9 @@
 # Native migration batches for v3.8.5
 
-These changes are staged for v3.8.5. Public package versions remain at the
-published v3.8.4 version until release preparation. The existing backend API
-version remains 7: result shapes are unchanged. Required capability checks now
-include the newly migrated operations, so a stale source-development wheel
-fails the existing compatibility check with rebuild guidance.
+The v3.8.5 source uses backend API version 7 and preserves the existing result
+shapes. Required capability checks include the newly migrated operations, so
+a stale source-development wheel fails the compatibility check with rebuild
+guidance.
 
 ## Scope
 

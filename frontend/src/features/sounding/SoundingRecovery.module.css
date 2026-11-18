@@ -1,5 +1,4 @@
 .prompt {
-  --glass-fill: var(--surface-1);
   display: flex;
   flex-direction: column;
   width: min(32rem, calc(100vw - 2 * var(--chrome-gap) - env(safe-area-inset-left, 0rem) - env(safe-area-inset-right, 0rem)));
@@ -46,6 +45,7 @@
   min-block-size: 0;
   border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-md);
+  background: var(--glass-inset-fill);
   overflow: hidden;
 }
 .listHeading {
@@ -56,7 +56,7 @@
   justify-content: space-between;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  background: var(--control-fill);
+  background: var(--glass-inset-fill);
 }
 .listHeading h3 { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: var(--font-size-small); text-wrap: balance; }
 .count, .mode, .lastViewed { border-radius: var(--radius-pill); font-size: var(--font-size-caption); }
@@ -100,7 +100,7 @@
   gap: var(--space-3);
   padding: var(--space-3) var(--space-5);
   border-block-start: var(--hairline) solid var(--border-subtle);
-  background: var(--control-fill);
+  background: var(--glass-inset-fill);
 }
 .actions, .primaryActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .actions { justify-content: space-between; }
@@ -131,7 +131,7 @@
   border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-sm);
 }
-.statusIcon { inline-size: var(--control-h-xs); aspect-ratio: 1; background: var(--control-fill); }
+.statusIcon { inline-size: var(--control-h-xs); aspect-ratio: 1; background: var(--glass-inset-fill); }
 .restoreCard .statusIcon { color: var(--accent-bright); background: var(--accent-subtle); }
 .statusRow[data-saved="true"] .statusIcon, .saveDetail[data-saved="true"] > svg { color: var(--success); }
 .statusText strong { font-weight: var(--font-weight-semibold); }

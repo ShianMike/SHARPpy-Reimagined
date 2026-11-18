@@ -1,4 +1,4 @@
-.page { width: 100%; max-height: min(var(--overview-h), calc(100dvh - 2 * var(--chrome-inset) - 2 * var(--hairline))); padding: var(--space-6); overflow: auto; display: flex; flex-direction: column; gap: var(--space-4); overscroll-behavior: contain; background: color-mix(in srgb, var(--surface-1) 92%, transparent); }
+.page { width: 100%; max-height: min(var(--overview-h), calc(100dvh - 2 * var(--chrome-inset) - 2 * var(--hairline))); padding: var(--space-6); overflow: auto; display: flex; flex-direction: column; gap: var(--space-4); overscroll-behavior: contain; background: transparent; }
 .page > * { flex: none; }
 .heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
 .identity { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
@@ -8,7 +8,7 @@
 .heading h1 { font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); }
 .heading p { margin-top: var(--space-1); color: var(--text-secondary); }
 .workflows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
-.workflow { display: flex; flex-direction: column; min-width: 0; padding: var(--space-4); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-1); }
+.workflow { display: flex; flex-direction: column; min-width: 0; padding: var(--space-4); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--glass-inset-fill); }
 .workflowHeading { display: flex; align-items: center; gap: var(--space-2); }
 .workflowHeading > svg { color: var(--accent-bright); flex: none; }
 .workflowHeading h2 { font-size: var(--font-size-subhead); font-weight: var(--font-weight-semibold); }

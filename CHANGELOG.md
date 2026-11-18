@@ -42,6 +42,10 @@ Planned release: **v3.8.5**.
 
 ### Changed
 
+- Replace solid grey fills in the recent Overview, Settings, point inspector,
+  session recovery and export panels with a shared translucent glass inset.
+  Keep one blur layer per sheet and opaque surfaces for low graphics,
+  reduced transparency or browsers without backdrop-filter support.
 - Reduce scrolling in Layers with a separate settings area, compact
   pixel-rendering choices, a persistent color key and source/explanation text
   behind Details & source. Keep loading

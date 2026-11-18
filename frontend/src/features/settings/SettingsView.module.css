@@ -1,5 +1,5 @@
 .view { display: grid; grid-template-columns: calc(var(--dialog-nav-w) + var(--space-6)) minmax(0, 1fr); width: 100%; min-height: 0; overflow: hidden; }
-.sidebar { display: flex; flex-direction: column; padding: var(--space-6) var(--space-3); border-right: var(--hairline) solid var(--border-subtle); background: var(--control-fill); overflow-y: auto; }
+.sidebar { display: flex; flex-direction: column; padding: var(--space-6) var(--space-3); border-right: var(--hairline) solid var(--border-subtle); background: var(--glass-inset-fill); overflow-y: auto; }
 .sidebar header { padding-inline: var(--space-3); }
 .sidebar h1 { font-size: var(--font-size-title); }
 .navigation { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-5); }
@@ -14,7 +14,7 @@
 .heading h2 { font-size: var(--font-size-title); }
 .heading p { color: var(--text-secondary); margin-top: var(--space-1); }
 .settingsBody { display: flex; flex-direction: column; gap: var(--space-5); max-width: calc(2 * var(--picker-w)); }
-.section { padding: var(--space-4); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--control-fill); }
+.section { padding: var(--space-4); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--glass-inset-fill); }
 .legend { color: var(--text-primary); font-weight: var(--font-weight-semibold); font-size: var(--font-size-subhead); margin-bottom: var(--space-5); padding: 0; }
 .fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .hint { display: block; color: var(--text-secondary); font-size: var(--font-size-small); line-height: var(--line-height-body); }
@@ -28,15 +28,15 @@
 .effectiveCard h3 { color: var(--text-secondary); font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); margin-bottom: var(--space-2); }
 .effective { font-weight: var(--font-weight-medium); }
 .reasons { margin-top: var(--space-2); padding-left: var(--space-4); color: var(--text-secondary); font-size: var(--font-size-small); }
-.graphicsActive { display: grid; gap: var(--space-2); padding: var(--space-4); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--control-fill); }
+.graphicsActive { display: grid; gap: var(--space-2); padding: var(--space-4); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--glass-inset-fill); }
 .graphicsActiveHeading { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
 .graphicsActiveHeading > strong { font-size: var(--font-size-title); margin-right: auto; }
-.graphicsMode, .graphicsLimited { padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: var(--control-fill); color: var(--text-secondary); font-size: var(--font-size-caption); }
+.graphicsMode, .graphicsLimited { padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: var(--glass-inset-fill); color: var(--text-secondary); font-size: var(--font-size-caption); }
 .graphicsLimited { color: var(--warning); }
 .graphicsActive > p, .graphicsRecovery p { font-size: var(--font-size-small); color: var(--text-secondary); }
 .graphicsRecovery { display: grid; gap: var(--space-1); font-size: var(--font-size-small); }
 .graphicsChoices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); min-width: 0; }
-.graphicsChoices .graphicsOption { display: grid; align-content: center; justify-items: center; gap: var(--space-1); min-width: 0; min-height: var(--control-h-lg); padding: var(--space-3) var(--space-2); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--control-fill); text-align: center; }
+.graphicsChoices .graphicsOption { display: grid; align-content: center; justify-items: center; gap: var(--space-1); min-width: 0; min-height: var(--control-h-lg); padding: var(--space-3) var(--space-2); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--glass-inset-fill); text-align: center; }
 .graphicsOption strong { font-size: var(--font-size-body); font-weight: var(--font-weight-medium); }
 .graphicsOption small { font-size: var(--font-size-caption); color: var(--text-secondary); }
 .graphicsChoices .graphicsOption:hover { border-color: var(--accent); background: var(--fill-hover); }

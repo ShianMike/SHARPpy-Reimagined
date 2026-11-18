@@ -1,5 +1,5 @@
 .workspace { display: grid; gap: var(--space-4); min-width: 0; }
-.saved, .reset { min-width: 0; border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-1); overflow: hidden; }
+.saved, .reset { min-width: 0; border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--glass-inset-fill); overflow: hidden; }
 .heading { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-4); }
 .heading > div { flex: 1; min-width: 0; }
 .heading h3 { font-size: var(--font-size-subhead); font-weight: var(--font-weight-semibold); }

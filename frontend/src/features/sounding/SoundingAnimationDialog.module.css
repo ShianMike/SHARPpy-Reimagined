@@ -15,14 +15,14 @@
   overflow: hidden;
   border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-md);
-  background: var(--surface-1);
+  background: var(--glass-inset-fill);
 }
 .frameToolbar, .frameActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .frameToolbar {
   justify-content: space-between;
   padding: var(--space-2);
   border-block-end: var(--hairline) solid var(--border-subtle);
-  background: var(--control-fill);
+  background: var(--glass-inset-fill);
 }
 .frameActions > button { white-space: nowrap; }
 .frameCount {
@@ -56,7 +56,7 @@
   padding-inline: var(--space-1);
   border: var(--hairline) solid transparent;
   border-radius: var(--radius-sm);
-  background: var(--control-fill);
+  background: var(--glass-inset-fill);
   text-align: center;
   font-size: var(--font-size-caption);
   font-variant-numeric: tabular-nums;
@@ -77,7 +77,7 @@
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border-block-start: var(--hairline) solid var(--border-subtle);
-  background: var(--control-fill);
+  background: var(--glass-inset-fill);
 }
 .footer[data-export-ready="true"] { grid-template-columns: minmax(0, 1fr); }
 .actionBar, .resultBar, .previewActions, .createActions, .resultActions {
@@ -93,7 +93,7 @@
   padding: var(--space-2) var(--space-3);
   border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--surface-1);
+  background: var(--glass-inset-fill);
 }
 .resultSummary { display: flex; align-items: center; min-width: 0; gap: var(--space-2); }
 .resultIcon {
@@ -103,7 +103,7 @@
   inline-size: var(--control-h-sm);
   aspect-ratio: 1;
   border-radius: var(--radius-sm);
-  background: var(--control-fill);
+  background: var(--glass-inset-fill);
   color: var(--text-secondary);
 }
 .resultSize { display: block; color: var(--text-secondary); font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; }

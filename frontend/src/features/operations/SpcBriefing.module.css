@@ -1,4 +1,4 @@
-.briefing { border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-1); overflow: hidden; }
+.briefing { border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--glass-inset-fill); overflow: hidden; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4) var(--space-5); }
 .heading { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .headingIcon { display: grid; place-items: center; width: var(--control-h-lg); height: var(--control-h-lg); flex: none; border-radius: var(--radius-sm); background: var(--accent-subtle); color: var(--accent-bright); }

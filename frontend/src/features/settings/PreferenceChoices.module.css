@@ -2,7 +2,7 @@
   container: preference-choices / inline-size;
   display: grid;
   gap: var(--space-4);
-  background: var(--surface-1);
+  background: var(--glass-inset-fill);
 }
 .fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .fieldset > legend { padding: 0; margin-block-end: var(--space-3); font-size: var(--font-size-subhead); font-weight: var(--font-weight-semibold); }
@@ -17,7 +17,7 @@
   padding: var(--space-3);
   border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-md);
-  background: var(--control-fill);
+  background: var(--glass-inset-fill);
   cursor: pointer;
 }
 .card > input { position: absolute; inset-block-start: var(--space-3); inset-inline-end: var(--space-3); margin: 0; accent-color: var(--accent-bright); cursor: pointer; }
@@ -32,7 +32,7 @@
 .unitCard > input { inset: 0; width: 100%; height: 100%; opacity: 0; }
 .unitCard > strong { padding: 0; font-size: var(--font-size-title); font-variant-numeric: tabular-nums; }
 .speedOptions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-2); }
-.speedCard { position: relative; display: grid; place-items: center; min-height: calc(var(--control-h-lg) + var(--space-2)); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--control-fill); cursor: pointer; }
+.speedCard { position: relative; display: grid; place-items: center; min-height: calc(var(--control-h-lg) + var(--space-2)); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--glass-inset-fill); cursor: pointer; }
 .speedCard > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .speedCard > strong { font-size: var(--font-size-title); font-weight: var(--font-weight-medium); font-variant-numeric: tabular-nums; }
 .loopRow { display: grid; grid-template-columns: var(--control-h-md) minmax(0, 1fr); align-items: start; gap: var(--space-3); padding-block-start: var(--space-4); border-block-start: var(--hairline) solid var(--border-subtle); }

@@ -152,6 +152,8 @@
 
   /* Glass: fill and filter live only in the profile blocks and overrides below */
   --glass-tint: 25 31 40;
+  /* Inset panels share the sheet's blur instead of stacking more filters. */
+  --glass-inset-fill: var(--surface-1);
   --tooltip-glass-fill: var(--surface-1);
   --glass-border: rgb(255 255 255 / 0.28);
   --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -1px 0 rgb(255 255 255 / 0.07);
@@ -291,18 +293,21 @@
 /* Light diffusion retains the backdrop's detail; low and accessibility profiles stay opaque. */
 [data-graphics-profile="high"] {
   --glass-fill: rgb(var(--glass-tint) / 0.62);
+  --glass-inset-fill: var(--glass-sheen), rgb(var(--glass-tint) / 0.12);
   --tooltip-glass-fill: rgb(var(--glass-tint) / 0.32);
   --glass-filter: blur(5.4px) saturate(112%);
 }
 
 [data-graphics-profile="balanced"] {
   --glass-fill: rgb(var(--glass-tint) / 0.68);
+  --glass-inset-fill: var(--glass-sheen), rgb(var(--glass-tint) / 0.12);
   --tooltip-glass-fill: rgb(var(--glass-tint) / 0.32);
   --glass-filter: blur(3.6px) saturate(108%);
 }
 
 [data-graphics-profile="low"] {
   --glass-fill: rgb(var(--glass-tint) / 0.97);
+  --glass-inset-fill: var(--surface-1);
   --tooltip-glass-fill: rgb(var(--glass-tint) / 0.97);
   --glass-filter: none;
   --popover-focus-filter: none;
@@ -312,6 +317,7 @@
 @media (prefers-reduced-transparency: reduce) {
   :root[data-graphics-profile] {
     --glass-fill: var(--surface-1);
+    --glass-inset-fill: var(--surface-1);
     --tooltip-glass-fill: var(--surface-1);
     --glass-filter: none;
     --popover-focus-filter: none;

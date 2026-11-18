@@ -11,6 +11,9 @@ Planned release: **v3.8.5**.
 
 ### Fixed
 
+- Build the matching Rust sidecar for the frontend lifecycle check. Scope
+  the sounding cancellation assertion to the source form so that recovery
+  status can appear at the same time.
 - Keep the current map visible during playback while the next frame's enabled
   overlays load. Use the destination hour's product inventory and retain the
   prepared fields and overlays until the panels draw them. Keep Live Tracking

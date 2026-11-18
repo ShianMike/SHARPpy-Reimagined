@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 import math
-import os
 import re
-import tempfile
 import time
-from contextlib import suppress
 from pathlib import Path
 from urllib.parse import quote, unquote, urlencode, urlparse
-
-from sharpmod.models.model_transport import DownloadCancelled, _valid_grib
 
 
 class SourceRoutingUnavailable(RuntimeError):

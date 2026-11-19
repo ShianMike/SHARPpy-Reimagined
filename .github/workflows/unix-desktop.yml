@@ -135,6 +135,10 @@ jobs:
               : "${APPLE_ID:?Set APPLE_ID for notarization}"
               : "${APPLE_PASSWORD:?Set APPLE_PASSWORD for notarization}"
               : "${APPLE_TEAM_ID:?Set APPLE_TEAM_ID for notarization}"
+            else
+              # Tauri uses the presence of all three variables to select
+              # Apple ID authentication, including when their values are empty.
+              unset APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
             fi
             bash packaging/prepare_macos_backend.sh "$DESKTOP_TARGET"
           fi

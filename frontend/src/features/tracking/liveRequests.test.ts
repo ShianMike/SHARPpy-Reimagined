@@ -73,6 +73,18 @@ it.each([
     client.clear();
 });
 
+it.each([
+  { queryKey: mapKeys.radar(null) },
+  { queryKey: mapKeys.radarSite("reflectivity", "KTLX") },
+])("refreshes a cached latest radar scan before returning to live", async ({ queryKey }) => {
+  const client = createQueryClient();
+  const queryFn = vi.fn().mockResolvedValue("latest scan");
+  client.setQueryData(queryKey, "earlier scan", { updatedAt: Date.now() - 1_000 });
+  await expect(fetchLiveRequest(client, { queryKey, queryFn })).resolves.toBe("latest scan");
+  expect(queryFn).toHaveBeenCalledOnce();
+  client.clear();
+});
+
 it("bounds raster memory and unavailable cuts without removing active imagery or model data", async () => {
   const client = createQueryClient();
   const activeKey = mapKeys.radar(null, new Date(now).toISOString());
@@ -80,12 +92,16 @@ it("bounds raster memory and unavailable cuts without removing active imagery or
   const observer = new QueryObserver(client, { queryKey: activeKey, enabled: false });
   const unsubscribe = observer.subscribe(() => undefined);
   for (let step = 1; step <= 20; step++) client.setQueryData(mapKeys.satellite("visible", new Date(now - step * LIVE_MINUTE).toISOString()), { png: new Blob(["scan"]) }, { updatedAt: step + 1 });
+  const preparedKey = mapKeys.satellite("visible", new Date(now - 55 * LIVE_MINUTE).toISOString());
+  client.setQueryData(preparedKey, { png: new Blob(["next"]) }, { updatedAt: 1 });
   const fieldKey = mapKeys.field("refc", new Date(now).toISOString(), 0);
   client.setQueryData(fieldKey, "forecast");
-  trimLiveCache(client, 32);
+  trimLiveCache(client, 32, [preparedKey]);
   expect(client.getQueryData(activeKey)).toBeDefined();
+  expect(client.getQueryData(preparedKey)).toBeDefined();
   expect(client.getQueryData(fieldKey)).toBe("forecast");
-  expect(client.getQueryCache().findAll({ predicate: (query) => isLiveQuery(query.queryKey) })).toHaveLength(9);
+  const retained = client.getQueryCache().findAll({ predicate: (query) => isLiveQuery(query.queryKey) });
+  expect(retained.reduce((total, query) => total + (query.state.data as { png: Blob }).png.size, 0)).toBeLessThanOrEqual(32);
   await Promise.allSettled(Array.from({ length: 140 }, (_, step) => client.query({
     queryKey: mapKeys.radarSite("velocity", "KTLX", new Date(now - step * LIVE_MINUTE).toISOString(), "z"),
     queryFn: () => { throw new Error("No published cut"); }, retry: false,

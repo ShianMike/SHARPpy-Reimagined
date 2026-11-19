@@ -12,6 +12,7 @@ use std::{
 
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 
+pub(crate) mod compat;
 mod disk;
 mod reader;
 mod requests;

@@ -15,7 +15,6 @@ import { formatValue, LUT_SIZE } from "../field/colourize";
 import { convertedTicks, FieldLegend, spacedTicks } from "./FieldLegend";
 import { MapPanel } from "../panels/MapPanel";
 import { useHoverStore } from "../hover/hoverStore";
-import { FieldControls } from "./FieldControls";
 import { useUiStore } from "../../stores/uiStore";
 import { DEFAULT_UNITS, convertUnit } from "../../lib/displayUnits";
 import { PointDetails } from "../../features/inspector/PointDetails";
@@ -245,24 +244,6 @@ it.each([
   expect(within(scale).getByRole("slider").getAttribute("aria-valuemax")).toBe(maximum);
   act(() => { useHoverStore.getState().setPointer({ panel: 0, longitude: -97.5, latitude: 35.5, x: 110, y: 130 }); });
   await waitFor(() => { expect(screen.getByTestId("pointer-value").textContent).toContain(units); });
-});
-
-it("keeps product categories in the custom menu and changes only the active panel", async () => {
-  useForecastStore.getState().setHour(3);
-  useMapStore.getState().setPanelLayout(2);
-  useMapStore.getState().setActivePanel(1);
-  renderWithBackend(<FieldControls panel={1} />, createTransport("field-error"));
-  const select = await screen.findByRole("combobox", { name: "Product" });
-  await userEvent.click(select);
-  const menu = screen.getByRole("listbox", { name: "Product" });
-  expect(within(menu).getAllByRole("option")).toHaveLength(catalog.products.length);
-  const option = menu.querySelector<HTMLButtonElement>('[value="tmp-2m"]');
-  expect(option?.getAttribute("aria-description")).toBe(catalog.products.find((product) => product.key === "tmp-2m")?.category);
-  if (option === null) throw new Error("Missing product option");
-  await userEvent.click(option);
-  expect(useMapStore.getState().panels[0]?.productKey).toBe("tmp-2m");
-  expect(useMapStore.getState().productKey).toBeNull();
-  expect(document.activeElement).toBe(select);
 });
 
 it("shows five whole-number labels and keeps precise hover and keyboard readings", async () => {

@@ -1,4 +1,33 @@
 {
+  "3.8.5": {
+    "summary": "See today's SPC outlook, follow steadier map playback, and open soundings more reliably.",
+    "highlights": [
+      {
+        "title": "Day 1–3 SPC outlooks",
+        "description": "Choose a day on Overview to see the latest SPC outlook, official valid times and which states the highest risk covers in part. Days 1 and 2 show tornado, wind and hail probabilities. Day 3 shows combined severe probability."
+      },
+      {
+        "title": "Steadier playback and exports",
+        "description": "Forecast and live maps stay visible while the next frame's layers load, including when looping or returning to Live. Both timelines offer 3× and 4× speeds. Forecast PNG, GIF and WebP exports keep the matching overlays through each capture."
+      },
+      {
+        "title": "Simpler workspace controls",
+        "description": "Change layer settings beside the color key and expand Details & source as needed. Switch panels and copy coordinates from the point inspector. Appearance, units and playback settings use a consistent layout."
+      },
+      {
+        "title": "More reliable sounding opens",
+        "description": "Keep consistent measured levels from observed archives with repeated or out-of-order data. Automatic provider selection can try the next configured source. If HRRR analysis data is unavailable or unreadable, the app tries the standard GRIB source."
+      },
+      {
+        "title": "Clearer sounding views and recovery",
+        "description": "Scroll saved profiles while recovery actions stay visible. Pick animation frames in a compact grid and create a GIF directly. Severe and Winter views use matching growth-zone brackets, softer hodograph axes and an outlined locator map."
+      },
+      {
+        "title": "More processing in Rust",
+        "description": "Read just the required WRF column and nearby wind cells for a point sounding. Rust also handles more sounding diagnostics, point-provider requests and cache cleanup through the existing app and CLI."
+      }
+    ]
+  },
   "3.8.4": {
     "summary": "Recover your sounding session, load forecast data with less repeated work, and export each panel's complete weather overlays.",
     "highlights": [

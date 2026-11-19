@@ -38,7 +38,7 @@ def install_hodo_label_fit(
         import sharppy.viz.hodo as _hodo_mod
         import sharppy.sharptab as _tab
         import numpy as _np
-        from sharpmod_rs import configure_hodograph_rings
+        import sharpmod_rs
 
         _bg = _hodo_mod.backgroundHodo
         _plot = _hodo_mod.plotHodo
@@ -60,10 +60,17 @@ def install_hodo_label_fit(
         _orig_background = _bg.plotBackground
 
         def plotBackground(self):
-            configure_hodograph_rings(self)
+            sharpmod_rs.configure_hodograph_rings(self)
             return _orig_background(self)
 
         _bg.plotBackground = plotBackground
+        native_axes = getattr(sharpmod_rs, "draw_hodograph_axes", None)
+        speed_label_pen = getattr(sharpmod_rs, "hodograph_speed_label_pen", None)
+        if native_axes is not None:
+            def draw_axes(self, qp):
+                return native_axes(self, qp)
+
+            _bg.draw_axes = draw_axes
 
         # --- 1. Cap fonts after initUI (called at construction AND on resize) ---
         _orig_initUI = _bg.initUI
@@ -174,7 +181,10 @@ def install_hodo_label_fit(
                         _QtCore.QRectF(left_x, self.centery + offset, width, height)
                     )
 
-                qp.setPen(_QtGui.QPen(self.fg_color))
+                qp.setPen(
+                    speed_label_pen(self) if speed_label_pen is not None
+                    else _QtGui.QPen(self.fg_color)
+                )
                 for rect in rects:
                     qp.drawText(rect, _QtCore.Qt.AlignCenter, text)
             except Exception:

@@ -36,9 +36,9 @@ displayed Model Viewer map, including its OpenStreetMap basemap and weather
 layers. That composition uses the visible map context and is included in
 the viewer's PNG save/copy actions. The inset zooms to 6.4 times the displayed
 map scale and renders the crop at a density based on the selected image size.
-It includes the point marker and parameter scale, and shows the location on
-the sounding header above the map. Standalone CLI workers have no displayed
-map context; use the explicit locator-overlay option for those jobs.
+A border frames the map, the point marker identifies the sounding location,
+and the place name appears in the sounding header. Standalone CLI workers can
+provide their own map through the explicit locator-overlay option.
 
 With `--json`, a successful invocation exits `0` and writes one JSON record to
 stdout. The record has `schemaVersion` (`1`), the absolute `path`, `contentType`

@@ -1,6 +1,6 @@
 [package]
 name = "sharpmod-weather"
-version = "3.8.4"
+version = "3.8.5"
 edition = "2021"
 rust-version = "1.88"
 publish = false
@@ -15,6 +15,7 @@ csv = "=1.4.0"
 flate2 = "=1.1.10"
 geographiclib-rs = { version = "=0.2.7", default-features = false }
 hdf5-reader = { version = "=0.12.1", default-features = false }
+i_overlay = "=4.0.7"
 log = "0.4.34"
 image-webp = "=0.2.4"
 png = "=0.18.1"

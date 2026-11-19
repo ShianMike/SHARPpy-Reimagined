@@ -322,6 +322,9 @@ def test_index_board_formats_display_units(qt_app):
     assert board._wind_scalar(20.0) == "10"
     assert board._dirspd((180.0, 20.0)) == "180/10"
     assert board._uv_dirspd((10.0, 0.0)) == "270/05"
+    board.setPreferences(update_gui=False, temp_units="Fahrenheit", pw_units="in")
+    assert board._temp(68.0) == "68 °F"
+    assert board._pwat(2.23) == "2.23\u00a0in"
 
 
 def test_index_board_preserves_primary_widths_with_compact_composites(qt_app):
@@ -432,8 +435,8 @@ def test_three_column_stats_leave_one_line_between_lapse_rows(qt_app):
     assert min(b - a for a, b in zip(lapse_ys, lapse_ys[1:])) >= row_height
 
 
-def test_composite_reorders_ecape_lscp_and_wbz(qt_app):
-    """ECAPE shares NCAPE's row, then LSCP precedes WBZ Height below it."""
+def test_composite_places_wbz_directly_below_ecape(qt_app):
+    """Keep WBZ aligned with ECAPE in the right diagnostic column."""
     from qtpy.QtCore import QRect, Qt
 
     from sharpmod.viz.index_board import IndexBoard
@@ -450,7 +453,7 @@ def test_composite_reorders_ecape_lscp_and_wbz(qt_app):
     records = {}
 
     def capture_text(qp, rect, text, color=None, align=Qt.AlignLeft):
-        if text in {"LSCP = ", "WBZ Height = ", "ECAPE = ", "NCAPE = "}:
+        if text in {"LSCP = ", "WBZ = ", "ECAPE = ", "NCAPE = ", "4106 m AGL"}:
             records[text] = QRect(rect)
 
     board._text = capture_text
@@ -463,12 +466,13 @@ def test_composite_reorders_ecape_lscp_and_wbz(qt_app):
 
     assert records["ECAPE = "].y() == records["NCAPE = "].y()
     assert records["ECAPE = "].x() > records["NCAPE = "].x()
-    assert records["LSCP = "].y() < records["WBZ Height = "].y()
-    assert records["WBZ Height = "].y() - records["LSCP = "].y() == 18
+    assert records["WBZ = "].x() == records["ECAPE = "].x()
+    assert records["WBZ = "].y() == records["LSCP = "].y() == records["ECAPE = "].y() + 18
+    assert records["4106 m AGL"].y() == records["WBZ = "].y()
 
 
 def test_index_board_sfc500m_kinematics_row_is_neutral_white(qt_app):
-    """SFC-500m kinematics row label and values render as normal white text."""
+    """SFC - 500 m kinematics row label and values render as normal white text."""
     from qtpy.QtCore import QRect, Qt
 
     from sharpmod.viz.index_board import IndexBoard
@@ -504,10 +508,10 @@ def test_index_board_sfc500m_kinematics_row_is_neutral_white(qt_app):
     painter.end()
 
     row_start = next(i for i, (text, _color) in enumerate(records)
-                     if text == "SFC-500m")
+                     if text == "SFC - 500 m")
     row = records[row_start:row_start + 5]
     assert [text for text, _color in row] == [
-        "SFC-500m", "-2", "1", "270/10", "180/10"]
+        "SFC - 500 m", "-2", "1", "270/10", "180/10"]
     assert {color for _text, color in row} == {board.fg.name().lower()}
 
 
@@ -616,7 +620,7 @@ def test_index_board_uses_five_lapse_rows_and_places_lrghail_below_moshe(qt_app)
 
     def capture_text(qp, rect, s, color=None, align=Qt.AlignLeft):
         records.append((s, rect.y(), rect.height()))
-        if s in {"Supercell Comp = ", "STP(cin) = ", "STP(fix) = ",
+        if s in {"Supercell Comp = ", "STP (cin) = ", "STP (fix) = ",
                  "SHIP = ", "Derecho Comp = "}:
             severe_colors[s] = QtGui.QColor(color).name()
 
@@ -630,8 +634,8 @@ def test_index_board_uses_five_lapse_rows_and_places_lrghail_below_moshe(qt_app)
     painter.end()
 
     texts = [text for text, _y, _h in records]
-    assert "SFC-500m LR = " in texts
-    idx = texts.index("SFC-500m LR = ")
+    assert "SFC - 500 m LR = " in texts
+    idx = texts.index("SFC - 500 m LR = ")
     assert texts[idx + 1] == "10.0 C/km"
     assert texts.count("Derecho Comp = ") == 1
     assert "3-6km LR = " not in texts
@@ -646,21 +650,21 @@ def test_index_board_uses_five_lapse_rows_and_places_lrghail_below_moshe(qt_app)
 
     severe_y = {
         text: y for text, y, _h in records
-        if text in {"Supercell Comp = ", "STP(cin) = ", "STP(fix) = ",
+        if text in {"Supercell Comp = ", "STP (cin) = ", "STP (fix) = ",
                     "SHIP = ", "Derecho Comp = "}
     }
-    lapse_step = lapse_y["SFC-1km LR = "] - lapse_y["SFC-500m LR = "]
-    severe_step = severe_y["STP(cin) = "] - severe_y["Supercell Comp = "]
+    lapse_step = lapse_y["SFC - 1 km LR = "] - lapse_y["SFC - 500 m LR = "]
+    severe_step = severe_y["STP (cin) = "] - severe_y["Supercell Comp = "]
     assert severe_step == lapse_step
     assert lapse_step <= 21
     assert severe_y["Derecho Comp = "] - severe_y["SHIP = "] == severe_step
     for lapse_label, severe_label in zip(
-            ("SFC-500m LR = ", "SFC-1km LR = ", "SFC-3km LR = ",
+            ("SFC - 500 m LR = ", "SFC - 1 km LR = ", "SFC - 3 km LR = ",
              "850-500 LR = ", "700-500 LR = "),
-            ("Supercell Comp = ", "STP(cin) = ", "STP(fix) = ",
+            ("Supercell Comp = ", "STP (cin) = ", "STP (fix) = ",
              "SHIP = ", "Derecho Comp = ")):
         assert lapse_y[lapse_label] == severe_y[severe_label]
-    top_gap = severe_y["Supercell Comp = "] - lapse_y["SFC-500m LR = "]
+    top_gap = severe_y["Supercell Comp = "] - lapse_y["SFC - 500 m LR = "]
     bottom_gap = lapse_y["700-500 LR = "] - severe_y["Derecho Comp = "]
     assert top_gap == 0
     assert bottom_gap == 0

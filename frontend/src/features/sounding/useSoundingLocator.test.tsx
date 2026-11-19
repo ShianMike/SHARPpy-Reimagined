@@ -53,7 +53,7 @@ it("replaces the displayed and exported image only after the matching map is com
   expect(hook.result.current.pending).toBe(true);
   await waitFor(() => { expect(hook.result.current.view?.image).not.toBe(view.image); });
   expect(fixture.capture).toHaveBeenCalledOnce();
-  expect(fixture.compose).toHaveBeenCalledWith(view, locator, expect.anything(), "Norman, Oklahoma");
+  expect(fixture.compose).toHaveBeenCalledWith(view, locator, "Norman, Oklahoma");
   expect(hook.result.current.view?.width).toBe(view.width);
   expect(hook.result.current.pending).toBe(false);
   hook.unmount();

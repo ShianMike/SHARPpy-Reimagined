@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 import math
-import os
 import re
-import tempfile
 import time
-from contextlib import suppress
 from pathlib import Path
 from urllib.parse import quote, unquote, urlencode, urlparse
-
-from sharpmod.models.model_transport import DownloadCancelled, _valid_grib
 
 
 class SourceRoutingUnavailable(RuntimeError):
@@ -167,66 +162,6 @@ def download_nomads_subset(
     on_bytes=None,
     throttle: bool = True,
 ) -> tuple[Path, int, str]:
-    """Download one small server-side geographic GRIB subset atomically."""
-    source = getattr(herbie, "SOURCES", {}).get("nomads")
-    if not source:
-        raise SourceRoutingUnavailable("Herbie model has no NOMADS source")
-    url = build_nomads_subset_url(config, str(source), lat, lon, fields)
-    if save_dir is not None:
-        herbie.save_dir = Path(save_dir).expanduser()
-    output = Path(herbie.get_localFilePath(search))
-    output.parent.mkdir(parents=True, exist_ok=True)
-    if output.exists() and _valid_grib(output):
-        return output, output.stat().st_size, url
-    if throttle:
-        _wait_for_nomads_slot(cancelled)
+    from sharpmod_rs import download_nomads_native
 
-    owned_session = session is None
-    if owned_session:
-        import requests
-        session = requests.Session()
-    fd, temporary = tempfile.mkstemp(
-        prefix=output.name + ".", suffix=".tmp", dir=output.parent
-    )
-    downloaded = 0
-    try:
-        os.close(fd)
-        with session.get(url, stream=True, timeout=(10, 120)) as response:
-            if int(getattr(response, "status_code", 0)) != 200:
-                raise SourceRoutingUnavailable(
-                    f"NOMADS subset returned HTTP {response.status_code}"
-                )
-            total = int(response.headers.get("Content-Length", 0) or 0)
-            with open(temporary, "wb") as handle:
-                for chunk in response.iter_content(chunk_size=256 * 1024):
-                    if not chunk:
-                        continue
-                    handle.write(chunk)
-                    downloaded += len(chunk)
-                    if on_bytes is not None:
-                        on_bytes(len(chunk))
-                    if progress is not None:
-                        progress(downloaded, total)
-                    if cancelled is not None and cancelled():
-                        raise DownloadCancelled(
-                            "forecast-model download cancelled"
-                        )
-        if not _valid_grib(Path(temporary)):
-            raise SourceRoutingUnavailable(
-                "NOMADS returned a non-GRIB or incomplete subset"
-            )
-        os.replace(temporary, output)
-        return output, downloaded, url
-    except (DownloadCancelled, SourceRoutingUnavailable):
-        raise
-    except Exception as exc:
-        raise SourceRoutingUnavailable(
-            f"NOMADS geographic subset failed: {exc}"
-        ) from exc
-    finally:
-        with suppress(OSError):
-            os.remove(temporary)
-        if owned_session:
-            close = getattr(session, "close", None)
-            if callable(close):
-                close()
+    return download_nomads_native(herbie, config, search, fields, lat, lon, locals())

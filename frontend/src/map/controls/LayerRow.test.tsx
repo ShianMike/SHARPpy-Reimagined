@@ -5,7 +5,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Popover } from "../../components/Popover";
 import { SourceSelect } from "../../features/sounding/SourceFields";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { panelLayers, useMapStore } from "../../stores/mapStore";
 import { LAYER_REGISTRY } from "../layers/descriptors";
 import { ORDERABLE_LAYER_IDS } from "../layers/registry";
@@ -19,7 +19,7 @@ import { ReportControls } from "./ReportControls";
 
 const initial = useMapStore.getState();
 beforeEach(() => { useMapStore.setState(initial, true); });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 it("keeps the Layers popup open when choosing or dismissing a provider menu", async () => {
   function Popup() {
@@ -181,6 +181,31 @@ it("leads with enabled layers and opens provider settings only when requested", 
   expect(screen.queryByRole("button", { name: "Radar mosaic settings" })).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Map details" }));
   expect(within(panel).getByRole("switch", { name: "Station labels" })).toBeTruthy();
+});
+
+it("opens one weather editor at a time without closing it when another layer is hidden", async () => {
+  vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  useMapStore.setState({ view: "live" });
+  useMapStore.getState().setPanelLayout(2);
+  useMapStore.getState().setLayerVisible("radar", true);
+  useMapStore.getState().setLayerVisible("satellite", true);
+  const { view, queryClient } = renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport("overlay-error"));
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Radar mosaic settings" }));
+  expect(screen.getByRole("button", { name: "Radar mosaic settings" }).getAttribute("aria-expanded")).toBe("true");
+  await user.click(screen.getByRole("button", { name: "GOES satellite settings" }));
+  expect(screen.getByRole("button", { name: "Radar mosaic settings" }).getAttribute("aria-expanded")).toBe("false");
+  expect(screen.getByRole("button", { name: "GOES satellite settings" }).getAttribute("aria-expanded")).toBe("true");
+  expect(screen.queryByRole("slider", { name: "Radar mosaic opacity" })).toBeNull();
+  await user.click(screen.getByRole("switch", { name: "Radar mosaic" }));
+  expect(screen.getByRole("button", { name: "GOES satellite settings" }).getAttribute("aria-expanded")).toBe("true");
+  await user.click(screen.getByRole("button", { name: "Close layer settings" }));
+  await waitFor(() => { expect(document.activeElement).toBe(screen.getByRole("button", { name: "GOES satellite settings" })); });
+  expect(screen.queryByTestId("layer-settings-satellite")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "GOES satellite settings" }));
+  await user.click(screen.getByRole("button", { name: "Panel 2" }));
+  expect(screen.getByRole("button", { name: "Radar mosaic settings" }).getAttribute("aria-expanded")).toBe("false");
+  view.unmount(); queryClient.clear();
 });
 
 it("remembers its category after reopening and resets layers in every panel", async () => {

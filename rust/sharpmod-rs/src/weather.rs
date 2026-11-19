@@ -329,12 +329,13 @@ fn spc_outlook_parse(
     serde_json::to_string(&layer).map_err(|error| PyRuntimeError::new_err(error.to_string()))
 }
 
-#[pyfunction(signature = (valid_time, now=None, product="cat"))]
+#[pyfunction(signature = (valid_time, now=None, product="cat", day=None))]
 fn spc_outlook_fetch(
     py: Python<'_>,
     valid_time: &str,
     now: Option<&str>,
     product: &str,
+    day: Option<u8>,
 ) -> PyResult<Option<String>> {
     let valid_time = OffsetDateTime::parse(valid_time, &Rfc3339)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
@@ -346,13 +347,23 @@ fn spc_outlook_fetch(
     let product = product.to_owned();
     let runtime = runtime()?;
     py.detach(move || {
+        let client = sharpmod_weather::spc_outlook::client();
         let layer = runtime
-            .block_on(sharpmod_weather::spc_outlook::client().fetch(valid_time, now, &product))
+            .block_on(async {
+                match day {
+                    Some(day) => client.fetch_latest(day, &product).await,
+                    None => client.fetch(valid_time, now, &product).await,
+                }
+            })
             .map_err(PyRuntimeError::new_err)?;
         layer
             .map(|item| {
-                serde_json::to_string(item.as_ref())
-                    .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+                let result = if day.is_some() {
+                    item.latest_json()
+                } else {
+                    serde_json::to_string(item.as_ref())
+                };
+                result.map_err(|error| PyRuntimeError::new_err(error.to_string()))
             })
             .transpose()
     })

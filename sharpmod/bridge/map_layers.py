@@ -43,15 +43,18 @@ def _radar_bytes(raster, when) -> bytes:
 
 
 def spc_outlook(params: dict[str, Any]) -> dict[str, Any]:
-    """The SPC outlook of one product covering ``valid_time``, or null."""
-    p.keys(params, ("product", "valid_time"))
-    product = p.choice(params, "product", OUTLOOK_PRODUCTS, "cat")
+    """Read an outlook at a valid time or the latest issuance for a day."""
+    p.keys(params, ("product", "valid_time"), ("day",))
+    day = p.integer(params, "day", 1, 3) if "day" in params else None
+    products = OUTLOOK_PRODUCTS if day is None else (*OUTLOOK_PRODUCTS, "prob")
+    product = p.choice(params, "product", products, "cat")
     when = p.time(params, "valid_time")
     from sharpmod.providers import spc_outlook as spc
     from sharpmod.providers import spc_outlook_fetch
 
     try:
-        layer = spc_outlook_fetch.fetch_layer(when, product=product, disk_cache=False)
+        options = {} if day is None else {"day": day}
+        layer = spc_outlook_fetch.fetch_layer(when, product=product, disk_cache=False, **options)
     except spc.OutlookError as exc:
         raise BridgeError(
             "OVERLAY_FETCH_FAILED",
@@ -93,6 +96,8 @@ def spc_outlook(params: dict[str, Any]) -> dict[str, Any]:
             if not shape.marker
         ],
     }
+    if layer.affected_states is not None:
+        result["outlook"]["affected_states"] = list(layer.affected_states)
     return result
 
 

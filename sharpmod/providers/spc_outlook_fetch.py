@@ -22,8 +22,9 @@ def fetch_layer(
         opener: Callable[..., bytes] | None = None,
         should_cancel: Callable[[], bool] | None = None,
         disk_cache: bool = True,
+        day: int | None = None,
 ) -> OverlayLayer | None:
-    """Return the outlook layer covering ``valid_time``, or ``None``.
+    """Return the outlook layer for a valid time or an explicit latest issuance.
 
     ``None`` means "SPC published nothing that covers this time" -- before the
     2020 archive, beyond Day 3, or a quiet day with no outlook on file. That is
@@ -35,26 +36,27 @@ def fetch_layer(
     advance without warning, so trusting the URL alone would eventually draw
     yesterday's outlook over today's sounding.
     """
-    if now is None:
-        if opener is None and not disk_cache:
-            if should_cancel is not None and should_cancel():
-                return None
-            import sharpmod_rs
+    if day is not None or (now is None and opener is None and not disk_cache):
+        if should_cancel is not None and should_cancel():
+            return None
+        import sharpmod_rs
 
-            if valid_time.tzinfo is None:
-                raise ValueError("candidates_for requires a tz-aware valid_time")
-            when_iso = (
-                valid_time.astimezone(timezone.utc)
-                .isoformat(timespec="seconds")
-                .replace("+00:00", "Z")
-            )
-            try:
-                native = sharpmod_rs.spc_outlook_fetch(when_iso, product=product)
-            except (ValueError, RuntimeError) as exc:
-                raise _api.OutlookError(str(exc)) from None
-            if native is None:
-                return None
-            return _api._layer_from_native(json.loads(native))
+        if valid_time.tzinfo is None:
+            raise ValueError("candidates_for requires a tz-aware valid_time")
+        when_iso = (
+            valid_time.astimezone(timezone.utc)
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
+        )
+        options = {} if day is None else {"day": day}
+        try:
+            native = sharpmod_rs.spc_outlook_fetch(when_iso, product=product, **options)
+        except (ValueError, RuntimeError) as exc:
+            raise _api.OutlookError(str(exc)) from None
+        if native is None:
+            return None
+        return _api._layer_from_native(json.loads(native))
+    if now is None:
         now = datetime.now(timezone.utc)
 
     candidates = _api.candidates_for(valid_time, now, product)

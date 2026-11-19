@@ -53,6 +53,7 @@ pub fn invoke_handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
     tauri::generate_handler![
         commands::animation::encode_webp_frame,
         commands::soundings::get_sounding_snapshot,
+        commands::soundings::retain_soundings,
         commands::soundings::restore_sounding_snapshot,
         commands::backend::get_backend_health,
         commands::updater::check_for_updates,

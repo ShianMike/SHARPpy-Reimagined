@@ -236,6 +236,7 @@ it.each([2, 4] as const)("prefetches %i panels and the configured future hours c
   useForecastStore.setState({ modelKey: "hrrr", runTime, forecastHour: 0, playing: false });
   useGraphicsStore.setState({ effective: { ...savedGraphics.effective, profile: "high" } });
   const client = new BackendClient({ call: () => Promise.resolve(contours), listen: () => Promise.resolve(() => undefined) });
+  const fetchCatalog = vi.spyOn(client, "getMapCatalog").mockResolvedValue(mapCatalog);
   const pending: { product: string; hour: number; resolve: (frame: FieldFrame) => void }[] = [];
   vi.spyOn(client, "getWeatherField").mockImplementation((product, _run, hour) => new Promise((resolve) => { pending.push({ product, hour, resolve }); }));
   const queryClient = createQueryClient();
@@ -248,6 +249,7 @@ it.each([2, 4] as const)("prefetches %i panels and the configured future hours c
   const hook = renderHook(usePlayback, { wrapper });
   try {
     await waitFor(() => { expect(pending.map(({ product, hour }) => [product, hour])).toEqual([1, 2].flatMap((hour) => products.map((product) => [product, hour]))); });
+    expect(fetchCatalog.mock.calls).toEqual([["hrrr", runTime, 1], ["hrrr", runTime, 2]]);
     await act(async () => {
       pending.slice(0, -1).forEach(({ resolve }) => { resolve(frame); });
       await Promise.resolve();

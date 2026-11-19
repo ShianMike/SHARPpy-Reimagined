@@ -144,8 +144,8 @@ fn configure_winter_view<'py>(
     ] {
         hodo.setattr(name, &noop)?;
     }
-    // The instance wrappers add CAPE/HGZ and severe thermal labels. Use the same
-    // underlying Skew-T painter, then add only the winter layers in Rust.
+    // Use the underlying Skew-T painter so the winter layers are drawn
+    // without the Severe CAPE, HGZ and thermal-level overlays.
     let base = sound.get_type().getattr("plotData")?.unbind();
     let winter_hodo = hodo.clone().unbind();
     let paint = PyCFunction::new_closure(

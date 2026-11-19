@@ -9,7 +9,7 @@ in both the returned profile metadata and the portable ``.npz`` output.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import math
 from typing import Callable, Mapping, Protocol, Sequence, runtime_checkable
@@ -548,53 +548,9 @@ def fetch_observed(
     Fallback is explicit in ``providers``.  Failures from earlier providers are
     recorded as ``fallback_attempts`` metadata on the successful result.
     """
-    if not providers:
-        raise ValueError("at least one observed-sounding provider is required")
-    attempts: list[dict[str, str]] = []
-    for provider_value in providers:
-        provider = (
-            get_observed_provider(provider_value)
-            if isinstance(provider_value, str)
-            else provider_value
-        )
-        if not isinstance(provider, ObservedSoundingProvider):
-            raise TypeError("provider does not implement ObservedSoundingProvider")
-        try:
-            result = provider.fetch(station, when_utc)
-        except ObservedProviderError as exc:
-            attempts.append({
-                "provider": provider.info.key,
-                "error_type": type(exc).__name__,
-                "error": str(exc),
-            })
-            continue
-        if attempts:
-            metadata = dict(result.metadata)
-            metadata["fallback_attempts"] = tuple(dict(item) for item in attempts)
-            _set_profile_metadata(result.profile, metadata)
-            result = replace(result, metadata=metadata)
-        return result
-    raise ObservedFallbackError(attempts)
+    from sharpmod_rs import fetch_observed as native_fetch
 
-
-def _profile_column(profile, name: str) -> np.ndarray:
-    values = np.ma.asarray(getattr(profile, name), dtype=float)
-    return np.asarray(values.filled(MISSING), dtype=float)
-
-
-def _json_metadata(metadata: Mapping[str, object]) -> dict[str, object]:
-    def normalize(value):
-        if isinstance(value, datetime):
-            return _utc_datetime(value).isoformat().replace("+00:00", "Z")
-        if isinstance(value, Mapping):
-            return {str(key): normalize(item) for key, item in value.items()}
-        if isinstance(value, (list, tuple)):
-            return [normalize(item) for item in value]
-        if isinstance(value, np.generic):
-            return value.item()
-        return value
-
-    return {str(key): normalize(value) for key, value in metadata.items()}
+    return native_fetch(station, when_utc, providers)
 
 
 def write_observed_npz(
@@ -604,66 +560,9 @@ def write_observed_npz(
     loc: str | None = None,
 ) -> str:
     """Atomically write one provider result and its provenance sidecar."""
-    profile = result.profile
-    metadata = dict(result.metadata)
-    valid = _utc_datetime(result.valid)
-    loc_label = str(loc or metadata.get("loc") or metadata.get("station_name")
-                    or result.station_id)
-    n_levels = int(_profile_column(profile, "pres").size)
-    omeg = getattr(profile, "omeg", None)
-    if omeg is None:
-        omeg_array = np.full(n_levels, MISSING, dtype=float)
-    else:
-        omeg_array = np.asarray(
-            np.ma.asarray(omeg, dtype=float).filled(MISSING), dtype=float
-        )
-    fallback_from = [
-        str(item.get("provider", ""))
-        for item in metadata.get("fallback_attempts", ())
-        if isinstance(item, Mapping)
-    ]
-    arrays = {
-        "pres": _profile_column(profile, "pres"),
-        "hght": _profile_column(profile, "hght"),
-        "tmpc": _profile_column(profile, "tmpc"),
-        "dwpc": _profile_column(profile, "dwpc"),
-        "wdir": _profile_column(profile, "wdir"),
-        "wspd": _profile_column(profile, "wspd"),
-        "omeg": omeg_array,
-        "lat": float(metadata.get("lat", 0.0)),
-        "lon": float(metadata.get("lon", 0.0)),
-        "loc": loc_label,
-        "model": "Observed",
-        "run": valid.strftime("%Y-%m-%d %H:%M"),
-        "valid": valid.strftime("%Y-%m-%d %H:%M"),
-        "fxx": 0,
-        "observed": True,
-        "source": result.provider,
-        "source_provider": result.provider,
-        "source_provider_name": result.provider_name,
-        "source_station": result.station_id,
-        "source_url": result.source_url,
-        "requested_station": result.requested_station,
-        "fallback_from": np.asarray(fallback_from, dtype=str),
-    }
-    out_path = str(out_path)
-    sidecar = _json_metadata(metadata)
-    sidecar.update({
-        "provider": result.provider,
-        "provider_name": result.provider_name,
-        "source_station": result.station_id,
-        "requested_station": result.requested_station,
-        "source_url": result.source_url,
-        "valid": valid.isoformat().replace("+00:00", "Z"),
-        "levels": n_levels,
-        "backend": f"{result.provider} observed provider",
-        "decoder": "provider-neutral observed-sounding adapter",
-        "cache_hit": False,
-        "surface_vorticity_source": "not provided by observed archive",
-        "npz": str(out_path),
-    })
-    _atomic_write_sounding_pair(out_path, arrays, sidecar)
-    return out_path
+    from sharpmod_rs import write_observed_npz as native_write
+
+    return native_write(result, out_path, loc)
 
 
 __all__ = [

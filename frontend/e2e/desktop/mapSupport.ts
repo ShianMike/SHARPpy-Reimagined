@@ -47,6 +47,10 @@ export function row(id: string): Locator {
   return page.getByTestId(`layer-row-${id}`);
 }
 
+export function settings(id: string): Locator {
+  return page.getByTestId(`layer-settings-${id}`);
+}
+
 export async function openLayers(): Promise<void> {
   const toggle = page.getByRole("group", { name: "Map detail views" }).getByRole("button", { name: "Layers", exact: true });
   // The closing drawer stays visible during its discrete display transition.
@@ -97,8 +101,10 @@ export async function forecastIdentity() {
 export async function fieldOutcome() {
   await setLayer("model-field", true);
   const started = Date.now();
-  const shown = row("model-field").getByTestId("field-shown");
-  const failed = row("model-field").getByTestId("field-error");
+  const details = settings("model-field").locator("details");
+  if (await details.getAttribute("open") === null) await details.locator("summary").click();
+  const shown = settings("model-field").getByTestId("field-shown");
+  const failed = settings("model-field").getByTestId("field-error");
   await expect.poll(async () => (await shown.isVisible()) || (await failed.isVisible()), { timeout: FIELD_MS, intervals: [250] }).toBe(true);
   const ok = await shown.isVisible();
   const forecast = await forecastIdentity();

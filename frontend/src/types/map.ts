@@ -48,6 +48,9 @@ export type SatelliteChannel = (typeof SATELLITE_CHANNELS)[number];
 
 export const OUTLOOK_KEYS = ["cat", "torn", "wind", "hail"] as const;
 export type OutlookKey = (typeof OUTLOOK_KEYS)[number];
+export const OUTLOOK_DAYS = [1, 2, 3] as const;
+export type OutlookDay = (typeof OUTLOOK_DAYS)[number];
+export type OutlookProductKey = OutlookKey | "prob";
 /** The layer names the panel and the inspector show. */
 export const OUTLOOK_NAMES: Readonly<Record<OutlookKey, string>> = {
   cat: "SPC categorical",
@@ -242,6 +245,8 @@ export interface Outlook {
   covers: boolean;
   sourceUrl: string;
   attribution: string;
+  /** States with some coverage in the highest risk tier of a latest issuance. */
+  affectedStates?: readonly string[];
   areas: readonly OutlookArea[];
 }
 

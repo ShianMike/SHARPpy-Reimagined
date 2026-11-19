@@ -8,7 +8,7 @@ import { expect, test } from "./support/test";
 import { boxOf, chooseThroughSearch, isInside, overlapArea, viewportBox } from "./support/ui";
 
 /** The 49-time HRRR BUFKIT file in the repository's examples. */
-const BUFKIT = join("..", "examples", "soundings", "hrrr_kbvo_20260625_06z.buf");
+const BUFKIT = join(import.meta.dirname, "..", "..", "examples", "soundings", "hrrr_kbvo_20260625_06z.buf");
 /** Valid times in the multi-time fixture summary, the file above as sharpmod read it. */
 const BUFKIT_TIMES = 49;
 
@@ -64,6 +64,7 @@ test.describe("at 1440 by 900", () => {
       const side = page.locator("#sounding-sources");
       const list = page.getByTestId("open-soundings");
       const heading = page.getByRole("heading", { name: "Open soundings 12" });
+      await list.scrollIntoViewIfNeeded();
       const before = await boxOf(page.getByRole("tablist", { name: "Source" }));
       const headingBefore = await boxOf(heading);
       expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
@@ -75,7 +76,9 @@ test.describe("at 1440 by 900", () => {
       expect(await boxOf(heading)).toEqual(headingBefore);
       await expect(page.getByRole("button", { name: "Hide sources" })).toBeVisible();
       await page.getByRole("tab", { name: "Model", exact: true }).click();
-      await page.getByTestId("open-model").scrollIntoViewIfNeeded();
+      const openModel = page.getByTestId("open-model");
+      await openModel.scrollIntoViewIfNeeded();
+      await expect(openModel).toBeInViewport();
       expect(await side.evaluate((element) => element.scrollTop === 0 && element.scrollHeight <= element.clientHeight)).toBe(true);
       await expect(heading).toBeVisible();
       await expect(page.getByRole("tablist", { name: "Source" })).toBeVisible();

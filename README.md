@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.8.4
+# SHARPpy Reimagined · v3.8.5
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,36 +10,32 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v384---2026-11-17)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v385---2026-11-19)
+
+If SHARPpy Reimagined helps your weather analysis, select **Star** at the top of this GitHub page to support the project.
 
 </div>
 
-## What's new in 3.8.4
+## What's new in 3.8.5
 
-- **Restore your sounding session:** recover open profiles, completed edits,
-  undo/redo history, selected times and the Severe or Winter view after an exit.
-  Recovery copies stay on this device, separately from temporary weather data.
-- **Faster forecast export setup:** remember quality, frame duration and panel
-  scope. Keep all hour shortcuts in one row, select the next 6 or 12 hours,
-  thin a selection to every 3 hours, or Shift-click a range.
-- **Independent storm reports:** each panel keeps its own hazard filter and
-  event window in Model Viewer and Live Tracking, including saved layouts.
-- **Complete export overlays:** load enabled storm reports, SPC outlooks and
-  isobars for every selected hour and panel before capturing PNG, GIF or WebP.
-- **More reliable sounding images:** native request checks catch invalid edits
-  before rendering. Rust manages imports and image-cache transactions, retries
-  invalid cached images, and cleans up failed uploads and partial renders.
-- **Faster forecast loading:** share decoded GRIB ingredients between parameters
-  and panels, decode completed fields while other ranges download, and fetch
-  required sounding companions alongside pressure data. Measured transfer
-  history guides route, mirror and worker choices within existing limits.
-- **Cleaner Windows upgrades:** remove obsolete installed runtime code and native
-  packages while keeping current files, saved soundings, preferences and recovery
-  sessions. Locked or unsafe runtime paths stop the installer with a clear error.
-
-The [fixed-input GRIB comparison](benchmarks/results/2026-11-17-unreleased-grib-loading/README.md)
-records exact numerical parity and less repeated transfer work. Its controlled
-loading measurements are separate from Internet, PNG and GIF performance.
+- **SPC outlooks on Overview.** Choose Day 1, 2 or 3 to see the latest risk,
+  valid times and states covered in part by the highest outlined risk.
+- **Steadier map playback and export.** Forecast and Live Tracking prepare
+  the next frame's enabled layers while the current map stays visible. Both
+  timelines offer 3× and 4× speeds. Forecast exports retain matching overlays
+  through each PNG, GIF or WebP capture.
+- **Simpler map controls.** Edit layers alongside the color key, pick a panel
+  from the point inspector and copy the point's coordinates.
+- **More reliable sounding opens.** Keep consistent reported levels when
+  an observed archive repeats or misorders them. Automatic provider selection
+  can try another observed source, and HRRR analyses can fall back to GRIB.
+- **Clearer sounding tools.** Scroll the saved profiles inside the recovery
+  dialog, select animation frames in a compact grid and create GIFs directly.
+  Severe and Winter profiles use softer hodograph axes and matching growth-zone
+  brackets.
+- **More processing in Rust.** Read WRF sounding columns and adjacent wind
+  cells directly from NetCDF, and use native code for more diagnostics,
+  profile loading, provider requests and cache transactions.
 
 ## Sounding and forecast tools
 
@@ -56,8 +52,6 @@ loading measurements are separate from Internet, PNG and GIF performance.
   the existing interfaces.
 - **Temporary-file recovery:** desktop shutdown retries locked session files,
   and a later launch recovers owned session files left by a process crash.
-- **Dependency updates:** includes ecCodes 2.50.1, Ruff 0.17.4 and the
-  action-gh-release 3.0.4 release workflow update.
 
 ## Weather analysis
 

@@ -2,10 +2,10 @@ name: Frontend and desktop bridge
 on:
   push:
     branches: [main]
-    paths: ["frontend/**", "src-tauri/**", "rust/weather-core/**", "sharpmod/bridge/**", "sharpmod/resources/basemap.json", "pyproject.toml", "constraints/release.txt", "scripts/install_sharppy_compat.py", ".github/workflows/frontend.yml"]
+    paths: ["frontend/**", "src-tauri/**", "rust/sharpmod-rs/**", "rust/weather-core/**", "sharpmod/bridge/**", "sharpmod/resources/basemap.json", "pyproject.toml", "constraints/release.txt", "scripts/install_sharppy_compat.py", ".github/workflows/frontend.yml"]
   pull_request:
     branches: [main]
-    paths: ["frontend/**", "src-tauri/**", "rust/weather-core/**", "sharpmod/bridge/**", "sharpmod/resources/basemap.json", "pyproject.toml", "constraints/release.txt", "scripts/install_sharppy_compat.py", ".github/workflows/frontend.yml"]
+    paths: ["frontend/**", "src-tauri/**", "rust/sharpmod-rs/**", "rust/weather-core/**", "sharpmod/bridge/**", "sharpmod/resources/basemap.json", "pyproject.toml", "constraints/release.txt", "scripts/install_sharppy_compat.py", ".github/workflows/frontend.yml"]
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -30,14 +30,26 @@ jobs:
       - run: npm ci
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with: { python-version: "3.13", cache: pip }
-      - name: Require the real Python boundary in UI tests
+      - &install_native_sidecar
+        name: Install the real sidecar for lifecycle checks
         working-directory: .
         shell: pwsh
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
         run: |
           python -m pip install --constraint constraints/release.txt -e ".[render]"
-          if ($LASTEXITCODE -ne 0) { throw "Python boundary dependencies failed" }
+          if ($LASTEXITCODE -ne 0) { throw "Sidecar dependencies failed" }
           python scripts/install_sharppy_compat.py --sharppy-only
           if ($LASTEXITCODE -ne 0) { throw "SHARPpy compatibility install failed" }
+          python -m pip install "maturin==1.16.0"
+          if ($LASTEXITCODE -ne 0) { throw "Native sidecar build tool install failed" }
+          $nativeDirectory = Join-Path $env:RUNNER_TEMP 'sidecar-native-wheel'
+          python -m maturin build --locked --manifest-path rust/sharpmod-rs/Cargo.toml --interpreter python --out $nativeDirectory
+          if ($LASTEXITCODE -ne 0) { throw "Native sidecar backend build failed" }
+          $nativeWheel = @(Get-ChildItem -LiteralPath $nativeDirectory -Filter '*.whl' -File)
+          if ($nativeWheel.Count -ne 1) { throw "Native sidecar backend wheel is not unique" }
+          python -m pip install --no-deps $nativeWheel[0].FullName
+          if ($LASTEXITCODE -ne 0) { throw "Native sidecar backend install failed" }
           "SHARPPY_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
       - run: npm run build
       - run: npm run lint
@@ -135,25 +147,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Scientific dependency audit failed" }
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with: { python-version: "3.13", cache: pip }
-      - name: Install the real sidecar for lifecycle checks
-        working-directory: .
-        shell: pwsh
-        env:
-          CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
-        run: |
-          python -m pip install --constraint constraints/release.txt -e ".[render]"
-          if ($LASTEXITCODE -ne 0) { throw "Sidecar dependencies failed" }
-          python scripts/install_sharppy_compat.py --sharppy-only
-          if ($LASTEXITCODE -ne 0) { throw "SHARPpy compatibility install failed" }
-          python -m pip install "maturin==1.16.0"
-          if ($LASTEXITCODE -ne 0) { throw "Native sidecar build tool install failed" }
-          $nativeDirectory = Join-Path $env:RUNNER_TEMP 'sidecar-native-wheel'
-          python -m maturin build --locked --manifest-path rust/sharpmod-rs/Cargo.toml --interpreter python --out $nativeDirectory
-          if ($LASTEXITCODE -ne 0) { throw "Native sidecar backend build failed" }
-          $nativeWheel = @(Get-ChildItem -LiteralPath $nativeDirectory -Filter '*.whl' -File)
-          if ($nativeWheel.Count -ne 1) { throw "Native sidecar backend wheel is not unique" }
-          python -m pip install --no-deps $nativeWheel[0].FullName
-          if ($LASTEXITCODE -ne 0) { throw "Native sidecar backend install failed" }
-          "SHARPPY_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
+      - *install_native_sidecar
       - name: Require normal and forced sidecar cleanup
         run: cargo test --locked --test python_sidecar -- --ignored --test-threads=1

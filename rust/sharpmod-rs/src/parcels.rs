@@ -12,6 +12,7 @@ mod maximum;
 mod start;
 pub use maximum::maximum_parcel_level;
 pub mod convective_temperature;
+pub(crate) mod display;
 pub mod trajectory;
 
 pub const PARCEL_COUNT: usize = 3;
@@ -198,7 +199,7 @@ fn vapor_pressure(temperature: f64) -> f64 {
     6.107_8 / polynomial.powi(8)
 }
 
-fn mix_ratio(pressure: f64, temperature: f64) -> f64 {
+pub(crate) fn mix_ratio(pressure: f64, temperature: f64) -> f64 {
     if !pressure.is_finite() || pressure <= 0.0 || !temperature.is_finite() {
         return f64::NAN;
     }

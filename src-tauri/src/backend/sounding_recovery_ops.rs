@@ -23,6 +23,32 @@ pub struct SoundingSnapshot {
 }
 
 impl Router {
+    pub async fn retain_soundings(
+        &self,
+        ids: &[String],
+    ) -> Result<serde_json::Value, BackendError> {
+        let context = ErrorContext::new("retain_soundings", Some(PYTHON_PROVIDER), None);
+        if ids.len() > 24 || ids.iter().any(|id| !sounding_id_ok(id)) {
+            return Err(invalid(&context, "Expected up to 24 valid sounding IDs"));
+        }
+        let result: serde_json::Value = self
+            .call(
+                &context,
+                "soundings.retain",
+                json!({"sounding_ids": ids}),
+                Duration::from_secs(10),
+            )
+            .await?;
+        if result != json!({"retained": true}) {
+            return Err(rejected(
+                &context,
+                "soundings.retain",
+                "Invalid retention acknowledgement".into(),
+            ));
+        }
+        Ok(result)
+    }
+
     pub async fn sounding_snapshot(
         &self,
         sounding_id: &str,

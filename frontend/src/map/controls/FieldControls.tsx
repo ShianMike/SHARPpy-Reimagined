@@ -4,6 +4,7 @@
 // product's description and caveat from sharpmod.
 
 import type { ReactNode } from "react";
+import { ChevronDown, Info } from "lucide-react";
 import { Action } from "../../ui/Controls";
 import { useForecastContext } from "../../features/forecast/useForecast";
 import { compactUtc, forecastLabel } from "../../features/sounding/soundingTime";
@@ -26,7 +27,7 @@ function ProductSelect({ catalog, value }: { catalog: MapCatalog; value: string 
   );
 }
 
-function FrameState({ field }: { field: PanelField }): ReactNode {
+function FrameState({ field, ready }: { field: PanelField; ready: boolean }): ReactNode {
   const context = useForecastContext();
   const { frame, request } = field;
   if (field.blocked === "loading-models") {
@@ -62,18 +63,13 @@ function FrameState({ field }: { field: PanelField }): ReactNode {
       />
     );
   }
-  const shown = frame.data;
-  if (shown === undefined || shown.forecastHour !== request.forecastHour) {
+  if (!ready) {
     return <p className={styles.hint} data-testid="field-loading">{`Loading ${forecastLabel(request.forecastHour)}. A new model hour takes a few seconds.`}</p>;
   }
-  return (
-    <p className={styles.hint} data-testid="field-shown">
-      {`${forecastLabel(shown.forecastHour)} of the ${compactUtc(shown.runTime)} run, valid ${compactUtc(shown.validTime)}. ${shown.attribution}.`}
-    </p>
-  );
+  return null;
 }
 
-/** Shown inside the model field row while the layer is on. */
+/** Product and frame controls in the selected layer's settings area. */
 export function FieldControls({ panel }: { panel: number }): ReactNode {
   const field = usePanelField(panel);
   const smoothing = useMapStore((state) => panelLayers(state, panel)["model-field"].smoothing ?? false);
@@ -96,23 +92,29 @@ export function FieldControls({ panel }: { panel: number }): ReactNode {
   }
   const { product } = field;
   const contour = product.contour;
+  const shown = field.frame.data;
+  const ready = !field.frame.isError && shown !== undefined && field.request !== null && shown.forecastHour === field.request.forecastHour;
   return (
     <div className={styles.extra}>
       <ProductSelect catalog={catalog.data} value={product.key} />
-      <SourceSelect label="Pixel rendering" value={smoothing ? "smooth" : "sharp"}
-        options={[
-          { value: "sharp", label: "Sharp", detail: "Original pixel edges" },
-          { value: "smooth", label: "Smooth", detail: "Smooth shapes, crisp colors" },
-        ]}
-        onChange={(value) => { useMapStore.getState().setFieldSmoothing(value === "smooth"); }} />
-      <p className={styles.hint}>Applies to all model parameters in this panel.</p>
-      <FrameState field={field} />
-      <FieldLegend palette={product.palette} />
-      {product.description === "" ? null : <p className={styles.hint}>{product.description}</p>}
-      {contour === null ? null : (
-        <p className={styles.hint}>{`Contours every ${String(contour.interval)} ${contour.label}.`}</p>
-      )}
-      {product.caveat === "" ? null : <p className={styles.warning}>{product.caveat}</p>}
+      <div className={styles.rendering}>
+        <span>Pixels</span>
+        <div className={styles.renderingOptions} role="group" aria-label="Pixel rendering" aria-description="Applies to all model parameters in this panel.">
+          <button type="button" aria-pressed={!smoothing} title="Original pixel edges" onClick={() => { useMapStore.getState().setFieldSmoothing(false); }}>Sharp</button>
+          <button type="button" aria-pressed={smoothing} title="Smooth shapes, crisp colors" onClick={() => { useMapStore.getState().setFieldSmoothing(true); }}>Smooth</button>
+        </div>
+      </div>
+      <FieldLegend palette={product.palette} compact />
+      <FrameState field={field} ready={ready} />
+      <details className={styles.fieldDetails}>
+        <summary><Info className="icon-sm" aria-hidden="true" /><span>Details &amp; source</span><ChevronDown className="icon-sm" aria-hidden="true" /></summary>
+        <div>
+          {ready ? <p className={styles.hint} data-testid="field-shown">{`${forecastLabel(shown.forecastHour)} of the ${compactUtc(shown.runTime)} run, valid ${compactUtc(shown.validTime)}. ${shown.attribution}.`}</p> : null}
+          {product.description === "" ? null : <p className={styles.hint}>{product.description}</p>}
+          {contour === null ? null : <p className={styles.hint}>{`Contours every ${String(contour.interval)} ${contour.label}.`}</p>}
+          {product.caveat === "" ? null : <p className={styles.warning}>{product.caveat}</p>}
+        </div>
+      </details>
     </div>
   );
 }

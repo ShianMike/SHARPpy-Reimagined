@@ -138,7 +138,7 @@ test("Settings exposes application updates and explains the browser limitation",
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Updates", exact: true }).click();
   await expect(page.getByRole("heading", { name: "SHARPpy Reimagined" })).toBeVisible();
   await expect(page.getByText(/^Current version: \d+\.\d+\.\d+/)).toBeVisible();
-  await expect(page.getByText("Check for updates in the installed Windows app.")).toBeVisible();
+  await expect(page.getByText("The Windows app checks at 00:00 and 12:00 UTC, or when next opened online. You choose when to install.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Check for updates" })).toBeDisabled();
   await saveScreenshot(page, "browser-updates.png");
   expectWarnings(consoleMessages, []);

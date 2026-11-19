@@ -12,16 +12,16 @@
 .hoursSection legend { width: 100%; padding: 0; font-size: var(--font-size-small); font-weight: var(--font-weight-semibold); }
 .hoursSection legend span { float: right; font-size: var(--font-size-caption); color: var(--text-secondary); font-weight: var(--font-weight-regular); }
 .hourActions { display: grid; grid-template-columns: repeat(2, var(--control-h-sm)) repeat(3, minmax(0, 1fr)); align-items: center; gap: var(--space-1); margin-block: var(--space-2); }
-.hourActions > button { min-width: 0; padding-inline: var(--space-1); border: var(--hairline) solid var(--border-subtle); background: var(--control-fill); color: var(--text-primary); font-size: var(--font-size-small); white-space: nowrap; }
+.hourActions > button { min-width: 0; padding-inline: var(--space-1); border: var(--hairline) solid var(--border-subtle); background: var(--glass-inset-fill); color: var(--text-primary); font-size: var(--font-size-small); white-space: nowrap; }
 .hourHint { margin: 0 0 var(--space-2); font-size: var(--font-size-caption); color: var(--text-secondary); line-height: var(--line-height-body); }
 .hours { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--control-h-sm) * 2), 1fr)); gap: var(--space-1); max-height: calc(var(--control-h-lg) * 4); padding: var(--space-1); overflow-y: auto; border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); }
 .hours label { position: relative; min-width: 0; }
 .hours input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; }
-.hours span { display: block; padding: var(--space-2); border: var(--hairline) solid transparent; border-radius: var(--radius-sm); background: var(--control-fill); text-align: center; font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; }
+.hours span { display: block; padding: var(--space-2); border: var(--hairline) solid transparent; border-radius: var(--radius-sm); background: var(--glass-inset-fill); text-align: center; font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; }
 .hours input:checked + span { color: var(--accent-bright); background: var(--accent-subtle); border-color: var(--accent); }
 .hours input:focus-visible + span { outline: var(--focus-ring-width) solid var(--accent-bright); outline-offset: var(--focus-ring-offset); }
 .hours input:disabled + span { opacity: 0.6; }
-.preview { display: grid; place-items: center; aspect-ratio: 16 / 9; border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden; background: var(--surface-1); }
+.preview { display: grid; place-items: center; aspect-ratio: 16 / 9; border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden; background: var(--glass-inset-fill); }
 .preview > canvas, .preview > img { display: block; width: 100%; height: 100%; object-fit: contain; grid-area: 1 / 1; }
 .preview > [hidden] { display: none; }
 .placeholder { display: grid; justify-items: center; gap: var(--space-2); max-width: 80%; text-align: center; color: var(--text-secondary); }
@@ -31,7 +31,7 @@
 .previewCaption { display: flex; justify-content: space-between; font-size: var(--font-size-caption); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .stages { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) 0; margin: 0; border-block: var(--hairline) solid var(--border-subtle); list-style: none; font-size: var(--font-size-caption); color: var(--text-secondary); }
 .stages li { display: flex; align-items: center; gap: var(--space-1); }
-.stages li > span { display: grid; place-items: center; width: var(--control-h-xs); height: var(--control-h-xs); border-radius: var(--radius-round); background: var(--control-fill); }
+.stages li > span { display: grid; place-items: center; width: var(--control-h-xs); height: var(--control-h-xs); border-radius: var(--radius-round); background: var(--glass-inset-fill); }
 .stages li[data-active="true"] { color: var(--accent-bright); }
 .stages li[data-active="true"] > span { background: var(--accent-subtle); }
 .footer { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-4); border-top: var(--hairline) solid var(--border-subtle); }

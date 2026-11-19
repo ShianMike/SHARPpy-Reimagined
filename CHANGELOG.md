@@ -7,6 +7,158 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v3.8.5] - 2026-11-19
+
+### Fixed
+
+- Keep the native parcel and WRF column code compatible with stable Rust's
+  Clippy checks and the Rust 1.88 build. Install the existing WRF dependencies
+  for the Rust CI tests that read NetCDF profiles.
+- Keep Storage readable when the optional native extension is unavailable.
+- Build the matching Rust sidecar for the frontend lifecycle check. Scope
+  the sounding cancellation assertion to the source form so that recovery
+  status can appear at the same time.
+- Restore the shared hover color on appearance, unit and playback choices.
+  Exercise the current layer editor, playback handoff, sounding sidebar and
+  Overview repository link in the browser suite.
+- Keep the current map visible during playback while the next frame's enabled
+  overlays load. Use the destination hour's product inventory and retain the
+  prepared fields and overlays until the panels draw them. Keep Live Tracking
+  frames through minute changes and bitmap cache eviction, and reuse the
+  freshly loaded radar scan when playback returns to Live.
+- Keep prepared fields and overlays available throughout forecast export
+  capture. Discard a capture if its forecast selection or layer settings
+  change during rendering.
+- Keep observed UWyo soundings usable when reported pressure or height repeats
+  or arrives out of order. Select consistent measured levels before analysis
+  without changing their values or relaxing portable sounding validation.
+  Report unusable observed profiles as sounding data errors.
+- Try the next explicitly configured observed provider when downloaded levels,
+  optional omega arrays, coordinates or timestamps fail validation. Preserve
+  the selected provider's measurements, masks and provenance without combining
+  archives.
+- Roll back observed NPZ and metadata files when opening is canceled or later
+  decoding or registration fails, and retain files that a rendering or recovery
+  request still owns after cache eviction. Avoid deleting neighboring cache IDs.
+- Retain profiles in the open sounding list while background opens put pressure
+  on the bounded source cache. Release that retention when a profile closes,
+  serialize open-list synchronization, and preserve source ownership when an
+  in-flight entry is re-added after eviction.
+- Protect open profiles before model-animation loading with one retention
+  acknowledgement instead of requesting scientific analyses for every open
+  profile solely to update its LRU position.
+- Roll back model, ERA5 and WRF cache outputs if decoding, cancellation or
+  registration fails after extraction. Preserve the original source files and
+  shared model-hour cache.
+- Copy each edited sounding column once per edit transaction and reject
+  incomplete storm-motion edits before applying temperature or dewpoint edits.
+- Reject invalid HRRR Zarr chunk dimensions, numeric dtypes and point indices
+  before sampling, while retaining partial edge chunks and C/Fortran storage.
+- Try GRIB when an HRRR Zarr analysis is missing, unreadable or has malformed
+  metadata. Keep cancellations from starting another download and stop queuing
+  Zarr chunks after a retrieval failure.
+
+### Changed
+
+- Align the application, frontend, native packages and health metadata at
+  v3.8.5. Update the README, usage guide and in-app release highlights.
+- Replace solid grey fills in the recent Overview, Settings, point inspector,
+  session recovery and export panels with a shared translucent glass inset.
+  Keep one blur layer per sheet and opaque surfaces for low graphics,
+  reduced transparency or browsers without backdrop-filter support.
+- Reduce scrolling in Layers with a separate settings area, compact
+  pixel-rendering choices, a persistent color key and source/explanation text
+  behind Details & source. Keep loading
+  and error states visible, and open one weather-layer editor at a time. On
+  narrow windows, switch between the layer list and its editor with a back action.
+- Redesign the point inspector with compact readings, aligned values and
+  units, an active-panel indicator and selectable rows for switching map
+  panels. Add coordinate copying with success and failure feedback, keeping
+  the sounding action accessible while readings and source details scroll.
+  Keep secondary map controls clear of the inspector on narrow windows and
+  remove the redundant Layers shortcut from the inspector header.
+- Redesign Workspace settings with a compact saved-setup summary, current
+  panel count and theme, and a distinct reset section that explains which
+  work is kept and groups confirmation actions together. Align the saved
+  status and retained-work note with the card padding using text-only labels.
+- Combine update availability and automatic check timing into one concise
+  message in Settings, removing the separate schedule divider.
+- Replace the static Overview welcome cards with a compact SPC briefing for
+  Day 1, Day 2, or Day 3. Show each day's latest issuance, official UTC times,
+  outlined risks and the states partially covered by the highest risk.
+  Match the SPC polygons to bundled Census boundaries. Follow the current
+  clock independently of model and live-history selections.
+  Include tornado, wind and hail for Days 1–2,
+  plus combined severe probability for Day 3. Refresh while open and label
+  upcoming guidance. Remove the embedded map and heading shield. Keep
+  shortcuts to forecasts, live tracking and soundings.
+- Redesign Appearance, Units and Playback with consistent choice cards,
+  descriptive labels, responsive layouts and visible keyboard focus. Add 3×
+  and 4× playback to both forecast and live timelines and save the selected
+  speed across app restarts.
+- Show the current app version beside the Overview title, using the same
+  package metadata as Settings → Updates. Invite users to star the project
+  through the Overview footer's GitHub link and the repository README.
+- Open backend details from a compact info icon in Overview and Logs. Show
+  version and runtime details directly when the backend is ready.
+- Draw matching cyan Skew-T brackets with capped ends and labels directly on
+  the plot, aligned to −35 °C for both the Severe HGZ and Winter DGZ.
+- Give the sounding locator a visible outline and remove its tiny color scale
+  from displayed, copied and saved images. Document the current locator in
+  the user and image integration guides.
+- Use thinner, softer center axes and dimmer speed labels in both hodographs.
+- Move the Severe sounding's wet-bulb zero height from the Skew-T annotation
+  to a text readout directly below ECAPE.
+- Space the Severe sounding's SFC, LCL–EL and EHI layer labels so the range
+  endpoints and units are easier to read.
+- Draw the green mixing-ratio labels directly on the Skew-T grid.
+- Space Fahrenheit and humidity units and STP qualifiers in the Severe
+  diagnostics. Use superscripts for shear, significant-severe and CAPE-family
+  units. Set PWAT's inch unit in the same size as its value.
+- Keep the sounding source form at its full height above the open profiles.
+  Put the observed date and launch on one row on short windows and use the
+  sidebar to reach content when it needs more room.
+- Make Create GIF the primary action in sounding animation and keep WebP as
+  another format choice. Group Save and Copy with the finished file and give
+  playback and export controls room to wrap on narrow screens. Give the frame
+  picker its own shortcuts, a visible selection limit, and aligned profile
+  tiles that keep each UTC timestamp together. Separate sounding details,
+  frame selection and timing controls with subtle divider lines.
+- Use a compact restore dialog with source and valid time for each saved
+  sounding. Place Last viewed beside the title and wrap source details on the
+  line below. Scroll only the saved-soundings list, keeping the heading,
+  description and actions in place. Group recovery in the sounding sidebar
+  and distinguish a previous session from the current session's save status.
+- Move observed-provider fallback, pre-save validation, NPZ/metadata assembly,
+  observed bridge registration and opened-profile cache ownership into Rust.
+  Retain the existing provider adapters, public schemas, archive decoders and
+  validated atomic output transaction.
+- Move display thermodynamic indices, pressure-weighted humidity, precipitable
+  water, lapse rates and inferred temperature advection into Rust, preserving
+  the pinned SHARPpy sampling, masks and conversion constants. Compute TEI,
+  ESP, WNDG, significant-severe, SHIP and the complete MMP predictor natively.
+- Share portable NPZ archive, array, scalar and physical validation through one
+  native boundary. Move NPZ/JSON pair publication, cancellation and rollback
+  ownership into Rust while retaining matching generations and recovery files
+  when restoration fails.
+- Move model, ERA5 and WRF opening, metadata assembly and registration into
+  native transactions behind the existing CLI and bridge interfaces.
+- Select WRF NetCDF point hyperslabs and adjacent staggered wind cells before
+  materializing scientific arrays. Transform only the selected columns in Rust.
+- Run ECCC GeoMet point scheduling, exact run/time checks and normalization in
+  Rust. Move Open-Meteo point orchestration and column assembly into Rust while
+  retaining its single-request billing and credential-aware HTTP adapter.
+- Plan HRRR F000 Zarr metadata, schedule bounded chunk requests and normalize
+  point profiles in Rust. Reuse the native pooled HTTP client and retain
+  numcodecs for compressed chunks, current caches and the GRIB fallback.
+- Move NOMADS geographic subsets and the permissive Herbie transfer fallback
+  into Rust, including local byte ranges, HTTP 200 responses that ignore Range,
+  atomic publication and cancellation of stalled reads.
+- Assemble sounding edit targets, inspection records and original edit values
+  in Rust while retaining the existing Qt plot transforms and public shapes.
+- Check the new required native operations when selecting the Rust backend so
+  stale source-development wheels report the existing rebuild guidance.
+
 ## [v3.8.4] - 2026-11-17
 
 ### Added

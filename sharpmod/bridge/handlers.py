@@ -173,6 +173,7 @@ def is_seed_catalog(records: list[dict[str, Any]], seed: dict[str, tuple]) -> bo
 
 
 HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
+    "soundings.retain": lambda params: __import__("sharpmod_rs").retain_soundings(params),
     "soundings.snapshot": lambda params: __import__("sharpmod_rs").sounding_snapshot(params),
     "soundings.restore": lambda params: __import__("sharpmod_rs").restore_sounding_snapshot(params),
     "animation.webp_frame": lambda params: __import__("sharpmod_rs").encode_webp_frame(params),

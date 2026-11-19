@@ -46,11 +46,12 @@ describe("Sounding local work protection", () => {
       ? new Promise(() => undefined) : base.call(command, args));
     const { queryClient } = renderWithBackend(<SoundingWorkspace />, { ...base, call });
     await userEvent.click(screen.getByRole("tab", { name: "Model" }));
+    const sourceForm = within(screen.getByRole("region", { name: "Open a sounding" }));
     for (let attempt = 1; attempt <= 2; attempt++) {
       await userEvent.click(await screen.findByRole("button", { name: "Open sounding" }));
       await userEvent.click(await screen.findByRole("button", { name: "Cancel request" }));
       await waitFor(() => { expect(queryClient.isMutating()).toBe(0); });
-      expect(screen.getByRole("status").textContent).toBe("Request cancelled. Your inputs and open soundings have been kept.");
+      expect(sourceForm.getByRole("status").textContent).toBe("Request cancelled. Your inputs and open soundings have been kept.");
       expect(screen.getByRole<HTMLButtonElement>("button", { name: "Open sounding" }).disabled).toBe(false);
       expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Longitude" }).value).toBe("-97");
       expect(screen.queryByTestId("model-error")).toBeNull();

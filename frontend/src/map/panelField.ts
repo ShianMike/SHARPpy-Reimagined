@@ -45,6 +45,11 @@ export function productOf(catalog: MapCatalog | undefined, chosen: string | null
   return catalog.products.find((product) => product.key === chosen) ?? defaultProductFor(catalog, panel) ?? null;
 }
 
+/** Pressure lines are loaded by the independent Isobars layer. */
+export function fieldAuxiliaries(product: FieldProduct): boolean {
+  return product.wind || (product.key !== "mslp" && product.contour !== null);
+}
+
 function blockOf(visible: boolean, catalog: MapCatalog | undefined, context: ForecastContext | null): FieldBlock | null {
   if (!visible) {
     return "hidden";

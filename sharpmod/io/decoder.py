@@ -410,69 +410,21 @@ def getDecoders():
 
 
 def _validate_npz_container(filename) -> None:
-    """Reject oversized or malformed point-sounding archives before NumPy."""
-    path = os.path.abspath(os.fspath(filename))
-    size_limit = _positive_env_number(
-        "SHARPMOD_MAX_NPZ_BYTES", DEFAULT_MAX_NPZ_BYTES, int
-    )
-    try:
-        if os.path.getsize(path) > size_limit:
-            raise ValueError(f"portable sounding exceeds {size_limit:,} bytes")
-        with zipfile.ZipFile(path) as archive:
-            members = archive.infolist()
-            if len(members) > 64:
-                raise ValueError("portable sounding contains too many arrays")
-            expanded = sum(member.file_size for member in members)
-            if expanded > size_limit:
-                raise ValueError(
-                    "portable sounding expands beyond the configured "
-                    f"{size_limit:,}-byte safety limit"
-                )
-            if any(
-                member.file_size > size_limit or not member.filename.endswith(".npy")
-                for member in members
-            ):
-                raise ValueError("portable sounding contains an invalid array member")
-    except (OSError, zipfile.BadZipFile) as exc:
-        raise ValueError(f"invalid portable sounding archive: {exc}") from exc
+    from sharpmod_rs import validate_portable_archive
+
+    validate_portable_archive(filename)
 
 
 def _npz_scalar(data, key, *, default=None):
-    """Read a non-object scalar from an already safely-open NPZ archive."""
-    if key not in data:
-        if default is not None:
-            return default
-        raise ValueError(f"portable sounding is missing required field {key!r}")
-    value = np.asarray(data[key])
-    if value.dtype.hasobject:
-        raise ValueError(f"portable sounding field {key!r} uses unsafe object data")
-    if value.size != 1:
-        raise ValueError(f"portable sounding field {key!r} must contain one value")
-    return value.reshape(-1)[0].item()
+    from sharpmod_rs import portable_scalar
+
+    return portable_scalar(data, key, default)
 
 
 def _npz_profile_array(data, key, expected_levels=None) -> np.ndarray:
-    """Read and validate one numeric, one-dimensional profile array."""
-    if key not in data:
-        raise ValueError(f"portable sounding is missing required field {key!r}")
-    value = np.asarray(data[key])
-    if value.dtype.hasobject or value.dtype.kind not in "fiu":
-        raise ValueError(f"portable sounding field {key!r} must be a numeric array")
-    if value.ndim != 1:
-        raise ValueError(f"portable sounding field {key!r} must be one-dimensional")
-    max_levels = _positive_env_number(
-        "SHARPMOD_MAX_PROFILE_LEVELS",
-        DEFAULT_MAX_PROFILE_LEVELS,
-        int,
-    )
-    if not 2 <= value.size <= max_levels:
-        raise ValueError(f"portable sounding field {key!r} has an invalid level count")
-    if expected_levels is not None and value.size != expected_levels:
-        raise ValueError(
-            f"portable sounding field {key!r} has {value.size} levels; "
-            f"expected {expected_levels}"
-        )
-    return np.asarray(value, dtype=float)
+    from sharpmod_rs import portable_profile_array
+
+    return portable_profile_array(data, key, expected_levels)
 
 
 def _parse_portable_datetime(value, key: str) -> datetime:

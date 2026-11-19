@@ -5,7 +5,7 @@ import { availableParallelism, cpus, platform, release } from "node:os";
 import { dirname } from "node:path";
 import { expect, test } from "./support/test";
 import { waitForMapDrawn } from "./support/app";
-import { turnOn } from "./support/ui";
+import { layerSettings, turnOn } from "./support/ui";
 import type { GifBenchmarkCapture } from "../src/features/forecastExport/gifExport.benchmark";
 
 const output = process.env.SHARPPY_GIF_BENCHMARK_OUT;
@@ -44,6 +44,7 @@ test("records complete forecast GIF export phases and verifies the animation", a
   await page.getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await turnOn(page, "model-field");
+  await (await layerSettings(page, "model-field")).getByText("Details & source", { exact: true }).click();
   await expect(page.getByTestId("field-shown")).toBeVisible();
   await page.getByRole("button", { name: /Export forecast/u }).click();
   const dialog = page.getByRole("dialog", { name: /Export forecast/u });

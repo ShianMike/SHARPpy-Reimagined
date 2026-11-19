@@ -9,8 +9,7 @@ from contextlib import suppress
 from qtpy import QtGui
 from qtpy.QtCore import QObject
 from qtpy.QtCore import QRect
-from sharpmod.viz.skew import draw_cape_fill
-from sharpmod.viz.skew import draw_hgz_overlay
+from sharpmod.viz.skew import HGZOverlay, draw_cape_fill, draw_hgz_overlay
 from sharppy.viz.SPCWindow import SPCWidget as _VendoredSPCWidget
 from sharpmod.viz import SPCWindow as _api
 
@@ -102,9 +101,9 @@ def attach_hgz_overlay(
 
     This is the concrete mount seam for Requirements 19.9-19.11: it wraps the
     skew-T's ``plotData`` so that, *after* the vendored widget renders its
-    temperature/dewpoint traces onto its backing pixmap, the HGZ band is drawn
-    over the -10 degrees C to -30 degrees C layer via
-    :func:`sharpmod.viz.skew.draw_hgz_overlay`, using the widget's own
+    temperature/dewpoint traces onto its backing pixmap, the -10 to -30 °C layer
+    is marked by a shaded band or a native bracket (when `draw_fill` is false).
+    Both use the widget's own
     pressure->pixel transform (``originy + pres_to_pix(p) / scale`` -- the same
     composition the vendored widget applies to every plotted level) and its plot
     rectangle (``tlx/tly/brx/bry``). The overlay draws nothing when
@@ -127,6 +126,10 @@ def attach_hgz_overlay(
         return False
     if profile is not None:
         skewt._sharpmod_derived_profile = profile
+    draw_bracket = None
+    if not draw_fill:
+        with suppress(ImportError):
+            from sharpmod_rs import draw_fixed_hgz_layer as draw_bracket
 
     def _plot_rect():
         tlx = getattr(skewt, "tlx", None)
@@ -139,7 +142,7 @@ def attach_hgz_overlay(
         # When the omega meter is drawn it sits at the cold (left) end of the
         # skew-T (~-49..-41 C at 1000 mb). Start the HGZ band to the right of it
         # so the translucent fill does not wash out the omega bars.
-        if getattr(skewt, "plot_omega", False):
+        if draw_bracket is None and getattr(skewt, "plot_omega", False):
             try:
                 omega_right = skewt.tmpc_to_pix(-39, 1000)
                 if omega_right == omega_right:  # NaN guard
@@ -168,11 +171,17 @@ def attach_hgz_overlay(
                 qp = QtGui.QPainter()
                 qp.begin(bitmap)
                 try:
-                    draw_hgz_overlay(
-                        qp, prof, rect, _transform,
-                        fill_color=fill_color, edge_color=edge_color,
-                        draw_fill=draw_fill,
-                    )
+                    if draw_bracket is None:
+                        draw_hgz_overlay(
+                            qp, prof, rect, _transform,
+                            fill_color=fill_color, edge_color=edge_color,
+                            draw_fill=draw_fill,
+                        )
+                    else:
+                        draw_bracket(
+                            skewt, qp, rect, HGZOverlay(rect, _transform).band_pixels(prof),
+                            edge_color,
+                        )
                 finally:
                     qp.end()
         except Exception:
@@ -186,10 +195,10 @@ def attach_hgz_overlay(
 
 
 def attach_thermal_levels(skewt):
-    """Keep temperature levels, wet-bulb zero and growth zone on every panel.
+    """Keep temperature levels and the growth zone on every Severe panel.
 
     Use the native non-winter pass for the blue 0/-20/-30 degree markers and
-    lapse-rate layer, then add the growth zone and wet-bulb zero. The blue 0 C
+    lapse-rate layer, then add the growth zone. The blue 0 C
     marker already labels the freezing level, so skip the winter branch's
     duplicate FRZ label.
 
@@ -203,8 +212,8 @@ def attach_thermal_levels(skewt):
     if not callable(original_plot_data):
         return False
 
-    def _draw_growth_zone_and_levels(qp, prof):
-        """Draw the growth zone and wet-bulb zero without a duplicate FRZ."""
+    def _draw_growth_zone(qp, prof):
+        """Draw the dendritic growth trace and its boundary ticks."""
         import numpy as np
 
         import sharppy.sharptab as tab
@@ -228,14 +237,6 @@ def attach_thermal_levels(skewt):
                         qp, plevel=level,
                         color=QtGui.QColor(_api._DGZ_TICK_COLOR))
 
-        # Drawn even when there is no growth zone, which is the other half of the
-        # repair: the vendored code skipped the whole block in that case, so a
-        # sounding with no -12 to -17 layer lost its wet-bulb zero as well.
-        with suppress(Exception):
-            skewt.draw_sig_levels(
-                qp, plevel=tab.params.temp_lvl(prof, 0, wetbulb=True),
-                color=QtGui.QColor(skewt.dewp_color), var_id="WBZ=")
-
     def _wrapped_plot_data(*args, **kwargs):
         plotdgz = getattr(skewt, "plotdgz", False)
         try:
@@ -256,7 +257,7 @@ def attach_thermal_levels(skewt):
                     qp.setClipRect(clip)
                 qp.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
                 qp.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing)
-                _draw_growth_zone_and_levels(qp, prof)
+                _draw_growth_zone(qp, prof)
             finally:
                 qp.end()
         except Exception:

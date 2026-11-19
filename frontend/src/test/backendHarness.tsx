@@ -36,6 +36,7 @@ export function scriptedTransport(replies: Partial<Record<CommandName, ScriptedR
   calls: (command: CommandName) => number;
 } {
   const counts: Record<CommandName, number> = {
+    retain_soundings: 0,
     get_sounding_snapshot: 0,
     restore_sounding_snapshot: 0,
     get_cached_forecast_hours: 0,

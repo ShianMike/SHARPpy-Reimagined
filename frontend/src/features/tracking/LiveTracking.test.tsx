@@ -169,6 +169,7 @@ it("plays loaded history, pauses on stepping, and stops at the end without loopi
   useUiStore.setState({ speed: 1, loop: false });
   const { view, queryClient } = renderWithBackend(<LiveTimeline />, transportWithRadar());
   fireEvent.click(screen.getByRole("button", { name: "Play" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
   expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 60 * LIVE_MINUTE);
   await act(async () => { await vi.advanceTimersByTimeAsync(751); });
   expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 55 * LIVE_MINUTE);

@@ -6,7 +6,9 @@ import { useSoundingStore } from "../../stores/soundingStore";
 import { compactUtc, forecastLabel } from "./soundingTime";
 import { INITIAL_VIEW } from "./viewHistory";
 
-export interface SoundingFrameChoice { value: number; label: string }
+export const SOUNDING_ANIMATION_FRAME_LIMIT = 12;
+
+export interface SoundingFrameChoice { value: number; label: string; timeLabel?: string }
 export interface SoundingAnimationProgress { phase: "loading" | "scaling" | "rendering" | "encoding"; done: number; total: number }
 export interface PreparedSoundings { frames: AnimationFrame[]; width: number; height: number }
 export interface SoundingAnimationOptions {
@@ -20,16 +22,22 @@ export function soundingFrameChoices(summary: SoundingSummary, model: ForecastMo
     const limit = model.maxForecastHours[new Date(summary.runTime).getUTCHours()] ?? 0;
     return model.forecastHours.filter((hour) => hour <= limit).map((value) => ({ value, label: forecastLabel(value) }));
   }
-  return summary.timeCount < 2 ? [] : Array.from({ length: summary.timeCount }, (_, value) => ({
-    value, label: summary.times?.[value] == null ? `Profile ${String(value + 1)}` : `${String(value + 1)} · ${compactUtc(summary.times[value])} UTC`,
-  }));
+  return summary.timeCount < 2 ? [] : Array.from({ length: summary.timeCount }, (_, value) => {
+    const time = summary.times?.[value];
+    const profile = String(value + 1);
+    if (time == null) return { value, label: `Profile ${profile}` };
+    const timeLabel = `${compactUtc(time)} UTC`;
+    return { value, label: `${profile} · ${timeLabel}`, timeLabel };
+  });
 }
 
 /** Source profiles are prepared first; both plots then use one fixed extent. */
 export async function prepareSoundingAnimation(options: SoundingAnimationOptions, client: BackendClient,
   signal: AbortSignal, progress: (state: SoundingAnimationProgress) => void): Promise<PreparedSoundings> {
   signal.throwIfAborted();
-  if (options.selected.length < 2 || options.selected.length > 12) throw new Error("Choose between 2 and 12 sounding frames.");
+  if (options.selected.length < 2 || options.selected.length > SOUNDING_ANIMATION_FRAME_LIMIT) {
+    throw new Error(`Choose between 2 and ${String(SOUNDING_ANIMATION_FRAME_LIMIT)} sounding frames.`);
+  }
   const { summary } = options;
   const available = soundingFrameChoices(summary, options.model);
   if (!options.selected.every((item) => available.some((choice) => choice.value === item.value)))
@@ -38,13 +46,11 @@ export async function prepareSoundingAnimation(options: SoundingAnimationOptions
   const report = (phase: SoundingAnimationProgress["phase"], done: number): void => { progress({ phase, done, total: options.selected.length }); };
   report("loading", 0);
   const open = useSoundingStore.getState().open;
-  // The backend keeps 24 entries: retain the 12 visible profiles before adding
-  // at most 12 animation sources, without changing the user's open list.
+  // Confirm retention before adding animation sources; this protects visible
+  // profiles without requesting their scientific analyses or changing the list.
   if (summary.kind === "model") {
-    for (const item of open) {
-      await client.getSoundingAnalysis(item.soundingId, signal);
-      signal.throwIfAborted();
-    }
+    await client.retainSoundings(open.map(item => item.soundingId));
+    signal.throwIfAborted();
   }
   for (const [index, item] of options.selected.entries()) {
     signal.throwIfAborted();

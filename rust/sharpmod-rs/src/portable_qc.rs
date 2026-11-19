@@ -9,7 +9,7 @@ use pyo3::{
 };
 
 #[pyfunction]
-fn portable_profile_issues<'py>(
+pub(crate) fn portable_profile_issues<'py>(
     py: Python<'py>,
     columns: &Bound<'py, PyDict>,
 ) -> PyResult<Bound<'py, PyTuple>> {

@@ -1,7 +1,7 @@
 import { deckLayers, nextFrames, projectPoint, waitForMapDrawn } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
-import { boxOf, hoverAt, layerRow, overlapArea, turnOn } from "./support/ui";
+import { boxOf, hoverAt, layerRow, layerSettings, overlapArea, turnOn } from "./support/ui";
 import { expect, test } from "./support/test";
 
 test("radar site labels toggle and persist on the flat live map", async ({ page, consoleMessages }) => {
@@ -98,7 +98,7 @@ test("Storm reports expose live filters and render beside the other live layers"
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Live Tracking", exact: true }).click();
   await waitForMapDrawn(page);
   await turnOn(page, "storm-reports");
-  const reports = page.getByTestId("layer-row-storm-reports");
+  const reports = await layerSettings(page, "storm-reports");
   await expect(reports.getByRole("combobox", { name: "Event window", exact: true })).toBeVisible();
   await expect(reports.getByRole("combobox", { name: "Hazard", exact: true })).toBeVisible();
   await expect(reports).toContainText("NWS Local Storm Reports");
@@ -142,7 +142,7 @@ test("Live Tracking has independent layers, a past-hour clock, and a session cac
   await reflectivity.press("End");
   await expect(firstScale.getByRole("tooltip")).toHaveText("72.5 dBZ");
   await reflectivity.press("Tab");
-  const radar = await layerRow(page, "radar");
+  const radar = await layerSettings(page, "radar");
   await expect(page.getByRole("button", { name: "Show point details", exact: true })).toHaveCount(0);
   await expect(radar.getByTestId("radar-shown")).toBeVisible();
   await expect(page.getByTestId("layer-row-model-field")).toHaveCount(0);
@@ -162,6 +162,7 @@ test("Live Tracking has independent layers, a past-hour clock, and a session cac
   await radarTime.getByRole("button", { name: "Close radar time" }).click();
   await page.clock.pauseAt(new Date("2026-10-04T21:00:01Z"));
   await page.getByRole("button", { name: "Play", exact: true }).press("Enter");
+  await expect(time).toHaveValue("-60");
   await page.clock.fastForward(750);
   await expect.poll(async () => Number(await time.inputValue())).toBeGreaterThan(-60);
   await page.getByRole("button", { name: "Pause", exact: true }).press("Enter");
@@ -187,7 +188,7 @@ test("single-site radar controls follow the active live panel and its scale", as
   await waitForMapDrawn(page);
   await page.getByRole("button", { name: "Four synchronized panels", exact: true }).click();
   await expect(page.getByTestId("panel-chip-4")).toBeVisible();
-  const radar = await layerRow(page, "radar");
+  const radar = await layerSettings(page, "radar");
   const liveRadar = page.getByRole("group", { name: "Live radar", exact: true });
   const firstScale = page.getByTestId("map-panel-1").getByTestId("radar-scale");
   await liveRadar.getByRole("combobox", { name: "Site", exact: true }).click();
@@ -225,12 +226,10 @@ test("single-site radar controls follow the active live panel and its scale", as
   await expect(scale.getByRole("tooltip")).toHaveText("173.8 kt");
   await expect(scale.getByRole("button", { name: "Radar layer" })).toHaveAttribute("aria-pressed", "true");
   await scale.getByRole("button", { name: "Radar layer" }).click();
-  await layerRow(page, "radar");
-  await expect(radar.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+  await expect((await layerRow(page, "radar")).getByRole("switch")).toHaveAttribute("aria-checked", "false");
   await page.getByRole("button", { name: "Close layers", exact: true }).click();
   await scale.getByRole("button", { name: "Radar layer" }).click();
-  await layerRow(page, "radar");
-  await expect(radar.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+  await expect((await layerRow(page, "radar")).getByRole("switch")).toHaveAttribute("aria-checked", "true");
   expect(overlapArea(await boxOf(page.getByTestId("live-timeline")), await boxOf(page.getByRole("dialog", { name: "Layers", exact: true })))).toBe(0);
   await nextFrames(page);
   await saveScreenshot(page, "browser-live-tracking.png");

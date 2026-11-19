@@ -53,6 +53,19 @@ it("validates persisted workspace settings and ignores transient navigation stat
   expect(useUiStore.persist.getOptions().partialize?.(useUiStore.getState())).toMatchObject({ popupPositions: { model: { x: 150, y: 230 } } });
 });
 
+it.each([3, 4])("restores %s times playback after a fresh UI session", async (speed) => {
+  const storage = useUiStore.persist.getOptions().storage;
+  if (storage === undefined) throw new Error("UI preferences require storage");
+  useUiStore.getState().setSpeed(speed);
+  const saved = await storage.getItem("sharppy-workspace-ui");
+  expect(saved?.state).toMatchObject({ speed });
+  useUiStore.setState({ speed: 1 });
+  if (saved === null) throw new Error("Playback preferences were not saved");
+  await storage.setItem("sharppy-workspace-ui", saved);
+  await useUiStore.persist.rehydrate();
+  expect(useUiStore.getState().speed).toBe(speed);
+});
+
 it("follows the system theme and stops following when a theme is chosen", () => {
   const listeners = new Set<() => void>();
   const media = { matches: true, addEventListener: (_: string, listener: () => void) => { listeners.add(listener); }, removeEventListener: (_: string, listener: () => void) => { listeners.delete(listener); } };

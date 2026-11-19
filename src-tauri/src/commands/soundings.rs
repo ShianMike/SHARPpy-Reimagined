@@ -13,6 +13,14 @@ use crate::error::BackendError;
 use crate::state::AppState;
 
 #[tauri::command]
+pub async fn retain_soundings(
+    state: tauri::State<'_, AppState>,
+    sounding_ids: Vec<String>,
+) -> Result<serde_json::Value, BackendError> {
+    state.router.retain_soundings(&sounding_ids).await
+}
+
+#[tauri::command]
 pub async fn get_sounding_snapshot(
     state: tauri::State<'_, AppState>,
     sounding_id: String,

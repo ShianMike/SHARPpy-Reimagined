@@ -626,6 +626,9 @@ def _layer_from_native(payload: dict[str, Any]) -> OverlayLayer:
         source_url=payload["source_url"],
         attribution=payload["attribution"],
         bounds=tuple(float(v) for v in raw_bounds) if raw_bounds else None,
+        affected_states=(
+            tuple(payload["affected_states"]) if "affected_states" in payload else None
+        ),
     )
 
 

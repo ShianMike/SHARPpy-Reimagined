@@ -7,7 +7,7 @@
 import { camera, deckLayers, nextFrames, waitForMapDrawn } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
-import { chooseThroughSearch, hoverAt, layerRow, turnOn } from "./support/ui";
+import { chooseThroughSearch, hoverAt, layerRow, layerSettings, turnOn } from "./support/ui";
 import { expect, test } from "./support/test";
 
 test("surface observations: the station models around the selection", async ({ page, consoleMessages }) => {
@@ -15,7 +15,7 @@ test("surface observations: the station models around the selection", async ({ p
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await turnOn(page, "surface-plots");
-  const row = await layerRow(page, "surface-plots");
+  const row = await layerSettings(page, "surface-plots");
   // Live observations start around the map centre before a location is selected.
   await expect(row.getByTestId("surface-shown")).toContainText("4 observations");
   await chooseThroughSearch(page, "72357");

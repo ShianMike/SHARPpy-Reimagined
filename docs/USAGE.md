@@ -1,6 +1,6 @@
 # SHARPpy Reimagined Usage Guide
 
-This guide describes the **v3.8.4 desktop interface** and the
+This guide describes the **v3.8.5 desktop interface** and the
 command-line tools. For installation, see the [README](../README.md#get-started)
 and [dependency reference](../installation.txt). The previous Qt interface has
 its own [v2.0.0 Legacy guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/USAGE.md).
@@ -75,7 +75,7 @@ and portable copies that you downloaded elsewhere remain under your control.
 If cleanup is blocked by a running process or an unsafe linked directory, close
 the app, check the installation folder and run the installer again.
 
-In v3.8.4, wait for **Recovery copy saved on this device**
+Wait for **Recovery copy saved on this device**
 before closing or updating if you want to restore completed sounding work.
 Unapplied editor inputs and unfinished recalculations are not included.
 
@@ -386,12 +386,11 @@ NetCDF backend. The CLI equivalent is [`wrf-extract`](#4-wrf-arw-model-output-wr
 
 The viewer displays the native Skew-T, hodograph, and scientific panels. When
 the sounding location is visible in Model Viewer, the image can include a
-locator captured from that map. It retains the OpenStreetMap-based basemap,
-displayed layers, location marker and parameter scale. The locator shows a
-4× closer crop around the sounding point. The map fills the inset
-without tiny title/time or attribution bands. The locator also appears in saved
-and copied sounding PNGs.
-Hidden model fields produce a basemap locator without a parameter legend.
+locator captured from that map. It uses the OpenStreetMap-based basemap and
+displayed layers, with a point marker, a border and a place name in the header.
+The 6.4× crop is centered near the sounding point. The locator also appears
+in saved and copied sounding PNGs. Hidden model fields produce a basemap
+locator.
 Mismatched model runs or valid times, off-screen locations and unavailable map
 captures leave the original sounding image usable. Live Tracking locators are
 not included.
@@ -449,7 +448,7 @@ for links and the distinction between research context and implemented methods.
 Opening a file and rendering its image are separate operations. The first image
 can take longer while the render worker starts.
 
-#### Recovering a sounding session (v3.8.4)
+#### Recovering a sounding session
 
 Open soundings are saved automatically on this device. After an accidental exit,
 Alt+F4 or a normal close, reopening offers **Restore previous session**. This

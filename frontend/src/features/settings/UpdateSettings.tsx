@@ -34,8 +34,8 @@ export function UpdateSettings(): ReactNode {
       </>} /> : <div className={styles.updateStatus}>
       <div className={styles.updateMessage} role="status">
         <p className={styles.updateTitle}>{title}</p>
-        <p>{!desktop ? "Check for updates in the installed Windows app." : (update === null
-          ? "New releases are installed only when you choose."
+        <p>{!desktop ? "The Windows app checks at 00:00 and 12:00 UTC, or when next opened online. You choose when to install." : (update === null
+          ? "Checks at 00:00 and 12:00 UTC, or when next opened online. You choose when to install."
           : "Updating keeps saved preferences and disk caches. Saved sounding recovery copies can be restored after reopening. Let recovery finish saving and review unfinished edits before installing.")}</p>
       </div>
       <div className={styles.updateActions}>
@@ -43,7 +43,6 @@ export function UpdateSettings(): ReactNode {
         {update === null ? null : <Action tone="accent" disabled={!desktop || busy} onClick={install}>Install update</Action>}
       </div>
     </div>}
-    <p className={styles.updateSchedule}>Automatic checks run at 00:00 and 12:00 UTC, once per window on this device. If the app is closed or offline, it checks when next available. You can check manually anytime and choose when to install.</p>
     {status === "downloading" ? <div className={styles.updateProgress}>
       <progress aria-label="Update download" value={total === undefined ? undefined : downloaded} max={total ?? 1} />
       {total === undefined ? null : <span>{Math.min(100, Math.floor(downloaded / total * 100))}%</span>}

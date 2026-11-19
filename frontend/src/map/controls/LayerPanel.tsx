@@ -1,8 +1,8 @@
 // Enabled weather layers lead in their draw order; the remaining layers can
 // be added below. Settings and live provider controls edit the active panel.
 
-import { CloudSun, EyeOff, List, Map as MapIcon } from "lucide-react";
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { ArrowLeft, CloudSun, EyeOff, List, Map as MapIcon, Settings2, X } from "lucide-react";
+import { useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useForecastContext } from "../../features/forecast/useForecast";
 import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { compactUtc, formatUtc, forecastLabel } from "../../features/sounding/soundingTime";
@@ -21,6 +21,7 @@ import { WeatherLegend } from "./WeatherLegend";
 import { DomainStatus, OutlookStatus, PlaceStatus, RadarControls, SatelliteControls } from "./OverlayControls";
 import { ReportControls } from "./ReportControls";
 import { SurfacePlotControls } from "./SurfacePlotControls";
+import { OpacityControl } from "./OpacityControl";
 import styles from "./LayerPanel.module.css";
 
 export interface LayerPanelProps {
@@ -69,6 +70,9 @@ function WeatherExtra({ id, panel }: { id: OrderableLayerId; panel: number }): R
 }
 
 export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
+  const [expandedWeather, setExpandedWeather] = useState<{ panel: number; id: OrderableLayerId } | null>(null);
+  const root = useRef<HTMLElement>(null);
+  const editorId = useId();
   const group = useMapStore((state) => state.layerPanelGroup);
   const projection = useMapStore(mapProjection);
   const live = useMapStore((state) => state.view === "live");
@@ -85,9 +89,15 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
   const topFirst = [...order].reverse().filter((id) => ORDERABLE.has(id) && layerInView(id, live ? "live" : "map"));
   const active = topFirst.filter((id) => states[id].visible);
   const available = topFirst.filter((id) => !states[id].visible);
+  const selectedId = expandedWeather?.panel === panel && active.includes(expandedWeather.id) ? expandedWeather.id : null;
+  const selectedLayer = selectedId === null ? undefined : descriptor(selectedId);
+  const closeEditor = (id: OrderableLayerId): void => {
+    setExpandedWeather(null);
+    requestAnimationFrame(() => { root.current?.querySelector<HTMLElement>(`[data-testid="layer-row-${id}"] [aria-expanded]`)?.focus(); });
+  };
 
   return (
-    <section aria-label={layout === 1 ? "Layers" : `Layers, panel ${String(panel + 1)}`} className={styles.panel} data-testid="layer-panel">
+    <section ref={root} aria-label={layout === 1 ? "Layers" : `Layers, panel ${String(panel + 1)}`} className={styles.panel} data-testid="layer-panel">
       <div className={styles.context}>
         <div className={styles.contextHeading}>
           <strong>{live ? "Live Tracking" : context === null ? "Weather overlays" : `${context.model.label} ${forecastLabel(context.hour)}`}</strong>
@@ -113,20 +123,24 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
         </div>
       </div>
       <div className={styles.body}>
-        {group !== "weather" ? null : <div className={styles.weatherLayout} data-motion="fade">
+        {group !== "weather" ? null : <div className={styles.weatherLayout} data-motion="fade" data-editing={selectedLayer !== undefined}>
+          <div className={styles.layerStack}>
           <section className={styles.layerColumn} aria-label="Active weather layers">
           <div className={styles.stackHeading}><h3 className={styles.group}>On map <span>{active.length} · top first</span></h3>
             <IconAction icon={EyeOff} size="sm" label="Hide all weather layers" disabled={active.length === 0}
-              onClick={() => { for (const id of active) useMapStore.getState().setLayerVisible(id, false); }} />
+              onClick={() => { setExpandedWeather(null); for (const id of active) useMapStore.getState().setLayerVisible(id, false); }} />
           </div>
           <div className={styles.layerList}>
           {active.length === 0 ? <p className={styles.hint}>Choose a layer from Add layers.</p> : null}
           {active.map((id, index) => {
             const layer = descriptor(id);
             return layer === undefined ? null : (
-                <LayerRow key={id} layer={layer} state={states[id]} order={{ id, fromTop: index, count: active.length }}>
-                  <WeatherExtra id={id} panel={panel} />
-                </LayerRow>
+                <LayerRow key={id} layer={layer} state={states[id]} order={{ id, fromTop: index, count: active.length }}
+                  disclosure={{ targetId: editorId, expanded: selectedId === id, onChange: (expanded) => {
+                    const trigger = document.activeElement;
+                    setExpandedWeather((current) => expanded ? { panel, id } : current?.panel === panel && current.id === id ? null : current);
+                    if (expanded) requestAnimationFrame(() => { if (document.activeElement === trigger) document.getElementById(`${editorId}-heading`)?.focus(); });
+                  } }} />
             );
           })}
           </div></section>
@@ -136,6 +150,20 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
               const layer = descriptor(id);
               return layer === undefined ? null : <LayerRow key={id} layer={layer} state={states[id]} />;
             })}{available.length === 0 ? <p className={styles.hint}>All weather layers are on the map.</p> : null}</div>
+          </section>
+          </div>
+          <section id={editorId} className={styles.layerEditor} aria-label="Layer settings">
+            {selectedLayer === undefined || selectedId === null ? <div className={styles.editorEmpty}><Settings2 className="icon" aria-hidden="true" /><h3>Choose a layer</h3><p>Select an on-map layer to adjust its settings.</p></div> : <>
+              <header className={styles.editorHeading}>
+                <Action className={styles.editorBack} onClick={() => { closeEditor(selectedId); }}><ArrowLeft className="icon-sm" aria-hidden="true" />Layers</Action>
+                <h3 id={`${editorId}-heading`} tabIndex={-1}>{selectedLayer.label}</h3>
+                <IconAction className={styles.editorClose} icon={X} size="sm" label="Close layer settings" onClick={() => { closeEditor(selectedId); }} />
+              </header>
+              <div className={styles.editorBody} data-testid={`layer-settings-${selectedId}`}>
+                {selectedLayer.opacityControl ? <OpacityControl label={`${selectedLayer.label} opacity`} value={states[selectedId].opacity} onChange={(opacity) => { useMapStore.getState().setLayerOpacity(selectedId, opacity); }} /> : null}
+                <WeatherExtra id={selectedId} panel={panel} />
+              </div>
+            </>}
           </section>
         </div>}
         {group !== "legend" ? null : <div className={styles.scrollBody} data-motion="fade"><WeatherLegend active={active} panel={panel} availabilities={availabilities} /></div>}
@@ -160,7 +188,7 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
       <footer className={styles.footer}>
         <span role="status" aria-label="Layer settings status">{reset ? live ? "Live layers reset" : "Layers reset · all panels" : "Saves automatically"}</span>
         <Action title={live ? "Reset live layers and weather options." : "Reset layers, projection and weather options in all panels. Keep the layout, parameters and map location."}
-          onClick={() => { resetLayerSettings(); setReset(true); }}>Reset layers</Action>
+          onClick={() => { setExpandedWeather(null); resetLayerSettings(); setReset(true); }}>Reset layers</Action>
       </footer>
     </section>
   );

@@ -1,17 +1,18 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { BackendClient } from "../../lib/backend/client";
-import { mapKeys } from "../../lib/backend/queryOptions";
-import { fieldQueryOptions, reportQueryOptions, outlookQueryOptions, type FrameRequest } from "../../map/mapQueries";
+import { fieldQueryOptions, type FrameRequest } from "../../map/mapQueries";
+import { mapCatalogQueryOptions } from "../../map/catalogQuery";
 import { contourQueryOptions } from "../../map/contourQueries";
+import { forecastOverlayLoads } from "../../map/forecastOverlayLoads";
+import { fieldAuxiliaries } from "../../map/panelField";
 import { prepareFieldImage } from "../../map/fieldImages";
 import { buildLut } from "../../map/field/colourize";
 import { queryFrame } from "../../map/queryFrame";
 import { mapCaptureSources } from "../../map/runtime/mapCapture";
 import { useForecastStore } from "../../stores/forecastStore";
-import { panelLayers, panelReports, useMapStore } from "../../stores/mapStore";
+import { panelLayers, panelProduct, panelReports, useMapStore } from "../../stores/mapStore";
 import type { ForecastContext } from "../forecast/useForecast";
-import { OUTLOOK_KEYS, type FieldProduct } from "../../types/map";
-import { addHours } from "../sounding/soundingTime";
+import type { FieldProduct } from "../../types/map";
 import { encodeAnimation, type AnimationFrame } from "../animation/encodeAnimation";
 import { composeForecast, type ForecastComposition } from "./forecastComposition";
 export interface ForecastExportOptions extends ForecastComposition {
@@ -71,26 +72,20 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
             });
         }
     };
-    const load = async (part: typeof panels[number], hour: number, loadSignal = signal) => {
+    const load = async (part: typeof panels[number], hour: number, loadSignal = signal, keepUntil?: AbortSignal) => {
         const request: FrameRequest = { model: options.context.model.key, product: part.product.key, runTime: options.run, forecastHour: hour };
-        const catalog = await queryFrame(queryClient, { queryKey: mapKeys.catalog(request.model, request.runTime, hour),
-            queryFn: () => client.getMapCatalog(request.model, request.runTime, hour), staleTime: 10 * 60000 }, loadSignal);
-        if (!catalog.products.some(p => p.key === part.product.key) || hour < part.product.minimumForecastHour)
+        const catalog = await queryFrame(queryClient, mapCatalogQueryOptions(client, request.model, request.runTime, hour), loadSignal, { keepUntil });
+        const product = catalog.products.find(p => p.key === part.product.key);
+        if (catalog.fieldModel !== request.model || product === undefined || hour < product.minimumForecastHour)
             throw new Error(`Panel ${String(part.panel + 1)} does not offer ${part.product.label} at F${String(hour).padStart(3, "0")}.`);
-        const [frame] = await Promise.all([queryFrame(queryClient, fieldQueryOptions(client, queryClient, request), loadSignal),
-            ...(part.product.contour !== null || part.product.wind ? [queryFrame(queryClient, contourQueryOptions(client, queryClient, request), loadSignal)] : [])]);
-        const layers = panelLayers(originalMap, part.panel), reports = panelReports(originalMap, part.panel);
-        const validTime = addHours(options.run, hour);
-        const overlays: Promise<unknown>[] = OUTLOOK_KEYS.filter(key => layers[`spc-${key}`].visible)
-            .map(key => queryFrame(queryClient, outlookQueryOptions(client, key, validTime), loadSignal));
-        if (layers["storm-reports"].visible) overlays.push(queryFrame(queryClient,
-            reportQueryOptions(client, validTime, reports.reportWindowS, reports.reportFilter), loadSignal));
-        if (layers.isobars.visible) {
-            if (!catalog.products.some(product => product.key === "mslp"))
-                throw new Error(`Panel ${String(part.panel + 1)} cannot load its enabled isobars at F${String(hour).padStart(3, "0")}.`);
-            overlays.push(queryFrame(queryClient, contourQueryOptions(client, queryClient, { ...request, product: "mslp" }), loadSignal));
-        }
-        await Promise.all(overlays);
+        const pressureAvailable = catalog.products.some(product => product.key === "mslp");
+        if (panelLayers(originalMap, part.panel).isobars.visible && !pressureAvailable)
+            throw new Error(`Panel ${String(part.panel + 1)} cannot load its enabled isobars at F${String(hour).padStart(3, "0")}.`);
+        const [frame] = await Promise.all([
+            queryFrame(queryClient, fieldQueryOptions(client, queryClient, request), loadSignal, { keepUntil }),
+            ...(fieldAuxiliaries(product) ? [queryFrame(queryClient, contourQueryOptions(client, queryClient, request), loadSignal, { keepUntil })] : []),
+            ...forecastOverlayLoads(client, queryClient, originalMap, part.panel, request, pressureAvailable, loadSignal, keepUntil),
+        ]);
         return { request, frame };
     };
     const frames: AnimationFrame[] = [];
@@ -106,6 +101,21 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
     useForecastStore.setState({ playing: false, exporting: true });
     smooth(false);
     const captureState = useMapStore.getState();
+    let displayedHour = original.forecastHour;
+    const checkSelection = (): void => {
+        signal.throwIfAborted();
+        const forecast = useForecastStore.getState(), mapState = useMapStore.getState();
+        if (forecast.modelKey !== original.modelKey || forecast.runTime !== original.runTime || forecast.forecastHour !== displayedHour)
+            throw new Error("The selected forecast changed during export. Try again.");
+        if (mapState.panelLayout !== captureState.panelLayout || mapState.view !== captureState.view)
+            throw new Error("The map layout changed during export. Try again.");
+        if (mapState.layerOrder !== captureState.layerOrder || panels.some(({ panel }) =>
+            panelLayers(mapState, panel) !== panelLayers(captureState, panel)
+            || panelProduct(mapState, panel) !== panelProduct(captureState, panel)
+            || panelReports(mapState, panel).reportFilter !== panelReports(captureState, panel).reportFilter
+            || panelReports(mapState, panel).reportWindowS !== panelReports(captureState, panel).reportWindowS))
+            throw new Error("The map products, layers or storm-report settings changed during export. Try again.");
+    };
     try {
         const pending = options.hours.flatMap(hour => panels.map(part => ({ part, hour })));
         let next = 0, loaded = 0;
@@ -131,44 +141,45 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
         failed.signal.throwIfAborted();
         signal.throwIfAborted();
         for (const [index, hour] of options.hours.entries()) {
-            signal.throwIfAborted();
-            const mapState = useMapStore.getState();
-            if (mapState.panelLayout !== originalMap.panelLayout || mapState.view !== originalMap.view)
-                throw new Error("The map layout changed during export. Try again.");
-            if (panels.some(part => panelLayers(mapState, part.panel) !== panelLayers(captureState, part.panel)
-                || panelReports(mapState, part.panel).reportFilter !== panelReports(captureState, part.panel).reportFilter
-                || panelReports(mapState, part.panel).reportWindowS !== panelReports(captureState, part.panel).reportWindowS))
-                throw new Error("The map layers or storm-report settings changed during export. Try again.");
-            const loaded: Awaited<ReturnType<typeof load>>[] = [];
-            for (const part of panels) {
-                const item = await load(part, hour);
-                await prepareFieldImage(item.frame, part.product.palette, true, signal);
-                loaded.push(item);
-            }
-            if (loaded.some(item => item.frame.validTime !== loaded[0]?.frame.validTime))
-                throw new Error("The selected panels do not have the same valid time.");
-            useForecastStore.getState().setHour(hour);
-            progress({ phase: "capturing", done: index, total: options.hours.length, hour });
-            for (const [i, part] of panels.entries()) {
-                if (mapCaptureSources.get(part.panel) !== sources[i])
-                    throw new Error("A map changed during export. Try again.");
-                const item = loaded[i], source = sources[i];
-                if (item === undefined || source === undefined)
-                    throw new Error("A selected panel is unavailable.");
-                const map = await source.captureFrame(item.request, signal, { width: cellWidth, height: cellHeight });
-                const cell = document.createElement("canvas");
-                try {
-                    composeForecast(cell, { map, frame: { forecastHour: hour, validTime: item.frame.validTime, attribution: item.frame.attribution,
-                            ...(source.attribution === undefined ? {} : { basemapAttribution: source.attribution() }) } }, { ...options, width: cellWidth, height: cellHeight, product: part.product });
-                    context.drawImage(cell, (i % columns) * cellWidth, Math.floor(i / columns) * cellHeight, cellWidth, cellHeight);
+            checkSelection();
+            const hold = new AbortController();
+            const loadSignal = AbortSignal.any([signal, hold.signal]);
+            try {
+                const loaded: Awaited<ReturnType<typeof load>>[] = [];
+                for (const part of panels) {
+                    const item = await load(part, hour, loadSignal, loadSignal);
+                    await prepareFieldImage(item.frame, part.product.palette, true, loadSignal);
+                    loaded.push(item);
                 }
-                finally {
-                    map.width = 0;
-                    map.height = 0;
-                    cell.width = 0;
-                    cell.height = 0;
+                checkSelection();
+                if (loaded.some(item => item.frame.validTime !== loaded[0]?.frame.validTime))
+                    throw new Error("The selected panels do not have the same valid time.");
+                displayedHour = hour;
+                useForecastStore.getState().setHour(hour);
+                progress({ phase: "capturing", done: index, total: options.hours.length, hour });
+                for (const [i, part] of panels.entries()) {
+                    if (mapCaptureSources.get(part.panel) !== sources[i])
+                        throw new Error("A map changed during export. Try again.");
+                    const item = loaded[i], source = sources[i];
+                    if (item === undefined || source === undefined)
+                        throw new Error("A selected panel is unavailable.");
+                    const map = await source.captureFrame(item.request, loadSignal, { width: cellWidth, height: cellHeight });
+                    const cell = document.createElement("canvas");
+                    try {
+                        checkSelection();
+                        composeForecast(cell, { map, frame: { forecastHour: hour, validTime: item.frame.validTime, attribution: item.frame.attribution,
+                                ...(source.attribution === undefined ? {} : { basemapAttribution: source.attribution() }) } }, { ...options, width: cellWidth, height: cellHeight, product: part.product });
+                        context.drawImage(cell, (i % columns) * cellWidth, Math.floor(i / columns) * cellHeight, cellWidth, cellHeight);
+                    }
+                    finally {
+                        map.width = 0;
+                        map.height = 0;
+                        cell.width = 0;
+                        cell.height = 0;
+                    }
                 }
             }
+            finally { hold.abort(); }
             const png = await new Promise<Blob>((resolve, reject) => {
                 canvas.toBlob(blob => {
                     if (blob === null)
@@ -177,7 +188,7 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
                         resolve(blob);
                 }, "image/png");
             });
-            signal.throwIfAborted();
+            checkSelection();
             preview.width = options.width;
             preview.height = options.height;
             preview.getContext("2d")?.drawImage(canvas, 0, 0);
@@ -207,7 +218,7 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
         canvas.height = 0;
         smooth(true);
         const current = useForecastStore.getState();
-        useForecastStore.setState({ exporting: false, ...(current.modelKey === original.modelKey && current.runTime === original.runTime ?
+        useForecastStore.setState({ exporting: false, ...(current.modelKey === original.modelKey && current.runTime === original.runTime && current.forecastHour === displayedHour ?
                 { forecastHour: original.forecastHour, playing: false } : {}) });
     }
 }

@@ -1,6 +1,6 @@
 import { waitForMapDrawn } from "./support/app";
 import { saveScreenshot } from "./support/screenshots";
-import { layerRow, turnOn } from "./support/ui";
+import { layerRow, layerSettings, turnOn } from "./support/ui";
 import { expect, test } from "./support/test";
 
 test.use({ viewport: { width: 1920, height: 1080 } });
@@ -15,9 +15,10 @@ for (const theme of ["dark", "light"] as const) {
     const row = await layerRow(page, "isobars");
     await expect(row.getByRole("switch")).toHaveAttribute("aria-checked", "false");
     await turnOn(page, "isobars");
-    await expect(row.getByText(/Mean sea-level pressure · 4 hPa intervals/u)).toBeVisible();
-    await row.getByRole("slider", { name: "Isobars opacity", exact: true }).fill("0.55");
-    await expect(row.getByRole("slider", { name: "Isobars opacity", exact: true })).toHaveValue("0.55");
+    const settings = await layerSettings(page, "isobars");
+    await expect(settings.getByText(/Mean sea-level pressure · 4 hPa intervals/u)).toBeVisible();
+    await settings.getByRole("slider", { name: "Isobars opacity", exact: true }).fill("0.55");
+    await expect(settings.getByRole("slider", { name: "Isobars opacity", exact: true })).toHaveValue("0.55");
     await saveScreenshot(page, `isobars-controls-${theme}.png`);
     await page.getByRole("group", { name: "Layer categories" }).getByRole("button", { name: "Legend", exact: true }).click();
     const key = page.getByTestId("legend-isobars");

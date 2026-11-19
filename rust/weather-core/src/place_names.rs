@@ -91,12 +91,11 @@ struct PlaceRecord {
     land_area_sqmi: f64,
 }
 
-struct BoundaryPolygon {
-    min_lat: f64,
-    min_lon: f64,
-    max_lat: f64,
-    max_lon: f64,
-    points: Vec<(f64, f64)>,
+pub(crate) struct BoundaryPolygon {
+    pub state: u8,
+    /// West, east, south, north.
+    pub bounds: [f64; 4],
+    pub points: Vec<[f64; 2]>,
 }
 
 struct PlaceIndex {
@@ -121,7 +120,8 @@ fn load_index() -> PlaceIndex {
             continue;
         }
         if let Some(rest) = line.strip_prefix(BOUNDARY_PREFIX) {
-            if let Some((_, coords)) = rest.split_once('\t') {
+            if let Some((state, coords)) = rest.split_once('\t') {
+                let Ok(state) = state.parse() else { continue };
                 let mut points = Vec::new();
                 let mut valid = true;
                 for encoded in coords.split_whitespace() {
@@ -138,27 +138,22 @@ fn load_index() -> PlaceIndex {
                         valid = false;
                         break;
                     }
-                    points.push((lon, lat));
+                    points.push([lon, lat]);
                 }
                 if valid && points.len() >= 4 {
-                    if points.first() != points.last() {
-                        points.push(points[0]);
-                    }
                     let mut min_lat = f64::INFINITY;
                     let mut max_lat = f64::NEG_INFINITY;
                     let mut min_lon = f64::INFINITY;
                     let mut max_lon = f64::NEG_INFINITY;
-                    for &(lon, lat) in &points {
+                    for &[lon, lat] in &points {
                         min_lon = min_lon.min(lon);
                         max_lon = max_lon.max(lon);
                         min_lat = min_lat.min(lat);
                         max_lat = max_lat.max(lat);
                     }
                     boundaries.push(BoundaryPolygon {
-                        min_lat,
-                        min_lon,
-                        max_lat,
-                        max_lon,
+                        state,
+                        bounds: [min_lon, max_lon, min_lat, max_lat],
                         points,
                     });
                 }
@@ -272,6 +267,10 @@ pub fn place_labels() -> &'static [PlaceLabel] {
     &index().labels
 }
 
+pub(crate) fn conus_state_boundaries() -> &'static [BoundaryPolygon] {
+    &index().boundaries
+}
+
 pub fn place_labels_json() -> Result<String, String> {
     #[derive(serde::Serialize)]
     struct PlaceLabelsReply<'a> {
@@ -296,12 +295,12 @@ fn point_on_segment(x: f64, y: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> bool 
         && y <= y1.max(y2) + tolerance
 }
 
-fn point_in_polygon(lat: f64, lon: f64, points: &[(f64, f64)]) -> bool {
+fn point_in_polygon(lat: f64, lon: f64, points: &[[f64; 2]]) -> bool {
     let mut inside = false;
     let mut previous = *points.last().expect("nonempty boundary ring");
     for &current in points {
-        let (x1, y1) = previous;
-        let (x2, y2) = current;
+        let [x1, y1] = previous;
+        let [x2, y2] = current;
         if point_on_segment(lon, lat, x1, y1, x2, y2) {
             return true;
         }
@@ -325,11 +324,10 @@ pub fn is_conus_point(lat: f64, lon: f64) -> bool {
     if !(south..=north).contains(&lat) || !(west..=east).contains(&lon) {
         return false;
     }
-    index().boundaries.iter().any(|poly| {
-        lat >= poly.min_lat
-            && lat <= poly.max_lat
-            && lon >= poly.min_lon
-            && lon <= poly.max_lon
+    conus_state_boundaries().iter().any(|poly| {
+        let [west, east, south, north] = poly.bounds;
+        (south..=north).contains(&lat)
+            && (west..=east).contains(&lon)
             && point_in_polygon(lat, lon, &poly.points)
     })
 }

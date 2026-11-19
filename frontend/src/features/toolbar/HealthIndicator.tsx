@@ -1,13 +1,9 @@
-// The toolbar health indicator (DESIGN-frontend F8, DR6-5): a button with
-// aria-haspopup="dialog" and aria-expanded, showing a status dot and the C3
-// label, that opens HealthPopover. The label never shrinks or hides. The
-// popover gets the query result as props, so opening it adds no observer.
-
+import { Info } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { StatusDot } from "../../components/StatusDot";
 import { cx } from "../../lib/cx";
 import { useBackendHealth } from "../../lib/backend/BackendProvider";
 import { useRestartBackend } from "../../lib/backend/useRestartBackend";
+import { IconAction } from "../../ui/Controls";
 import { HealthPopover } from "./HealthPopover";
 import { healthView } from "./healthStatus";
 import styles from "./HealthIndicator.module.css";
@@ -25,20 +21,21 @@ export function HealthIndicator({ className }: HealthIndicatorProps): ReactNode 
 
   return (
     <>
-      <button
+      <IconAction
         ref={setAnchor}
-        type="button"
+        icon={Info}
+        label="Backend info"
+        size="sm"
         className={cx(styles.indicator, className)}
+        data-health-tone={view.tone}
+        data-testid="health-indicator"
         aria-haspopup="dialog"
         aria-expanded={open}
-        data-testid="health-indicator"
+        aria-description={view.tone === "success" ? undefined : view.label}
         onClick={() => {
           setOpen((value) => !value);
         }}
-      >
-        <StatusDot tone={view.tone} />
-        <span className={styles.label}>{view.label}</span>
-      </button>
+      />
       <HealthPopover
         open={open}
         anchor={anchor}

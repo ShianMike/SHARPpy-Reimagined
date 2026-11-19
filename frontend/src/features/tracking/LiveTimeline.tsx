@@ -1,6 +1,6 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { Radio, Repeat } from "lucide-react";
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../../lib/cx";
 import { LIVE_HISTORY_MINUTES, LIVE_MINUTE, liveHistoryTimes, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
@@ -25,7 +25,10 @@ export function LiveTimeline({ className, scanTarget }: { className?: string | u
   const previous = times.findLast((step) => step < time), next = times.find((step) => step > time);
   const queryClient = useQueryClient();
   const fetching = useIsFetching({ predicate: (query) => isLiveQuery(query.queryKey) && query.getObserversCount() > 0 });
-  const failed = queryClient.getQueryCache().findAll({ predicate: (query) => isLiveQuery(query.queryKey) && query.getObserversCount() > 0 && query.state.status === "error" }).length;
+  const failed = useSyncExternalStore(
+    useCallback((notify: () => void) => queryClient.getQueryCache().subscribe(notify), [queryClient]),
+    useCallback(() => queryClient.getQueryCache().findAll({ predicate: (query) => isLiveQuery(query.queryKey) && query.getObserversCount() > 0 && query.state.status === "error" }).length, [queryClient]),
+  );
   const history = useLiveHistory();
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -36,15 +39,12 @@ export function LiveTimeline({ className, scanTarget }: { className?: string | u
     tick();
     return () => { clearTimeout(timer); };
   }, []);
-  useEffect(() => { if (fetching === 0) trimLiveCache(queryClient); }, [fetching, queryClient]);
+  useEffect(() => { if (!playing && fetching === 0) trimLiveCache(queryClient); }, [playing, fetching, queryClient]);
   const status = failed > 0 ? `${String(failed)} layers unavailable · see Layers`
     : fetching > 0 || history.waiting ? "Fetching live data…"
     : "Past 60 minutes · session cache cleared on exit";
   const choose = (time: number | null): void => { setPlaying(false); selectTime(time); };
-  const toggle = (): void => {
-    if (!playing && (selectedTime === null || selectedTime >= now)) selectTime(times[0] ?? now);
-    setPlaying(!playing);
-  };
+  const toggle = (): void => { setPlaying(!playing); };
   return <Surface as="section" className={cx(styles.timeline, className)} aria-label="Live Tracking timeline" data-testid="live-timeline">
     {scanTarget == null ? null : createPortal(<RadarScanPicker onSelect={(frame) => { choose(frame >= now ? null : frame); }} />, scanTarget)}
     <MapInteractionControls />

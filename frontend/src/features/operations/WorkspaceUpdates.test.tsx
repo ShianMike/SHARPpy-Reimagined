@@ -72,7 +72,7 @@ it("keeps viewer and sounding navigation available during a failed forecast, the
       ? Promise.reject({ code: "CATALOG_UNAVAILABLE", message: "Forecast service unavailable", retryable: false, context: { operation: command } }) : base.call(command, args),
   });
   await screen.findByText("Forecast models unavailable", { exact: true });
-  expect(screen.getByText("Forecast service unavailable")).toBeTruthy();
+  expect(within(screen.getByTestId("overview-model-error")).getByText("Forecast service unavailable")).toBeTruthy();
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "Open Live Tracking" }));
   expect(useAppStore.getState().activeWorkspace).toBe("live");
@@ -98,8 +98,12 @@ it("keeps session errors visible in the activity summary and links to full logs"
   expect(summary?.closest("details")?.open).toBe(true);
   await user.click(screen.getByRole("button", { name: "View logs" }));
   expect(useAppStore.getState().activeWorkspace).toBe("status");
-  await user.click(screen.getByRole("button", { name: "Open Settings" }));
-  expect(useAppStore.getState().activeWorkspace).toBe("settings");
+  expect(screen.getByText("Support SHARPpy Reimagined with a star on GitHub.")).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Star the Repo" })).toMatchObject({
+    href: "https://github.com/ShianMike/SHARPpy-Reimagined",
+    target: "_blank",
+    rel: "noopener noreferrer",
+  });
   queryClient.clear();
 });
 

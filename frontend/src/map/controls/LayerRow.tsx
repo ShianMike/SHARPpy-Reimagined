@@ -13,14 +13,18 @@ export interface LayerRowProps {
   /** For a weather layer: its place from the top, and how many there are. */
   order?: { id: OrderableLayerId; fromTop: number; count: number } | undefined;
   children?: ReactNode;
+  disclosure?: { expanded: boolean; onChange: (expanded: boolean) => void; targetId?: string };
 }
 
-export function LayerRow({ layer, state, order, children }: LayerRowProps): ReactNode {
+export function LayerRow({ layer, state, order, children, disclosure }: LayerRowProps): ReactNode {
   const { setLayerVisible, setLayerOpacity, moveLayer } = useMapStore.getState();
-  const [expanded, setExpanded] = useState(false);
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const expanded = disclosure?.expanded ?? localExpanded;
+  const setExpanded = disclosure?.onChange ?? setLocalExpanded;
   const row = useRef<HTMLDivElement>(null);
-  const detailsId = useId();
-  const hasSettings = state.visible && (layer.opacityControl || children != null);
+  const ownDetailsId = useId();
+  const detailsId = disclosure?.targetId ?? ownDetailsId;
+  const hasSettings = state.visible && (layer.opacityControl || children != null || disclosure?.targetId !== undefined);
   return (
     <div ref={row} className={styles.row} data-visible={state.visible} data-testid={`layer-row-${layer.id}`}>
       <div className={styles.rowHead}>
@@ -47,13 +51,13 @@ export function LayerRow({ layer, state, order, children }: LayerRowProps): Reac
           }}
         />
       </div>
-      <div id={detailsId} className={styles.rowDetails} data-motion="disclosure" inert={!expanded || !state.visible} hidden={!expanded || !state.visible}>
+      {disclosure?.targetId !== undefined ? null : <div id={detailsId} className={styles.rowDetails} data-motion="disclosure" inert={!expanded || !state.visible} hidden={!expanded || !state.visible}>
         {expanded && state.visible ? <>
         {layer.opacityControl ? <OpacityControl label={`${layer.label} opacity`} value={state.opacity}
           onChange={(opacity) => { setLayerOpacity(layer.id, opacity); }} /> : null}
         {children}
         </> : null}
-      </div>
+      </div>}
     </div>
   );
 }

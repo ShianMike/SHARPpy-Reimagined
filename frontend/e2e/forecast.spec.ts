@@ -2,7 +2,7 @@
 import { deckLayers, labels, nextFrames, presetPreferences, projectPoint, waitForMapDrawn } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
-import { hoverAt, layerRow, turnOn } from "./support/ui";
+import { hoverAt, layerRow, layerSettings, turnOn } from "./support/ui";
 import { expect, test } from "./support/test";
 
 test.describe("the forecast map", () => {
@@ -38,13 +38,13 @@ test.describe("the forecast map", () => {
     await expect(page.getByRole("dialog", { name: "Parameters", exact: true }).getByRole("button", { name: /^2 m AGL Temperature,/u })).toBeVisible();
     expectWarnings(consoleMessages, []);
   });
-
   test("the model field: product, colour scale, frame state, pointer value", async ({ page, consoleMessages }) => {
     await page.goto("/");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "model-field");
-    const row = await layerRow(page, "model-field");
+    const row = await layerSettings(page, "model-field");
+    await row.getByText("Details & source", { exact: true }).click();
     await expect(row.getByTestId("field-shown")).toContainText("F000 of the 10-04 16Z run, valid 10-04 16Z");
     await expect(row.getByTestId("field-legend")).toBeVisible();
     await expect.poll(() => deckLayers(page)).toContain("model-field-smooth");
@@ -68,7 +68,6 @@ test.describe("the forecast map", () => {
     await expect.poll(() => deckLayers(page)).toContain("model-field-contours");
     expectWarnings(consoleMessages, []);
   });
-
   test("an unpublished field frame says so, with no retry", async ({ page, consoleMessages }) => {
     await page.goto("/?scenario=field-error");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
@@ -82,7 +81,6 @@ test.describe("the forecast map", () => {
     expect(await deckLayers(page)).not.toContain("model-field-smooth");
     expectWarnings(consoleMessages, [{ pattern: /^\[backend\] FIELD_UNAVAILABLE in get_weather_field/u }]);
   });
-
   test("SPC stays in Model Viewer while live imagery has its own stacking order", async ({ page, consoleMessages }) => {
     await page.goto("/");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
@@ -124,7 +122,7 @@ test.describe("the forecast map", () => {
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "radar");
-    const row = await layerRow(page, "radar");
+    const row = await layerSettings(page, "radar");
     // Switching scope clears the mosaic product; the site scope takes its own default.
     await row.getByRole("combobox", { name: "Radar" }).click();
     await page.getByRole("option", { name: "Single site", exact: true }).click();
@@ -152,7 +150,7 @@ test.describe("the forecast map", () => {
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "satellite");
-    const row = await layerRow(page, "satellite");
+    const row = await layerSettings(page, "satellite");
     await expect(row.getByTestId("satellite-shown")).toContainText("G19");
     await expect(row.getByTestId("satellite-shown")).toContainText("87% view coverage");
     await expect.poll(() => deckLayers(page)).toContain("satellite");
@@ -171,7 +169,7 @@ test.describe("the forecast map", () => {
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "storm-reports");
-    const row = await layerRow(page, "storm-reports");
+    const row = await layerSettings(page, "storm-reports");
     await expect(row.getByTestId("reports-shown")).toContainText("4 of 4 reports");
     await expect.poll(() => deckLayers(page)).toContain("storm-reports");
     // The provider's own filter narrows the marks; the counts say so.
@@ -193,6 +191,7 @@ test.describe("the forecast map", () => {
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "model-field");
+    await (await layerSettings(page, "model-field")).getByText("Details & source", { exact: true }).click();
     await expect(page.getByTestId("field-shown")).toContainText("F000");
     await page.getByRole("button", { name: "Close layers", exact: true }).click();
     const point = await projectPoint(page, -108, 36);
@@ -258,7 +257,8 @@ test.describe("the forecast map", () => {
     await layerRow(page, "model-field");
     for (const n of [2, 3, 4]) {
       await page.getByRole("group", { name: "Active map panel" }).getByRole("button", { name: `Panel ${String(n)}`, exact: true }).click();
-      const row = await layerRow(page, "model-field");
+      const row = await layerSettings(page, "model-field");
+      await row.getByText("Details & source", { exact: true }).click();
       await expect(row.getByTestId("field-shown")).toContainText("F001 of the 10-04 16Z run, valid 10-04 17Z");
     }
     await nextFrames(page);

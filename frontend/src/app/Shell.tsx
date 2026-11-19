@@ -118,7 +118,7 @@ export function Shell(): ReactNode {
               aria-pressed={fullscreen} aria-keyshortcuts="F11" disabled={fullscreenBusy} onClick={() => { void toggleFullscreen(); }} />
           </div>
         </Toolbar>
-        <div className={styles.leftDock}>
+        <div className={styles.leftDock} data-point-open={isMap && detailsOpen && sideTab === "point"}>
           <NavigationRail className={styles.rail} />
           <div ref={attachLeft} className={styles.mapTools} data-motion="fade" inert={!isMap} hidden={!isMap} />
         </div>
@@ -141,7 +141,6 @@ export function Shell(): ReactNode {
               onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeDetails(); } }}>
               <div className={styles.sideHeader} role="group" aria-label="Detail panel">
                 <h2>{boxMode && !isLive ? "Region" : "Point"}</h2>
-                <IconAction icon={Layers} size="sm" label="Show layers" onClick={() => { setSideTab("layers"); }} />
                 <IconAction icon={X} size="sm" label="Close map details" onClick={closeDetails} />
               </div>
               <div className={styles.point} data-motion="fade">

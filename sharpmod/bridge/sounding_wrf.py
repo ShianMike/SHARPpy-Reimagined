@@ -37,36 +37,7 @@ def inspect_wrf(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def open_wrf(params: dict[str, Any]) -> dict[str, Any]:
-    """Use the existing raw WRF extractor, keeping the source dataset untouched."""
-    p.keys(params, ("file_path", "time", "latitude", "longitude"))
-    path = _wrf_path(params)
-    time = p.time(params, "time")
-    lat = p.number(params, "latitude", -90.0, 90.0)
-    lon = p.number(params, "longitude", -180.0, 180.0)
-    from sharpmod.tools import wrf_extract
+    """Open a local WRF profile through the native cache transaction."""
+    from sharpmod_rs import open_wrf_sounding
 
-    entry_id = cache().new_id()
-    output = cache().data_path(entry_id, ".npz")
-    try:
-        domain = wrf_extract.inspect_file(str(path))
-        if p.iso(time) not in [p.iso(value) for value in domain["times"]]:
-            raise p.invalid("time must be one of the WRF file's forecast times")
-        if not wrf_extract.point_in_domain(domain, lat, lon):
-            raise p.invalid("the requested point is outside this WRF domain")
-        wrf_extract.extract(str(path), lat, lon, str(output), valid_time=time)
-        collection, _ = decode(output)
-    except (wrf_extract.RetrievalError, wrf_extract.ParameterRangeError, ImportError) as exc:
-        output.unlink(missing_ok=True)
-        output.with_suffix(".json").unlink(missing_ok=True)
-        raise BridgeError("SOUNDING_INVALID", str(exc)[:500], False) from None
-    except Exception:
-        output.unlink(missing_ok=True)
-        output.with_suffix(".json").unlink(missing_ok=True)
-        raise
-    return register(
-        entry_id, output,
-        summary(entry_id, "file", collection, title=f"WRF {path.name}",
-                file_name=path.name, model="WRF-ARW", provider="local",
-                provider_name="Local WRF NetCDF"),
-        collection,
-    )
+    return open_wrf_sounding(params)

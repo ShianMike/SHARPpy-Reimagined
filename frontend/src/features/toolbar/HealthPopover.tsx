@@ -97,10 +97,10 @@ export function HealthPopover(props: HealthPopoverProps): ReactNode {
       testId="health-popover"
     >
       <div className={styles.body}>
-        <p className={styles.status}>
+        {view.tone === "success" ? null : <p className={styles.status}>
           <StatusDot tone={view.tone} />
           <span>{view.label}</span>
-        </p>
+        </p>}
         {problem === null ? null : <Notice tone={copy?.tone ?? "warning"} title={copy?.title ?? (view.tone === "warning" ? "Reconnecting weather service" : "Calculation engine needs attention")}
           message={copy?.message ?? (health?.bridge.status === "restarting" ? `Reconnection attempt ${String(health.bridge.attempt)}.` : problem)}
           {...(copy === null ? {} : { icon: copy.icon })} />}

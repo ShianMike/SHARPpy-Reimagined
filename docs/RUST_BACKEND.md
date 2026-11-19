@@ -32,6 +32,29 @@ the import. Creation never replaces an existing cache file. Session restoration
 shares the same staged-file owner. The public 5 MiB limit and bridge result
 shapes are unchanged.
 
+Observed opening now uses Rust for provider fallback, validation before provider
+selection, portable arrays and metadata assembly, bridge registration and failed
+open rollback. Provider adapters and the atomic NPZ/sidecar transaction retain
+their existing public interfaces. Invalid downloaded levels, optional omega,
+coordinates or timestamps can fall back to the next configured archive without
+combining measurements from different providers.
+
+The v3.8.5 migration batches also move the display thermodynamic workspace,
+selected severe indices, portable-file validation and pair publication,
+model/ERA5/WRF opening transactions, WRF column transforms, point-provider
+orchestration, HRRR F000 Zarr planning/sampling and compatibility transfers into
+Rust. Sounding editing and inspection retain Qt's exact transforms while Rust
+assembles records and validates edits before mutation. See the
+[batch scope and validation report](performance/RUST_MIGRATIONS_3_8_5.md)
+for the retained boundaries and reproduction commands.
+
+The opened-profile registry also lives in Rust. The UI synchronizes its open
+list through `retain_soundings` (`soundings.retain` on the wire), so background
+opens cannot evict an older visible profile. Removing an ID from that list
+makes it eligible for ordinary LRU eviction again. An active render or recovery
+request keeps its source files alive until its final reference is released;
+the registry remains bounded at 24 entries.
+
 The sounding bridge and CLI PNG reports share a native header/dimension check.
 It requires the PNG signature, a 13-byte IHDR and nonzero width and height, and
 does not decode or modify pixels. It is a header check, not a replacement for

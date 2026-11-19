@@ -24,6 +24,13 @@ def test_split_value_unit_recognizes_sounding_suffixes():
     assert split_value_unit("14.86 g/kg") == ("14.86", " g/kg")
     assert split_value_unit("245/23 kt") == ("245/23", " kt")
     assert split_value_unit("90\u00b0F") == ("90", "\u00b0F")
+    assert split_value_unit("81 °F") == ("81", " °F")
+    assert split_value_unit("16 m²/s²") == ("16", " m²/s²")
+    assert split_value_unit("16744 m³/s³") == ("16744", " m³/s³")
+    assert split_value_unit("942 J kg⁻¹") == ("942", " J kg⁻¹")
+    assert split_value_unit("0.23 J kg⁻¹ m⁻¹") == ("0.23", " J kg⁻¹ m⁻¹")
+    assert split_value_unit("2.23\u00a0in") is None
+    assert split_value_unit(">= 2 in") == (">= 2", " in")
     assert split_value_unit("Supercell Comp = ") is None
 
 
@@ -35,6 +42,7 @@ def test_compact_unit_width_is_smaller_than_full_value_width():
     metrics = QtGui.QFontMetrics(font)
 
     assert value_unit_width(font, "14.86 g/kg") < metrics.horizontalAdvance("14.86 g/kg")
+    assert value_unit_width(font, "2.23\u00a0in") == metrics.horizontalAdvance("2.23\u00a0in")
 
 
 def test_font_quality_hinting_is_applied_only_for_scaled_export():

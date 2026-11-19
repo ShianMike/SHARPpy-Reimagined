@@ -639,52 +639,10 @@ def _fetch_value(
     request_get,
     cancelled=None,
 ):
-    params = build_feature_info_params(
-        capability, variable, level, lat, lon, valid_time, reference_time
-    )
-    response = _request(
-        request_get,
-        params=params,
-        cancelled=cancelled,
-    )
-    try:
-        payload = response.json()
-        feature = payload["features"][0]
-        props = feature["properties"]
-        coords = feature["geometry"]["coordinates"]
-        value = float(props["value"])
-        selected_lon = float(coords[0])
-        selected_lat = float(coords[1])
-        returned_valid = _as_utc(props["time"])
-        returned_reference = _as_utc(props["dim_reference_time"])
-    except (KeyError, IndexError, TypeError, ValueError) as exc:
-        layer = params["LAYERS"]
-        raise RetrievalError(
-            "GeoMet returned no usable point value for %s" % layer
-        ) from exc
-    if not math.isfinite(value):
-        raise RetrievalError(
-            "GeoMet returned a non-finite value for %s" % params["LAYERS"]
-        )
-    if returned_valid != _as_utc(valid_time):
-        raise RetrievalError(
-            "GeoMet selected valid time %s instead of %s"
-            % (_iso(returned_valid), _iso(valid_time))
-        )
-    if returned_reference != _as_utc(reference_time):
-        raise RetrievalError(
-            "GeoMet selected run %s instead of %s"
-            % (_iso(returned_reference), _iso(reference_time))
-        )
-    return _PointValue(
-        variable=str(variable),
-        level=(int(level) if level is not None else None),
-        value=value,
-        selected_lat=selected_lat,
-        selected_lon=((selected_lon + 180.0) % 360.0) - 180.0,
-        valid_time=returned_valid,
-        reference_time=returned_reference,
-    )
+    from sharpmod_rs import geomet_point_value
+
+    return geomet_point_value(capability, variable, level, lat, lon, valid_time,
+                              reference_time, request_get, cancelled)
 
 
 def _capabilities_params(capability) -> dict[str, str]:

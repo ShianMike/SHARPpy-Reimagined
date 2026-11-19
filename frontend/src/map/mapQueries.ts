@@ -11,7 +11,7 @@ import { useLiveTrackingStore } from "../stores/liveTrackingStore";
 import { panelWeather, useMapStore } from "../stores/mapStore";
 import { useSoundingStore } from "../stores/soundingStore";
 import { releaseTime } from "../features/sounding/soundingTime";
-import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
+import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type OutlookDay, type OutlookProductKey, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
 import { nearestRadarSite } from "./nearestSite";
 import { panelRadar } from "./panelRadar";
 
@@ -20,6 +20,11 @@ const SPC_REFRESH_MS = 5 * 60_000;
 const AVAILABILITY_STALE_MS = 10 * 60_000;
 /** Used until the first radar frame states its own update interval. */
 const RADAR_DEFAULT_REFRESH_MS = 120_000;
+
+function radarRefreshMs(frame: RadarFrame | undefined): number {
+  const seconds = frame?.updateIntervalS ?? 0;
+  return seconds > 0 ? seconds * 1000 : RADAR_DEFAULT_REFRESH_MS;
+}
 
 export { useMapCatalog } from "./catalogQuery";
 
@@ -98,6 +103,20 @@ export function outlookQueryOptions(client: BackendClient, product: typeof OUTLO
   };
 }
 
+/** Keep each day's latest issuance separate from the map's time-based outlooks. */
+export function useLatestSpcOutlook(day: OutlookDay, product: OutlookProductKey): UseQueryResult<SpcOutlook> {
+  const client = useBackendClient();
+  return useQuery({
+    ...BASE_QUERY_OPTIONS,
+    queryKey: ["spc-latest", day, product],
+    queryFn: ({ signal }) => client.getSpcOutlook(product, `${new Date(Date.now()).toISOString().slice(0, 19)}Z`, signal, day),
+    staleTime: SPC_REFRESH_MS,
+    gcTime: 3 * SPC_REFRESH_MS,
+    refetchInterval: SPC_REFRESH_MS,
+    refetchOnWindowFocus: "always",
+  });
+}
+
 /** The four outlook products in OUTLOOK_KEYS order; `enabled[i]` turns each on. */
 export function useSpcOutlooks(enabled: readonly boolean[], validTime: string | null): UseQueryResult<SpcOutlook>[] {
   const client = useBackendClient();
@@ -121,13 +140,9 @@ export function useRadarFrame(product: string | null, enabled: boolean, validTim
     queryKey: mapKeys.radar(product, time),
     queryFn: () => client.getRadarFrame(product, time),
     enabled,
-    staleTime: time === null ? 0 : RADAR_HISTORY_STALE_MS,
+    staleTime: (query) => time === null ? radarRefreshMs(query.state.data) : RADAR_HISTORY_STALE_MS,
     gcTime: Number.POSITIVE_INFINITY,
-    refetchInterval: (query) => {
-      if (time !== null) return false;
-      const seconds = query.state.data?.updateIntervalS ?? 0;
-      return seconds > 0 ? seconds * 1000 : RADAR_DEFAULT_REFRESH_MS;
-    },
+    refetchInterval: (query) => time === null ? radarRefreshMs(query.state.data) : false,
   });
 }
 
@@ -177,13 +192,9 @@ export function useRadarSiteFrame(
     queryKey: mapKeys.radarSite(effectiveProduct, site ?? "", time, effectiveTilt),
     queryFn: () => client.getRadarSiteFrame({ site: site ?? "" }, effectiveProduct, time, effectiveTilt),
     enabled: enabled && site !== null && selection.supportedProducts?.length !== 0,
-    staleTime: time === null ? 0 : RADAR_HISTORY_STALE_MS,
+    staleTime: (query) => time === null ? radarRefreshMs(query.state.data) : RADAR_HISTORY_STALE_MS,
     gcTime: Number.POSITIVE_INFINITY,
-    refetchInterval: (query) => {
-      if (time !== null) return false;
-      const seconds = query.state.data?.updateIntervalS ?? 0;
-      return seconds > 0 ? seconds * 1000 : RADAR_DEFAULT_REFRESH_MS;
-    },
+    refetchInterval: (query) => time === null ? radarRefreshMs(query.state.data) : false,
   });
 }
 

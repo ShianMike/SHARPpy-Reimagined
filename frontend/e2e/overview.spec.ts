@@ -55,9 +55,14 @@ test("Overview disclosures and workspace actions support keyboard navigation", a
   await panel.getByRole("button", { name: "View logs" }).click();
   await expect(panel).toHaveAttribute("aria-label", "Logs");
   const rail = page.getByRole("navigation", { name: "Workspaces" });
-  for (const [action, destination] of [["Open Model Viewer", "Model Viewer"], ["Open Live Tracking", "Live Tracking"], ["Open Settings", "Settings"]] as const) {
+  for (const [action, destination] of [["Open Model Viewer", "Model Viewer"], ["Open Live Tracking", "Live Tracking"]] as const) {
     await rail.getByRole("button", { name: "Overview", exact: true }).click();
     await panel.getByRole("button", { name: action, exact: true }).click();
     await expect(rail.getByRole("button", { name: destination, exact: true })).toHaveAttribute("aria-current", "page");
   }
+  await rail.getByRole("button", { name: "Overview", exact: true }).click();
+  const repo = panel.getByRole("link", { name: "Star the Repo", exact: true });
+  await repo.focus();
+  await expect(repo).toBeFocused();
+  await expect(repo).toHaveAttribute("href", "https://github.com/ShianMike/SHARPpy-Reimagined");
 });

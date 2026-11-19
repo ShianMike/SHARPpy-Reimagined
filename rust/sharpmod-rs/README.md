@@ -3,7 +3,7 @@
 `sharpmod-rs` is the supported primary numerical and direct pressure-level GRIB
 point-decoding backend for
 [SHARPpy Reimagined](https://github.com/ShianMike/SHARPpy-Reimagined). Official
-v0.4 Windows binaries bundle it, and the application's default `auto` mode uses
+Windows binaries bundle it, and the application's default `auto` mode uses
 it after validating the versioned backend contract. It uses PyO3,
 NumPy-compatible array views, a coarse-grained profile-kinematics workspace,
 an SB/MU/ML parcel workspace, a traced five-parcel convective workspace,
@@ -58,8 +58,12 @@ and the existing 1 hPa refinement before restoring public SHARPpy parcel fields.
 Convective-temperature searches reuse prepared interpolation fields and native
 thermodynamics, preserving the stripped CAPE/CIN routine's reported levels and
 fractional final layer. The default 100 hPa mean mixing ratio is shared with the
-displayed profile value. Other thermodynamic indices retain their existing
-SHARPpy formulas at the compatibility boundary.
+displayed profile value. Display K/total-totals indices, precipitable water,
+pressure-weighted humidity, maximum temperature, lapse rates and inferred
+temperature advection also run natively with the pinned SHARPpy sampling and
+conversion constants. TEI, ESP, WNDG, significant-severe, SHIP and the complete
+MMP predictor retain their original ingredients and missing-value conventions.
+Explicitly replaced public MMP scalar adapters remain usable at the boundary.
 Display wind layers prepare owned interpolation series once and share each
 one-hPa pressure-weighted mean between the right and left storm-relative winds.
 Endpoint shears and fixed-height wind values use the same prepared series.
@@ -82,8 +86,24 @@ the 5 m/s nudge, knot conversion, endpoint tolerance, AGL coordinates and masks.
 Nonconvergent traces stop after 4095 steps and remain unavailable. Source-only
 environments keep the existing SHARPpy trajectory call.
 
-The SHARPpy widget stack, renderer and model-retrieval orchestration remain in
-Python. The native workspace kernels own their small
+Rust owns portable NPZ safety checks and NPZ/JSON publication transactions,
+including cancellation, generation matching and rollback. Model/ERA5/WRF bridge
+opens keep cache outputs under native ownership until registration succeeds.
+WRF selects NetCDF point hyperslabs before NumPy materializes scientific data;
+native code destaggers and transforms only those columns. GeoMet point fan-out
+and Open-Meteo request orchestration/normalization retain their existing public
+datasets and credential adapters. HRRR F000 Zarr metadata, bounded chunk jobs,
+numeric sampling and normalization run in Rust with numcodecs as the compiled
+decompressor. NOMADS and permissive Herbie transfers share native streaming,
+atomic file publication and cancellation, including injected HTTP sessions.
+
+Qt retains painting and its calibrated coordinate transforms. Rust assembles
+edit targets, inspection records and original values, validates a complete edit
+request before applying it, and copies each changed array once. The existing
+Python facades preserve public interfaces, profile construction, capability
+manifests and external file/credential adapters. Complex oracle-dependent
+composites still retain the pinned scientific reference.
+The native workspace kernels own their small
 profile columns and release the GIL. Kinematics returns Bunkers motion plus all
 requested surface layers in one call. Parcels returns the standard
 surface-based, lowest-300-hPa most-unstable, and 100-hPa mixed-layer summaries

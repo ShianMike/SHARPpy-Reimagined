@@ -165,7 +165,7 @@ jobs:
             packages=("$bundle"/deb/*.deb)
             [[ "${#packages[@]}" == 1 ]]
             package="$destination/SHARPpy-Reimagined-v$version-$PLATFORM.deb"
-            cp "${packages[0]}" "$package"
+            bash packaging/package_linux_desktop.sh "${packages[0]}" "$package"
             [[ $(dpkg-deb -f "$package" Architecture) == amd64 ]]
             [[ $(dpkg-deb -f "$package" Version) == "$version" ]]
             sudo apt-get install --no-install-recommends -y "$package"

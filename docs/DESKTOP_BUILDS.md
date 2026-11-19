@@ -72,8 +72,19 @@ SHARPMOD_REQUIRE_RUST=1 python -m PyInstaller packaging/sharpmod_backend.spec --
 npm --prefix frontend ci
 ```
 
-On Ubuntu, build the Linux installer with
-`npm --prefix frontend run tauri -- build --config src-tauri/tauri.linux.release.conf.json -- --locked`.
+On Ubuntu, use the Tauri package to assemble the installer with the complete
+backend and its library links:
+
+```bash
+target=x86_64-unknown-linux-gnu
+npm --prefix frontend run tauri -- build --target "$target" \
+  --config src-tauri/tauri.linux.release.conf.json -- --locked
+version=$(node -p 'require("./frontend/package.json").version')
+bash packaging/package_linux_desktop.sh \
+  "src-tauri/target/$target/release/bundle/deb/SHARPpy Reimagined_${version}_amd64.deb" \
+  "SHARPpy-Reimagined-v$version-linux-x64.deb"
+```
+
 On macOS, set `target` to `aarch64-apple-darwin` or `x86_64-apple-darwin`
 on the matching architecture, then run:
 

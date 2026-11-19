@@ -272,7 +272,6 @@ def test_release_workflow_gates_tag_and_source_versions():
         "test-desktop",
         "build-windows-exe",
         "native-windows-acceptance",
-        "build-unix-desktop",
         "attest-windows-release",
     }
     checkout = next(

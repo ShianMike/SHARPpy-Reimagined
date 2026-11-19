@@ -4,7 +4,7 @@
     "highlights": [
       {
         "title": "Model sounding downloads",
-        "description": "Open HRRR and other NOMADS point soundings through the repaired Rust downloader."
+        "description": "Open HRRR and other NOMADS soundings again. Standard IFS uses its 0.25° feed, and Canadian GeoMet profiles filter levels below the surface."
       },
       {
         "title": "Readable CAPE units",

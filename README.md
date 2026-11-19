@@ -18,8 +18,9 @@ If SHARPpy Reimagined helps your weather analysis, select **Star** at the top of
 
 ## What's new in 3.8.6 (Unreleased)
 
-- **Model sounding downloads.** HRRR and the other models that use NOMADS
-  can open point soundings again through the Rust downloader.
+- **Model soundings.** HRRR and other models that use NOMADS can open point
+  soundings again. Standard ECMWF IFS uses the combined 0.25° feed, and
+  Canadian GeoMet soundings keep pressure levels above the verified terrain.
 - **Readable CAPE units.** Severe sounding images use J/kg for HGZ CAPE
   and ECAPE, and J/kg/m for NCAPE.
 - **Linux desktop package.** Install the desktop app and its bundled

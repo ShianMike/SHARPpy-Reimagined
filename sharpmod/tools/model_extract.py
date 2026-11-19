@@ -329,7 +329,7 @@ _CONFIGS = (
     ModelConfig(
         "ecmwf-ifs", "ECMWF IFS Open Data", "ifs", "oper",
         search=IFS_PRESSURE_SEARCH, fxx_values=_ifs_hours(),
-        grid_spacing_km=27.8,
+        kwargs={"resolution": "0p25"}, grid_spacing_km=27.8,
         notes="ECMWF open-data deterministic IFS pressure levels"),
     ModelConfig(
         "ecmwf-ifs-9km", "ECMWF 9km", "ifs", "oper",

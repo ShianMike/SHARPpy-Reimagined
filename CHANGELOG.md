@@ -14,6 +14,10 @@ Target version: **3.8.6** (not published).
 - Restore model sounding downloads that use the NOMADS geographic subset.
   The Rust downloader now checks cached GRIB files directly and lets model
   retrieval fall back to indexed downloads when the subset is unavailable.
+- Request the combined 0.25° ECMWF IFS feed explicitly so standard IFS
+  soundings receive both pressure levels and surface fields.
+- Remove Canadian GeoMet pressure levels at or below the verified terrain
+  height before validating the sounding.
 - Use J/kg for HGZ CAPE and ECAPE, and J/kg/m for NCAPE in Severe sounding
   images so the units render correctly.
 

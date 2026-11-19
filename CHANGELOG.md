@@ -11,6 +11,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Verify Windows upgrades with fixtures that represent files owned by the
+  previous installation's runtime inventory. Exercise both the installer and
+  the app's updater while checking that saved soundings survive.
 - Keep the native parcel and WRF column code compatible with stable Rust's
   Clippy checks and the Rust 1.88 build. Install the existing WRF dependencies
   for the Rust CI tests that read NetCDF profiles.

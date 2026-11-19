@@ -12,6 +12,7 @@ $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted' -or [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
     throw 'Installed-upgrade verification requires a disposable GitHub Actions runner account'
 }
+. "$PSScriptRoot/installer_cleanup/upgrade_fixtures.ps1"
 $reportRoot = [System.IO.Path]::GetFullPath($ReportDirectory)
 $temporaryRoot = [System.IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\') + '\'
 if (-not $reportRoot.StartsWith($temporaryRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -48,13 +49,7 @@ $previousExecutable = Install-Candidate $PreviousInstaller $PreviousVersion 'pre
 $marker = Join-Path $installRoot 'upgrade-preservation-check.txt'
 'User-created file retained during in-place upgrade.' | Set-Content -LiteralPath $marker -Encoding utf8
 $markerHash = (Get-FileHash -LiteralPath $marker -Algorithm SHA256).Hash
-$staleCode = Join-Path $installRoot 'backend/_internal/obsolete-upgrade-check.pyc'
-$staleWheel = Join-Path $installRoot 'backend/sharpmod_rs-0.0.0-test.whl'
-$staleMetadata = Join-Path $installRoot 'backend/_internal/sharpmod_rs-0.0.0.dist-info'
-New-Item -ItemType Directory -Path $staleMetadata | Out-Null
-'Old installed code' | Set-Content -LiteralPath $staleCode
-'Old installed wheel' | Set-Content -LiteralPath $staleWheel
-'Old installed package metadata' | Set-Content -LiteralPath (Join-Path $staleMetadata 'METADATA')
+$retiredRuntime = Add-RetiredRuntimeFixtures (Join-Path $installRoot 'backend') $PreviousVersion
 $backendUserFile = Join-Path $installRoot 'backend/saved-user-sounding.spc'
 Copy-Item -LiteralPath $sampleFile -Destination $backendUserFile
 $backendUserHash = (Get-FileHash -LiteralPath $backendUserFile -Algorithm SHA256).Hash
@@ -65,11 +60,11 @@ if ((Get-FileHash -LiteralPath $marker -Algorithm SHA256).Hash -ne $markerHash -
     (Get-FileHash -LiteralPath $backendUserFile -Algorithm SHA256).Hash -ne $backendUserHash) {
     throw 'Upgrade modified preserved data'
 }
-foreach ($stale in @($staleCode, $staleWheel, $staleMetadata)) {
+foreach ($stale in $retiredRuntime.Files + $retiredRuntime.MetadataDirectory) {
     if (Test-Path -LiteralPath $stale) { throw "Obsolete installed runtime entry remains: $stale" }
 }
 $cleanup = Get-Content -LiteralPath (Join-Path $installRoot 'installer-cleanup.json') -Raw | ConvertFrom-Json
-if ($cleanup.ok -ne $true -or $cleanup.version -ne $ExpectedVersion -or $cleanup.removed_files -lt 3) {
+if ($cleanup.ok -ne $true -or $cleanup.version -ne $ExpectedVersion -or $cleanup.removed_files -lt $retiredRuntime.Files.Count) {
     throw 'Installed runtime cleanup was not verified'
 }
 [ordered]@{

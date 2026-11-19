@@ -13,6 +13,7 @@ if ([version]$ExpectedVersion -le [version]$PreviousVersion) { throw 'ExpectedVe
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
     throw 'Native acceptance installs software only on a disposable hosted runner'
 }
+. "$PSScriptRoot/installer_cleanup/upgrade_fixtures.ps1"
 $report = [IO.Path]::GetFullPath($ReportDirectory)
 if (-not $report.StartsWith(([IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\') + '\'), [StringComparison]::OrdinalIgnoreCase)) {
     throw 'Native acceptance must use a new directory inside RUNNER_TEMP'
@@ -141,10 +142,7 @@ try {
     Start-Desktop
     Run-Phase 'seed'
     $installedRoot = Split-Path -Parent $desktop.Path
-    $obsoleteCode = Join-Path $installedRoot 'backend/_internal/obsolete-updater-check.pyc'
-    $obsoleteWheel = Join-Path $installedRoot 'backend/sharpmod_rs-0.0.0-updater.whl'
-    'Old installed bytecode' | Set-Content -LiteralPath $obsoleteCode
-    'Old installed native wheel' | Set-Content -LiteralPath $obsoleteWheel
+    $retiredRuntime = Add-RetiredRuntimeFixtures (Join-Path $installedRoot 'backend') $PreviousVersion
     $userFile = Join-Path $installedRoot 'saved-user-sounding.spc'
     'User sounding preserved by upgrade' | Set-Content -LiteralPath $userFile
     $userFileHash = (Get-FileHash -LiteralPath $userFile).Hash
@@ -164,12 +162,12 @@ try {
         Install-Version $candidate
         Start-Desktop
     }
-    foreach ($obsolete in @($obsoleteCode, $obsoleteWheel)) {
+    foreach ($obsolete in $retiredRuntime.Files + $retiredRuntime.MetadataDirectory) {
         if (Test-Path -LiteralPath $obsolete) { throw "Updater left obsolete runtime entry: $obsolete" }
     }
     if ((Get-FileHash -LiteralPath $userFile).Hash -ne $userFileHash) { throw 'Updater modified a saved user file' }
     $cleanup = Get-Content -LiteralPath (Join-Path $installedRoot 'installer-cleanup.json') -Raw | ConvertFrom-Json
-    if ($cleanup.ok -ne $true -or $cleanup.version -ne $ExpectedVersion -or $cleanup.removed_files -lt 2) {
+    if ($cleanup.ok -ne $true -or $cleanup.version -ne $ExpectedVersion -or $cleanup.removed_files -lt $retiredRuntime.Files.Count) {
         throw 'Updater runtime cleanup was not verified'
     }
     $cleanup | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'installer-cleanup.json')

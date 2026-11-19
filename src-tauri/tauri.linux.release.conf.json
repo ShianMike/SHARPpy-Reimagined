@@ -7,7 +7,15 @@
     "shortDescription": "Forecast maps and atmospheric soundings",
     "linux": {
       "deb": {
-        "depends": ["libegl1", "libgl1", "libgomp1", "libxkbcommon-x11-0", "libxcb-cursor0", "xdg-utils"]
+        "depends": [
+          "ca-certificates",
+          "libegl1",
+          "libgl1",
+          "libgomp1",
+          "libxkbcommon-x11-0",
+          "libxcb-cursor0",
+          "xdg-utils"
+        ]
       }
     }
   }

@@ -20,7 +20,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ${{ github.workflow }}-frontend-${{ github.ref }}
+  group: ${{ github.workflow }}-frontend-${{ github.ref }}-${{ inputs.unix_packages && 'unix' || 'checks' }}
   cancel-in-progress: true
 jobs:
   unix-packages:

@@ -56,15 +56,18 @@ for the reports.
 
 To build the equivalent artifacts locally, use CPython 3.13.16 and start with
 a clean virtual environment. Use Rust 1.99.1 and your native target. Build the
-wheel and freeze the backend on the target OS.
+wheel and freeze the backend on the target OS. On macOS, export
+`MACOSX_DEPLOYMENT_TARGET=15.0` before building.
 
 ```bash
 export RUSTUP_TOOLCHAIN=1.99.1
 export PIP_CONSTRAINT="$PWD/constraints/release.txt"
 python -m pip install ".[render,era5,wrf]" pyinstaller maturin
 python scripts/install_sharppy_compat.py --sharppy-only
-python -m maturin build --release --locked --manifest-path rust/sharpmod-rs/Cargo.toml --interpreter python
-python -m pip install --no-deps rust/sharpmod-rs/target/wheels/sharpmod_rs-*.whl
+wheel_dir=$(mktemp -d)
+python -m maturin build --release --locked --manifest-path rust/sharpmod-rs/Cargo.toml \
+  --interpreter python --out "$wheel_dir"
+python -m pip install --no-deps "$wheel_dir"/sharpmod_rs-*.whl
 SHARPMOD_REQUIRE_RUST=1 python -m PyInstaller packaging/sharpmod_backend.spec --noconfirm
 npm --prefix frontend ci
 ```

@@ -11,6 +11,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Keep the native parcel and WRF column code compatible with stable Rust's
+  Clippy checks and the Rust 1.88 build. Install the existing WRF dependencies
+  for the Rust CI tests that read NetCDF profiles.
+- Keep Storage readable when the optional native extension is unavailable.
 - Build the matching Rust sidecar for the frontend lifecycle check. Scope
   the sounding cancellation assertion to the source form so that recovery
   status can appear at the same time.

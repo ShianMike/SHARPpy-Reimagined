@@ -150,7 +150,7 @@ impl Display {
         if !winds || self.pressure.iter().all(|p| *p <= 100.) {
             return None;
         }
-        let top = *self.pressure.iter().filter(|&&p| p >= 100.).next_back()?;
+        let top = *self.pressure.iter().rfind(|&&p| p >= 100.)?;
         let bottom = self.pressure[self.surface];
         let count = ((bottom - top) / 100.).ceil().max(0.) as usize;
         let mut values = Vec::with_capacity(count.saturating_sub(1));

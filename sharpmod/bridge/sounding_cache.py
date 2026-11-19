@@ -68,15 +68,19 @@ class SoundingCache:
     """A bounded, thread-safe LRU of opened soundings."""
 
     def __init__(self, root: Path, max_entries: int = MAX_ENTRIES) -> None:
-        from sharpmod_rs import SoundingEntries
-
         self.root = root
         self.renders = root / "renders"
         self.max_entries = max_entries
         self.renders.mkdir(parents=True, exist_ok=True)
         self.model_root = root / "model-hours"
         self.model_root.mkdir(exist_ok=True)
-        self._entries = SoundingEntries(self.root, self.renders, max_entries)
+        # Storage and live response caching also use this session directory.
+        try:
+            from sharpmod_rs import SoundingEntries
+        except ImportError:
+            self._entries = None
+        else:
+            self._entries = SoundingEntries(self.root, self.renders, max_entries)
         self.model_hours = ModelHourCache(
             directory_factory=lambda _key: tempfile.mkdtemp(prefix="source-", dir=self.model_root),
         )
@@ -92,6 +96,8 @@ class SoundingCache:
         return self.renders / f"{sounding_id}-{parcel.lower()}-{mode}.png"
 
     def add(self, entry: Entry) -> None:
+        if self._entries is None:
+            raise BridgeError("BACKEND_UNAVAILABLE", "Opening soundings requires the matching Rust backend.", False)
         self._entries.add(entry)
 
     def get(self, sounding_id: Any) -> Entry:
@@ -102,20 +108,26 @@ class SoundingCache:
                 False,
             )
         try:
-            return self._entries.get(sounding_id)
+            if self._entries is not None:
+                return self._entries.get(sounding_id)
         except KeyError:
-            raise BridgeError(
-                "SOUNDING_NOT_FOUND",
-                "This sounding is no longer open in the backend. Open it again.",
-                False,
-                {"sounding_id": sounding_id},
-            ) from None
+            pass
+        raise BridgeError(
+            "SOUNDING_NOT_FOUND",
+            "This sounding is no longer open in the backend. Open it again.",
+            False,
+            {"sounding_id": sounding_id},
+        )
 
     def completed_downloads(self) -> tuple[Path, ...]:
         """Raw GRIBs can be discarded once the portable sounding is registered."""
+        if self._entries is None:
+            return ()
         return tuple(self.root / f"{entry_id}-grib" for entry_id in self._entries.ids())
 
     def _remove_files(self, sounding_id: str) -> None:
+        if self._entries is None:
+            return
         try:
             self._entries.remove_files(sounding_id)
         except OSError:

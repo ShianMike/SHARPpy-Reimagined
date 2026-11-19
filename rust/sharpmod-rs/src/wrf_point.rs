@@ -57,8 +57,12 @@ fn column(
                 "WRF {name} stagger does not contain adjacent cells"
             )));
         }
+        let (pairs, _) = raw.as_chunks::<2>();
         return Ok(Some(
-            raw.chunks_exact(2).map(|v| 0.5 * (v[0] + v[1])).collect(),
+            pairs
+                .iter()
+                .map(|[left, right]| 0.5 * (left + right))
+                .collect(),
         ));
     }
     if shape.len() > 1 {

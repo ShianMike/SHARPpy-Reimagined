@@ -8,6 +8,7 @@ import { createTransport } from "../../lib/backend/fixtureTransport";
 import { parseSoundingSummary } from "../../lib/contracts/soundings";
 import { parseSoundingView } from "../../lib/contracts/soundingView";
 import { useSoundingStore } from "../../stores/soundingStore";
+import { useAppStore } from "../../stores/appStore";
 import { renderWithBackend } from "../../test/backendHarness";
 import { SoundingImage } from "./SoundingImage";
 import { SoundingExport } from "./SoundingExport";
@@ -23,7 +24,7 @@ beforeEach(() => {
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn((blob: Blob) => `blob:${String(blob.size)}`) });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
 });
-afterEach(() => { cleanup(); useSoundingStore.setState(useSoundingStore.getInitialState(), true); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); useAppStore.setState({ platform: "browser" }); useSoundingStore.setState(useSoundingStore.getInitialState(), true); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it("exports the current HD/UHD bytes, blocks stale previews, and reuses an unchanged render", async () => {
   const base = createTransport();
@@ -73,7 +74,8 @@ it("exports the current HD/UHD bytes, blocks stale previews, and reuses an uncha
   view.unmount(); queryClient.clear();
 });
 
-it("copies the prepared PNG once, disables concurrent exports, and keeps download recovery available", async () => {
+it("copies the prepared PNG once through the Linux webview API and keeps download recovery available", async () => {
+  useAppStore.setState({ platform: "linux" });
   class TestClipboardItem { constructor(readonly data: Record<string, Blob>) {} }
   let finish: () => void = () => undefined;
   const pending = new Promise<void>((resolve) => { finish = resolve; });
@@ -113,6 +115,14 @@ it("does not prepare an annotated image when the clipboard is unavailable", asyn
   expect((await screen.findByRole("alert")).textContent).toContain("Image copy unavailable");
   expect(createImageBitmap).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: "Export PNG again" })).toBeTruthy();
+});
+
+it("keeps only the PNG export action when the macOS webview lacks a clipboard writer", () => {
+  useAppStore.setState({ platform: "macos" });
+  vi.stubGlobal("ClipboardItem", undefined);
+  render(<SoundingExport view={parseSoundingView(response())} quality="uhd" onQualityChange={() => undefined} ready busy={false} filename="test.png" />);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Export PNG" }).disabled).toBe(false);
+  expect(screen.queryByRole("button", { name: "Copy sounding image" })).toBeNull();
 });
 
 it("does not let an earlier image's pending copy block or overwrite the new image's status", async () => {

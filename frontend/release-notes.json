@@ -1,4 +1,21 @@
 {
+  "3.8.6": {
+    "summary": "Run the desktop workspace on Ubuntu or Mac with the bundled sounding and forecast backend.",
+    "highlights": [
+      {
+        "title": "Linux desktop package",
+        "description": "Install the x64 .deb on Ubuntu 24.04 to use the model viewer, live tracking and sounding tools."
+      },
+      {
+        "title": "Mac builds for both architectures",
+        "description": "The desktop builds run on macOS 15 or later. Choose the Apple Silicon or Intel download when signed Mac builds are available."
+      },
+      {
+        "title": "Desktop downloads in Settings",
+        "description": "Open GitHub Releases from Settings → Updates on Linux and Mac to download and install a newer version."
+      }
+    ]
+  },
   "3.8.5": {
     "summary": "See today's SPC outlook, follow steadier map playback, and open soundings more reliably.",
     "highlights": [

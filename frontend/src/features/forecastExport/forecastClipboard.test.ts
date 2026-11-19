@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
+import { useAppStore } from "../../stores/appStore";
 import { copyForecastGif } from "./forecastClipboard";
 
 const native = vi.hoisted(() => vi.fn());
 vi.mock("../../lib/backend/tauriTransport", () => ({ copyForecastGif: native }));
 
-afterEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { useAppStore.setState({ platform: "browser" }); vi.resetAllMocks(); vi.unstubAllGlobals(); });
 
 it("passes the encoded GIF bytes to the native clipboard command", async () => {
-  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  useAppStore.setState({ platform: "windows" });
   native.mockResolvedValue(undefined);
   const bytes = new Uint8Array([71, 73, 70, 56, 57, 97]).buffer;
   const gif = { arrayBuffer: () => Promise.resolve(bytes) } as Blob;
@@ -17,7 +18,7 @@ it("passes the encoded GIF bytes to the native clipboard command", async () => {
 });
 
 it("rejects an oversized GIF before reading it into memory", async () => {
-  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  useAppStore.setState({ platform: "windows" });
   const arrayBuffer = vi.fn();
   const gif = { size: 16 * 1024 * 1024 + 1, arrayBuffer } as unknown as Blob;
   await expect(copyForecastGif(gif)).rejects.toThrow("too large to copy safely");
@@ -26,10 +27,19 @@ it("rejects an oversized GIF before reading it into memory", async () => {
 });
 
 it("propagates native clipboard errors without substituting a still image", async () => {
-  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  useAppStore.setState({ platform: "windows" });
   native.mockRejectedValue(new Error("clipboard unavailable"));
   const gif = { size: 6, arrayBuffer: () => Promise.resolve(new Uint8Array([71, 73, 70, 56, 57, 97]).buffer) } as Blob;
   await expect(copyForecastGif(gif)).rejects.toThrow("clipboard unavailable");
+});
+
+it.each(["linux", "macos"] as const)("rejects GIF copy before reading the blob on %s", async (platform) => {
+  useAppStore.setState({ platform });
+  const arrayBuffer = vi.fn();
+  const gif = { size: 6, arrayBuffer } as unknown as Blob;
+  await expect(copyForecastGif(gif)).rejects.toThrow("GIF clipboard unavailable");
+  expect(arrayBuffer).not.toHaveBeenCalled();
+  expect(native).not.toHaveBeenCalled();
 });
 
 it("writes the actual GIF MIME and bytes when browser clipboard supports it", async () => {

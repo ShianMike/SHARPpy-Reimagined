@@ -4,7 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Popover } from "../../components/Popover";
 import { Notice } from "../../components/Notice";
 import { useBackendClient } from "../../lib/backend/BackendProvider";
-import { copyPngToClipboard } from "../../lib/imageClipboard";
+import { copyPngToClipboard, useCanCopyPng } from "../../lib/imageClipboard";
+import { useAppStore } from "../../stores/appStore";
 import { useMapStore, panelLayers, panelProduct } from "../../stores/mapStore";
 import { useMapCatalog } from "../../map/catalogQuery";
 import { productOf } from "../../map/panelField";
@@ -17,7 +18,7 @@ import { compactUtc, forecastLabel } from "../sounding/soundingTime";
 import type { ForecastContext } from "../forecast/useForecast";
 import type { FieldProduct } from "../../types/map";
 import { exportForecast, forecastExportFilename, type ExportProgress, type ForecastExportOptions } from "./exportForecast";
-import { copyForecastGif } from "./forecastClipboard";
+import { copyForecastGif, useCanCopyGif } from "./forecastClipboard";
 import { useObjectUrl } from "../sounding/soundingQueries";
 import { ForecastHourSelection } from "./ForecastHourSelection";
 import styles from "./ForecastExportDialog.module.css";
@@ -29,6 +30,9 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
 }): ReactNode {
   const map = useMapStore();
   const catalog = useMapCatalog().data;
+  const windows = useAppStore((state) => state.platform === "windows");
+  const canCopyGif = useCanCopyGif();
+  const canCopyPng = useCanCopyPng();
   const settings = useUiStore(state => state.forecastExport);
   const setSettings = useUiStore(state => state.setForecastExport);
   const { width, delay } = settings;
@@ -137,7 +141,7 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
         </div>
         <div className={styles.previewCaption}><span>{width} × {height}</span><span>{activeFormat === "png" ? forecastLabel(context.hour) : `${String(selectedHours.length)} hours · ${(selectedHours.length * delay / 1000).toFixed(2)} s`}</span></div>
         <ol className={styles.stages} aria-label="Export stages">{(activeFormat !== "png" ? ["loading", "capturing", "encoding"] as const : ["loading", "capturing"] as const).map((stage, index) => <li key={stage} data-active={busy && progress?.phase === stage}><span>{index + 1}</span>{stage === "loading" ? "Load hours" : stage === "capturing" ? "Capture maps" : `Encode ${activeFormat.toUpperCase()}`}</li>)}</ol>
-        <p className={styles.help}>WebP loops the selected hours with lossless, full-color frames. GIF also loops; desktop GIF copy supports up to 16 MiB. PNG captures the current hour.</p>
+        <p className={styles.help}>WebP loops the selected hours with lossless, full-color frames. GIF also loops. PNG captures the current hour.{windows ? " Copy GIF supports up to 16 MiB." : ""}</p>
         {error === "" ? null : <Notice tone="danger" role="alert" title="Forecast export failed" message={error} />}
         {currentCopy?.state === "failed" ? <Notice tone="danger" role="alert" title={`${copyFormat} copy unavailable`} message={currentCopy.message ?? `Save the ${copyFormat} instead.`} /> : null}
       </section>
@@ -147,8 +151,8 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
       {busy ? <Action onClick={() => { controller.current?.abort(); }}>Cancel export</Action> : <>
         <Action onClick={close}>Close</Action>
         {url !== null && result !== null ? <a className={styles.save} href={url} download={result.filename}><Download className="icon-sm" aria-hidden="true" />Save {result.format.toUpperCase()}</a> : null}
-        {result?.format === "gif" ? <Action disabled={currentCopy?.state === "pending"} onClick={() => { void copyGif(); }}><Copy className="icon-sm" aria-hidden="true" />Copy GIF</Action> : null}
-        {result?.format === "png" ? <Action disabled={currentCopy?.state === "pending"} onClick={() => { void copyPng(); }}><Copy className="icon-sm" aria-hidden="true" />Copy PNG</Action> : null}
+        {result?.format === "gif" && canCopyGif ? <Action disabled={currentCopy?.state === "pending"} onClick={() => { void copyGif(); }}><Copy className="icon-sm" aria-hidden="true" />Copy GIF</Action> : null}
+        {result?.format === "png" && canCopyPng ? <Action disabled={currentCopy?.state === "pending"} onClick={() => { void copyPng(); }}><Copy className="icon-sm" aria-hidden="true" />Copy PNG</Action> : null}
         <Action disabled={!available || !hours.includes(context.hour)} onClick={() => { start("png"); }}><Image className="icon-sm" aria-hidden="true" />Create PNG</Action>
         <Action disabled={selectedHours.length < 2 || !available} onClick={() => { start("gif"); }}><Film className="icon-sm" aria-hidden="true" />Create GIF</Action>
         <Action tone="accent" disabled={selectedHours.length < 2 || !available} onClick={() => { start("webp"); }}><Film className="icon-sm" aria-hidden="true" />Create WebP</Action>

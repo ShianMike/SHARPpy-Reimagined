@@ -23,8 +23,9 @@ import { createQueryClient } from "./lib/backend/queryOptions";
 import type { Transport } from "./lib/backend/transport";
 import { probeGraphics, watchDevicePixelRatio } from "./lib/graphics/probe";
 import { MARKS, markOnce } from "./lib/metrics";
+import { useAppStore } from "./stores/appStore";
 import { useGraphicsStore } from "./stores/graphicsStore";
-import { startSessionLog } from "./stores/logStore";
+import { recordLog, startSessionLog } from "./stores/logStore";
 import { applyPreferences, createPreferencesRepository, DEFAULT_PREFERENCES, startPreferenceSync } from "./stores/preferences";
 import { useUiStore } from "./stores/uiStore";
 import type { GraphicsProfile } from "./types/graphics";
@@ -67,10 +68,6 @@ function ShellPaintedMark(): null {
   return null;
 }
 
-function isDesktopBuildInBrowser(): boolean {
-  return !["fixture", "live"].includes(import.meta.env.MODE) && !("__TAURI_INTERNALS__" in window);
-}
-
 /** Preferences first, so the graphics override applies to the first profile selection. */
 function startPreferences(): boolean {
   const repository = createPreferencesRepository(() => window.localStorage);
@@ -89,9 +86,20 @@ async function boot(container: HTMLElement): Promise<void> {
   useUiStore.getState().prepareReleaseNotes(version, returning);
   startGraphics();
   const root = createRoot(container);
-  if (isDesktopBuildInBrowser()) {
+  const desktop = "__TAURI_INTERNALS__" in window;
+  if (!desktop && !["fixture", "live"].includes(import.meta.env.MODE)) {
     root.render(<DesktopOnlyNotice />);
     return;
+  }
+  if (desktop) {
+    useAppStore.setState({ platform: "detecting" });
+    void import("./lib/backend/tauriTransport").then(({ getDesktopPlatform }) => getDesktopPlatform()).then(
+      (platform) => { useAppStore.setState({ platform }); },
+      (error: unknown) => {
+        useAppStore.setState({ platform: "unknown" });
+        recordLog("warning", "desktop", "Could not determine the desktop platform", String(error));
+      },
+    );
   }
   const client = new BackendClient(await loadTransport());
   const stopRetention = startSoundingRetention(client);

@@ -1,14 +1,15 @@
 import { useEffect, type ReactNode } from "react";
 import { Notice } from "../../components/Notice";
+import { useAppStore } from "../../stores/appStore";
 import { AUTOMATIC_UPDATE_INTERVAL_MS, useUpdateStore } from "../../stores/updateStore";
 import { Action } from "../../ui/Controls";
 import { UpdateInstallReview } from "./UpdateInstallReview";
 
 export function UpdateNotice(): ReactNode {
   const { status, installReview, update, downloaded, total, error, dismissedVersion, dismiss, check, install } = useUpdateStore();
-  const desktop = "__TAURI_INTERNALS__" in window;
+  const windows = useAppStore((state) => state.platform === "windows");
   useEffect(() => {
-    if (!desktop) return;
+    if (!windows) return;
     const checkAutomatically = (): void => { if (navigator.onLine) void check(true); };
     let timer: number;
     const schedule = (): void => {
@@ -20,9 +21,9 @@ export function UpdateNotice(): ReactNode {
     window.addEventListener("online", checkAutomatically);
     document.addEventListener("visibilitychange", visible);
     return () => { window.clearTimeout(timer); window.removeEventListener("online", checkAutomatically); document.removeEventListener("visibilitychange", visible); };
-  }, [check, desktop]);
+  }, [check, windows]);
 
-  if (!desktop) return null;
+  if (!windows) return null;
   // This global host also reviews installs requested from Settings, even after Later.
   const review = installReview === null ? null : <UpdateInstallReview />;
   if (update === null || update.version === dismissedVersion) return review;

@@ -9,6 +9,7 @@ import { parseModelCatalog } from "../../lib/contracts/soundings";
 import { renderWithBackend } from "../../test/backendHarness";
 import { resolveForecast } from "../forecast/useForecast";
 import { useMapStore } from "../../stores/mapStore";
+import { useAppStore } from "../../stores/appStore";
 import { useUiStore } from "../../stores/uiStore";
 import { DEFAULT_FORECAST_EXPORT_SETTINGS } from "../../stores/forecastExportSettings";
 import { ForecastExportDialog } from "./ForecastExportDialog";
@@ -16,7 +17,7 @@ import { defaultProductFor } from "../../map/panelField";
 
 const actions = vi.hoisted(() => ({ exportForecast: vi.fn(), copyGif: vi.fn() }));
 vi.mock("./exportForecast", async (original) => ({ ...await original<typeof import("./exportForecast")>(), exportForecast: actions.exportForecast }));
-vi.mock("./forecastClipboard", () => ({ copyForecastGif: actions.copyGif }));
+vi.mock("./forecastClipboard", async (original) => ({ ...await original<typeof import("./forecastClipboard")>(), copyForecastGif: actions.copyGif }));
 
 beforeEach(() => {
   useMapStore.getState().setLayerVisible("model-field", true);
@@ -42,7 +43,7 @@ it("uses each displayed panel's default parameter when exporting the whole layou
   });
   view.unmount(); queryClient.clear(); anchor.remove();
 });
-afterEach(() => { cleanup(); useMapStore.setState(useMapStore.getInitialState(), true); useUiStore.setState({ forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS }); vi.resetAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); useAppStore.setState({ platform: "browser" }); useMapStore.setState(useMapStore.getInitialState(), true); useUiStore.setState({ forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS }); vi.resetAllMocks(); vi.unstubAllGlobals(); });
 
 it("remembers export options on reopening, uses one panel when needed, and restores the layout preference", async () => {
   const inventory = parseMapCatalog(catalog), product = defaultProductFor(inventory, 0);
@@ -115,7 +116,8 @@ it("creates a current-hour PNG without requiring selected GIF hours", async () =
   view.unmount(); queryClient.clear(); anchor.remove();
 });
 
-it("copies the complete PNG, reports progress, and offers a save fallback if copying fails", async () => {
+it("copies the complete PNG through the macOS webview API and keeps a save fallback", async () => {
+  useAppStore.setState({ platform: "macos" });
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:forecast") });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
   class TestClipboardItem {
@@ -195,5 +197,28 @@ it("copies the actual GIF and reports clipboard errors with a save fallback", as
   fireEvent.click(screen.getByRole("button", { name: "Copy GIF" }));
   expect(await screen.findByText("GIF copied")).toBeTruthy();
   expect(actions.copyGif).toHaveBeenCalledWith(gif);
+  view.unmount(); queryClient.clear(); anchor.remove();
+});
+
+it("keeps GIF and PNG downloads available on Linux when clipboard copying is unavailable", async () => {
+  useAppStore.setState({ platform: "linux" });
+  vi.stubGlobal("ClipboardItem", undefined);
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:forecast") });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+  const inventory = parseMapCatalog(catalog), product = inventory.products[0];
+  const context = resolveForecast(parseModelCatalog(models).models, inventory, { modelKey: "hrrr", runTime: null, forecastHour: 0 });
+  if (context === null || product === undefined) throw new Error("Forecast fixture missing");
+  actions.exportForecast.mockResolvedValueOnce(new Blob(["GIF89a"], { type: "image/gif" }))
+    .mockResolvedValueOnce(new Blob(["PNG"], { type: "image/png" }));
+  const anchor = document.createElement("button"); document.body.append(anchor);
+  const { view, queryClient } = renderWithBackend(<ForecastExportDialog anchor={anchor} context={context} product={product} panel={0} onClose={vi.fn()} />, createTransport());
+  fireEvent.click(screen.getByRole("button", { name: "Create GIF" }));
+  expect(await screen.findByRole("link", { name: "Save GIF" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Copy GIF" })).toBeNull();
+  expect(screen.queryByText(/16 MiB/u)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Create PNG" }));
+  expect(await screen.findByRole("link", { name: "Save PNG" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Copy PNG" })).toBeNull();
+  expect(actions.copyGif).not.toHaveBeenCalled();
   view.unmount(); queryClient.clear(); anchor.remove();
 });

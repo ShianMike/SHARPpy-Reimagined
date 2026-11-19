@@ -245,7 +245,7 @@ def test_release_installs_model_fetch_dependencies():
     ) in workflow
     assert (
         "needs: [resolve-release, test-release, test-desktop, build-windows-exe, "
-        "native-windows-acceptance]"
+        "native-windows-acceptance, build-unix-desktop]"
     ) in workflow
     assert workflow.count("contents: write") == 1
 

@@ -9,7 +9,7 @@ import { useUiStore } from "../../stores/uiStore";
 import type { ImageMode, RenderChoice, SoundingSummary } from "../../types/soundings";
 import type { ViewRequest } from "../../types/soundingView";
 import { encodeAnimation, type AnimationFormat } from "../animation/encodeAnimation";
-import { copyForecastGif } from "../forecastExport/forecastClipboard";
+import { copyForecastGif, useCanCopyGif } from "../forecastExport/forecastClipboard";
 import { useModelCatalog, useObjectUrl } from "./soundingQueries";
 import { SourceSelect } from "./SourceFields";
 import { prepareSoundingAnimation, SOUNDING_ANIMATION_FRAME_LIMIT, soundingFrameChoices, type PreparedSoundings, type SoundingAnimationProgress } from "./prepareSoundingAnimation";
@@ -22,6 +22,7 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
   anchor: HTMLButtonElement; summary: SoundingSummary; choice: RenderChoice; quality: ImageMode; view: ViewRequest; onClose: () => void;
 }) {
   const client = useBackendClient();
+  const canCopyGif = useCanCopyGif();
   const colorStyle = useUiStore((state) => state.soundingColorStyle);
   const models = useModelCatalog();
   const model = models.data?.models.find((item) => [item.key, item.label].some((name) => name.toLowerCase() === summary.model?.toLowerCase()));
@@ -169,7 +170,7 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
           </>}
         </div>
         {exportReady ? <div className={local.resultActions} role="group" aria-label="Finished animation">
-          {result.format === "gif" ? <Action disabled={copying} onClick={copy}><Copy className="icon-sm" aria-hidden="true" />{copying ? "Copying…" : "Copy GIF"}</Action> : null}
+          {result.format === "gif" && canCopyGif ? <Action disabled={copying} onClick={copy}><Copy className="icon-sm" aria-hidden="true" />{copying ? "Copying…" : "Copy GIF"}</Action> : null}
           <a className={styles.save} href={url} download={result.filename}><Download className="icon-sm" aria-hidden="true" />Save {formatLabel}</a>
         </div> : null}
       </div>

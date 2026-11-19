@@ -256,12 +256,15 @@ def test_release_workflow_gates_tag_and_source_versions():
     assert set(build["needs"]) == {"resolve-release"}
     assert jobs["test-desktop"]["uses"] == "./.github/workflows/frontend.yml"
     assert jobs["test-desktop"]["with"]["ref"] == test_job["with"]["ref"]
+    assert jobs["build-unix-desktop"]["uses"] == "./.github/workflows/unix-desktop.yml"
+    assert jobs["build-unix-desktop"]["with"]["ref"] == test_job["with"]["ref"]
     assert set(jobs["attest-windows-release"]["needs"]) == {
         "resolve-release",
         "test-release",
         "test-desktop",
         "build-windows-exe",
         "native-windows-acceptance",
+        "build-unix-desktop",
     }
     assert set(jobs["publish"]["needs"]) == {
         "resolve-release",
@@ -284,7 +287,7 @@ def test_frontend_gate_requires_checks_and_all_browser_shards():
     jobs = _load_workflow("frontend.yml")["jobs"]
     gate = jobs["frontend"]
     assert set(gate["needs"]) == {"frontend-checks", "browser"}
-    assert gate["if"] == "always()"
+    assert gate["if"] == "${{ always() && !inputs.unix_packages }}"
     step = gate["steps"][0]
     assert step["env"] == {
         "CHECKS_RESULT": "${{ needs.frontend-checks.result }}",
@@ -300,8 +303,8 @@ def test_frontend_gate_requires_checks_and_all_browser_shards():
     ]
     browser = jobs["browser"]
     assert browser["if"] == (
-        "${{ github.event_name != 'pull_request' || "
-        "startsWith(github.head_ref, 'release/') }}"
+        "${{ !inputs.unix_packages && (github.event_name != 'pull_request' || "
+        "startsWith(github.head_ref, 'release/')) }}"
     )
     assert browser["strategy"] == {
         "fail-fast": "false", "matrix": {"shard": ["1", "2", "3", "4"]},

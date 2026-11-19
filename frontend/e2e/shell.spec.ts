@@ -185,7 +185,8 @@ test.describe("at the 1280 by 800 minimum window", () => {
       // Exercise the native notification UI without downloading or installing a release.
       Object.defineProperty(window, "__TAURI_INTERNALS__", { value: {
         metadata: { currentWindow: { label: "main" } },
-        invoke: (command: string) => {
+        invoke: (command: string, args?: { action?: string }) => {
+          if (command === "check_for_updates" && args?.action === "getPlatform") return Promise.resolve("windows");
           if (command === "check_for_updates") return Promise.resolve({ rid: 1, currentVersion, version: "99.0.0", rawJson: {} });
           if (command === "plugin:resources|close") return Promise.resolve();
           if (command === "plugin:window|is_fullscreen") return Promise.resolve(false);

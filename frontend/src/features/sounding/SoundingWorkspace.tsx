@@ -5,6 +5,7 @@ import { Action, EmptyPanel, IconAction } from "../../ui/Controls";
 import { Surface } from "../../ui/Surface";
 import { Popover } from "../../components/Popover";
 import { cx } from "../../lib/cx";
+import { useCanCopyPng } from "../../lib/imageClipboard";
 import { MAX_OPEN, pendingDiscardSounding, useActiveSounding, useSoundingStore } from "../../stores/soundingStore";
 import { OpenSoundings, soundingMeta } from "./OpenSoundings";
 import { SoundingImage } from "./SoundingImage";
@@ -76,6 +77,7 @@ function DiscardSoundingChanges({ fallback }: { fallback: RefObject<HTMLDivEleme
 }
 
 export function SoundingWorkspace(): ReactNode {
+  const canCopyPng = useCanCopyPng();
   const [sources, setSources] = useState(true);
   const [controls, setControls] = useState(false);
   const [controlsTarget, setControlsTarget] = useState<HTMLDivElement | null>(null);
@@ -106,7 +108,7 @@ export function SoundingWorkspace(): ReactNode {
                 <ol className={styles.guideSteps}>
                   <li><strong>Inspect a level</strong><p>Hover either chart to link a level. Focus a chart and use ↑ / ↓ to move between levels.</p></li>
                   <li><strong>Edit your profile</strong><p>Choose Edit profile, then drag a point or select a level. Compare Original / New values and use Undo history to step back.</p></li>
-                  <li><strong>Arrange and export</strong><p>Fit width or Fit all to resize. Use Chart panels for diagnostics or all four height charts, then Copy or Export PNG.</p></li>
+                  <li><strong>Arrange and export</strong><p>Fit width or Fit all to resize. Use Chart panels for diagnostics or all four height charts, then {canCopyPng ? "Copy or Export PNG" : "Export PNG"}.</p></li>
                 </ol>
                 <p className={styles.guideNote}>Your original data stays unchanged.</p>
               </section> : null}

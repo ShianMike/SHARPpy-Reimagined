@@ -54,6 +54,14 @@ the exact runtime versions, ecCodes/WRF imports, and Severe and Winter PNG
 dimensions. Download `unix-package-*` for the builds and `unix-runtime-*`
 for the reports.
 
+Actions caches Ubuntu package downloads by the current APT install plan and
+macOS Cargo dependencies by architecture, Rust compiler, Xcode SDK, Python
+version and the lockfiles. Every run still resolves the APT packages,
+rebuilds the first-party code, freezes the backend and checks the installed
+app. The unsigned-for-distribution Mac candidates keep the ad-hoc signatures
+applied by PyInstaller. The public workflow signs the bundled code with
+Developer ID and notarizes the finished package.
+
 To build the equivalent artifacts locally, use CPython 3.13.16 and start with
 a clean virtual environment. Use Rust 1.99.1 and your native target. Build the
 wheel and freeze the backend on the target OS. On macOS, export

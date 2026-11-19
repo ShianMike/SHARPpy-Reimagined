@@ -33,16 +33,16 @@ find "$backend_dir" -type l -print0 | while IFS= read -r -d '' link; do
 done
 
 signing_identity=${APPLE_SIGNING_IDENTITY:--}
-sign_args=(--force --sign "$signing_identity")
 if [[ "$signing_identity" == - ]]; then
   [[ -z ${APPLE_CERTIFICATE:-} ]] || fail "Import the certificate and set APPLE_SIGNING_IDENTITY before signing."
-  sign_args+=(--timestamp=none)
-else
-  sign_args+=(--timestamp)
+  # PyInstaller ad-hoc signs the executable and collected Mach-O binaries.
+  codesign --verify --strict "$backend_executable"
+  exit 0
 fi
+sign_args=(--force --sign "$signing_identity" --timestamp)
 
 sign_code() {
-  if [[ "$signing_identity" != - && "$2" == *executable* ]]; then
+  if [[ "$2" == *executable* ]]; then
     codesign "${sign_args[@]}" --options runtime "$1"
   else
     codesign "${sign_args[@]}" "$1"

@@ -446,13 +446,13 @@ class IndexColumnsMixin:
         wbz = self._d("wbz_height")
         ecape = self._d("ecape")
         # CAPE-energy rows use the white->yellow->red->pink scale; WBZ is neutral.
-        bot = [(("HGZ CAPE", i0(hgz), " J kg⁻¹",
+        bot = [(("HGZ CAPE", i0(hgz), " J/kg",
                  self._wyrp(hgz, 1000, 2500, 4000, higher=True)),
                 ("NSTP", f1(nstp), "",
                  self._wyrp(nstp, 1.0, 2.0, 4.0, higher=True))),
-               (("NCAPE", f2(ncape), " J kg⁻¹ m⁻¹",
+               (("NCAPE", f2(ncape), " J/kg/m",
                  self._wyrp(ncape, 0.1, 0.2, 0.3, higher=True)),
-               ("ECAPE", i0(ecape), " J kg⁻¹",
+               ("ECAPE", i0(ecape), " J/kg",
                  self._wyrp(ecape, 1000, 2500, 4000, higher=True))),
                (("LSCP", f1(lscp), "",
                  self._wyrp(lscp, -1.0, -4.0, -8.0, higher=False)),

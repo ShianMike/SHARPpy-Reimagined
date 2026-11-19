@@ -1,7 +1,15 @@
 {
   "3.8.6": {
-    "summary": "Run the desktop workspace on Ubuntu or Mac with the bundled sounding and forecast backend.",
+    "summary": "Open model soundings again, read CAPE units clearly and run the desktop app on Ubuntu.",
     "highlights": [
+      {
+        "title": "Model sounding downloads",
+        "description": "Open HRRR and other NOMADS point soundings through the repaired Rust downloader."
+      },
+      {
+        "title": "Readable CAPE units",
+        "description": "Severe sounding images show J/kg for HGZ CAPE and ECAPE, and J/kg/m for NCAPE."
+      },
       {
         "title": "Linux desktop package",
         "description": "Install the x64 .deb on Ubuntu 24.04 to use the model viewer, live tracking and sounding tools."

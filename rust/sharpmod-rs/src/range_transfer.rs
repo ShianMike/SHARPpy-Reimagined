@@ -17,6 +17,8 @@ mod disk;
 mod reader;
 mod requests;
 
+pub(crate) use disk::valid_grib;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ByteRange {
     pub start: u64,

@@ -436,7 +436,7 @@ def test_three_column_stats_leave_one_line_between_lapse_rows(qt_app):
 
 
 def test_composite_places_wbz_directly_below_ecape(qt_app):
-    """Keep WBZ aligned with ECAPE in the right diagnostic column."""
+    """Keep the lower diagnostic units and right-column alignment."""
     from qtpy.QtCore import QRect, Qt
 
     from sharpmod.viz.index_board import IndexBoard
@@ -447,14 +447,13 @@ def test_composite_places_wbz_directly_below_ecape(qt_app):
         hgz_cape=638.0,
         ncape=0.13,
         wbz_height=4106.0,
-        ecape=1417.0,
+        ecape=0.0,
         lscp=3.1,
     )
     records = {}
 
     def capture_text(qp, rect, text, color=None, align=Qt.AlignLeft):
-        if text in {"LSCP = ", "WBZ = ", "ECAPE = ", "NCAPE = ", "4106 m AGL"}:
-            records[text] = QRect(rect)
+        records[text] = QRect(rect)
 
     board._text = capture_text
     board._ship_chart = lambda *args, **kwargs: None
@@ -464,6 +463,9 @@ def test_composite_places_wbz_directly_below_ecape(qt_app):
     board._col_comp(painter, QRect(0, 0, 300, 400), 18)
     painter.end()
 
+    assert records["638 J/kg"].y() == records["HGZ CAPE = "].y()
+    assert records["0.13 J/kg/m"].y() == records["NCAPE = "].y()
+    assert records["0 J/kg"].y() == records["ECAPE = "].y()
     assert records["ECAPE = "].y() == records["NCAPE = "].y()
     assert records["ECAPE = "].x() > records["NCAPE = "].x()
     assert records["WBZ = "].x() == records["ECAPE = "].x()

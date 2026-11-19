@@ -15,10 +15,9 @@ Reimagined** into Applications. Use **Settings → Updates → GitHub Releases**
 to download a newer build and install it. Native GIF clipboard copying is
 available on Windows. The Save GIF action works on Linux and macOS.
 
-The latest published v3.8.5 uses the Windows release workflow from its tag.
-Linux and macOS installers are built from source or from GitHub Actions until
-they appear on the [releases page](https://github.com/ShianMike/SHARPpy-Reimagined/releases).
-For Mac downloads through GitHub Actions, the candidate has an ad-hoc signature.
+Find the Windows and Ubuntu packages on the
+[releases page](https://github.com/ShianMike/SHARPpy-Reimagined/releases).
+Mac candidates from GitHub Actions have ad-hoc signatures.
 macOS may prompt for approval when opening it. Verify the origin before using
 **Privacy & Security → Open Anyway**. Public Mac releases use Apple notarization.
 [Apple's guidance on opening apps](https://support.apple.com/en-us/102445)

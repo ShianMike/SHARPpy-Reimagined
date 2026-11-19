@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.8.5
+# SHARPpy Reimagined · v3.8.6
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,32 +10,22 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v385---2026-11-19)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v386---2026-11-19)
 
 If SHARPpy Reimagined helps your weather analysis, select **Star** at the top of this GitHub page to support the project.
 
 </div>
 
-## What's new in 3.8.5
+## What's new in 3.8.6
 
-- **SPC outlooks on Overview.** Choose Day 1, 2 or 3 to see the latest risk,
-  valid times and states covered in part by the highest outlined risk.
-- **Steadier map playback and export.** Forecast and Live Tracking prepare
-  the next frame's enabled layers while the current map stays visible. Both
-  timelines offer 3× and 4× speeds. Forecast exports retain matching overlays
-  through each PNG, GIF or WebP capture.
-- **Simpler map controls.** Edit layers alongside the color key, pick a panel
-  from the point inspector and copy the point's coordinates.
-- **More reliable sounding opens.** Keep consistent reported levels when
-  an observed archive repeats or misorders them. Automatic provider selection
-  can try another observed source, and HRRR analyses can fall back to GRIB.
-- **Clearer sounding tools.** Scroll the saved profiles inside the recovery
-  dialog, select animation frames in a compact grid and create GIFs directly.
-  Severe and Winter profiles use softer hodograph axes and matching growth-zone
-  brackets.
-- **More processing in Rust.** Read WRF sounding columns and adjacent wind
-  cells directly from NetCDF, and use native code for more diagnostics,
-  profile loading, provider requests and cache transactions.
+- **Model sounding downloads.** HRRR and the other models that use NOMADS
+  can open point soundings again through the Rust downloader.
+- **Readable CAPE units.** Severe sounding images use J/kg for HGZ CAPE
+  and ECAPE, and J/kg/m for NCAPE.
+- **Linux desktop package.** Install the desktop app and its bundled
+  scientific backend on Ubuntu 24.04 x64.
+- **Mac desktop builds.** Apple Silicon and Intel builds run on macOS 15
+  or later. Public Mac downloads require Apple notarization.
 
 ## Sounding and forecast tools
 
@@ -96,8 +86,7 @@ Updates**. Release assets include checksums and build provenance; the Windows
 executables are unsigned.
 
 See [Linux and macOS desktop builds](docs/DESKTOP_BUILDS.md) for platform
-requirements, source setup, and installer availability. The v3.8.5 release
-provides Windows downloads.
+requirements, source setup, and installer availability.
 
 To run from source, use Python **3.11–3.13**, Node.js **24.12 or newer**, stable
 Rust and your platform's Tauri prerequisites. From the repository root in

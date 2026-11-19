@@ -7,6 +7,11 @@ on:
     branches: [main]
     paths: ["frontend/**", "src-tauri/**", "rust/sharpmod-rs/**", "rust/weather-core/**", "sharpmod/bridge/**", "sharpmod/resources/basemap.json", "pyproject.toml", "constraints/release.txt", "scripts/install_sharppy_compat.py", ".github/workflows/frontend.yml"]
   workflow_dispatch:
+    inputs:
+      unix_packages:
+        description: Build and test Linux and macOS desktop packages
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       ref:
@@ -18,7 +23,13 @@ concurrency:
   group: ${{ github.workflow }}-frontend-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  unix-packages:
+    if: inputs.unix_packages
+    uses: ./.github/workflows/unix-desktop.yml
+    with:
+      ref: ${{ github.sha }}
   frontend-checks:
+    if: ${{ !inputs.unix_packages }}
     runs-on: windows-latest
     timeout-minutes: 20
     defaults: { run: { working-directory: frontend } }
@@ -59,7 +70,7 @@ jobs:
       - run: npm run build:browser
       - run: npm run build:fixture
   browser:
-    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'release/') }}
+    if: ${{ !inputs.unix_packages && (github.event_name != 'pull_request' || startsWith(github.head_ref, 'release/')) }}
     runs-on: windows-latest
     timeout-minutes: 12
     strategy:
@@ -91,7 +102,7 @@ jobs:
           retention-days: 7
   frontend:
     needs: [frontend-checks, browser]
-    if: always()
+    if: ${{ always() && !inputs.unix_packages }}
     runs-on: ubuntu-latest
     steps:
       - name: Require every frontend check and browser shard
@@ -103,6 +114,7 @@ jobs:
           test "$CHECKS_RESULT" = success
           test "$BROWSER_RESULT" = "$EXPECTED_BROWSER_RESULT"
   desktop-bridge:
+    if: ${{ !inputs.unix_packages }}
     runs-on: windows-latest
     timeout-minutes: 30
     defaults: { run: { working-directory: src-tauri } }

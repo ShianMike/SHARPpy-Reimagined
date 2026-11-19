@@ -98,6 +98,27 @@ fn parse<T: DeserializeOwned>(value: Value) -> T {
 }
 
 #[test]
+fn updater_reports_the_native_platform_without_an_update_plugin() {
+    let (_app, webview) = window(Arc::new(NotConfigured));
+    let platform = invoke_args(
+        &webview,
+        "check_for_updates",
+        serde_json::json!({"action": "getPlatform"}),
+    );
+    assert_eq!(platform.unwrap(), std::env::consts::OS);
+}
+
+#[cfg(not(windows))]
+#[test]
+fn updater_rejects_checks_on_non_windows_targets() {
+    let (_app, webview) = window(Arc::new(NotConfigured));
+    assert_eq!(
+        invoke(&webview, "check_for_updates").unwrap_err(),
+        "In-app updates are available on Windows. Download updates from GitHub Releases."
+    );
+}
+
+#[test]
 fn sounding_view_passes_the_selected_palette_to_the_bridge() {
     let launcher = FakeLauncher::with(vec![script(|mut io| async move {
         for style in ["protanopia", "standard"] {

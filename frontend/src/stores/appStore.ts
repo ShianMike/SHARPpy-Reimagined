@@ -4,12 +4,14 @@
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import type { DesktopPlatform } from "../lib/backend/tauriTransport";
 import { useMapStore } from "./mapStore";
 import { useLiveTrackingStore } from "./liveTrackingStore";
 import { useSoundingStore } from "./soundingStore";
 
 export const WORKSPACE_IDS = ["overview", "map", "live", "sounding", "status", "settings"] as const;
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number];
+export type AppPlatform = DesktopPlatform | "browser" | "detecting";
 
 export type PendingOutcome = "none" | "selected" | "dropped";
 
@@ -20,6 +22,7 @@ export interface MapPoint {
 }
 
 export interface AppState {
+  platform: AppPlatform;
   activeWorkspace: WorkspaceId;
   selectedStationId: string | null;
   /** The forecast point picked on empty map; null while a station is selected. */
@@ -41,6 +44,7 @@ export interface AppState {
 
 export const useAppStore = create<AppState>()(
   subscribeWithSelector((set, get) => ({
+    platform: "browser",
     activeWorkspace: "overview",
     selectedStationId: null,
     selectedPoint: null,

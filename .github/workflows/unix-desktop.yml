@@ -1,0 +1,213 @@
+name: Linux and macOS desktop packages
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      notarize_macos:
+        type: boolean
+        default: false
+    secrets:
+      APPLE_CERTIFICATE:
+      APPLE_CERTIFICATE_PASSWORD:
+      APPLE_ID:
+      APPLE_PASSWORD:
+      APPLE_TEAM_ID:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package and test ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            config: linux
+          - platform: macos-arm64
+            runner: macos-15
+            target: aarch64-apple-darwin
+            config: macos
+          - platform: macos-x64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            config: macos
+    defaults:
+      run:
+        shell: bash
+    env:
+      RUSTUP_TOOLCHAIN: "1.99.1"
+      SHARPMOD_REQUIRE_RUST: "1"
+      SHARPMOD_RELEASE_BUILD: "1"
+      SHARPMOD_BACKEND: rust
+      SHARPMOD_ONEFILE: "0"
+      PYTHONUTF8: "1"
+      PIP_CONSTRAINT: ${{ github.workspace }}/constraints/release.txt
+      DESKTOP_TARGET: ${{ matrix.target }}
+      PLATFORM: ${{ matrix.platform }}
+      CONFIG: ${{ matrix.config }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { ref: "${{ inputs.ref || github.sha }}", persist-credentials: false }
+
+      - name: Install Linux desktop build and test dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libegl1 libgl1 libgomp1 \
+            libxkbcommon-x11-0 libxcb-cursor0 xvfb xauth dbus-x11
+
+      - name: Use macOS 15 as the deployment target
+        if: runner.os == 'macOS'
+        run: echo "MACOSX_DEPLOYMENT_TARGET=15.0" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with: { python-version: "3.13.16", cache: pip, cache-dependency-path: "constraints/release.txt" }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: "24.12.0", cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-unix-desktop-${{ matrix.platform }}-${{ hashFiles('src-tauri/Cargo.lock', 'rust/sharpmod-rs/Cargo.lock') }}
+
+      - name: Build the matching scientific wheel and freeze the backend
+        run: |
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+          rustup target add "$DESKTOP_TARGET"
+          python -m pip install --upgrade pip
+          python -m pip install --no-compile ".[render,era5,wrf]" pyinstaller maturin
+          python scripts/install_sharppy_compat.py --sharppy-only
+          python -m maturin build --release --locked \
+            --manifest-path rust/sharpmod-rs/Cargo.toml --interpreter python --out "$RUNNER_TEMP/wheels"
+          python -m pip install --no-deps "$RUNNER_TEMP"/wheels/sharpmod_rs-*.whl
+          python -m pip check
+          # Setuptools generates this metadata during a local wheel build.
+          rm -rf -- sharpmod.egg-info
+          python packaging/release_contract.py --repo-root . --require-dist-info --require-external-metadata
+          python -m PyInstaller packaging/sharpmod_backend.spec --noconfirm
+
+      - name: Import the Apple Developer ID certificate
+        if: runner.os == 'macOS' && inputs.notarize_macos
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          : "${APPLE_CERTIFICATE:?Set the base64 Apple Developer ID .p12 in APPLE_CERTIFICATE}"
+          : "${APPLE_CERTIFICATE_PASSWORD:?Set APPLE_CERTIFICATE_PASSWORD}"
+          certificate=$(mktemp "$RUNNER_TEMP/apple-certificate.XXXXXX")
+          trap 'rm -f -- "$certificate"' EXIT
+          printf '%s' "$APPLE_CERTIFICATE" | base64 -D > "$certificate"
+          keychain="$RUNNER_TEMP/sharppy-release.keychain-db"
+          password=$(openssl rand -hex 32)
+          security create-keychain -p "$password" "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security import "$certificate" -P "$APPLE_CERTIFICATE_PASSWORD" -k "$keychain" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+          identity=$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application:/{print $2}')
+          [[ "$identity" =~ ^[[:xdigit:]]{40}$ ]]
+          printf 'APPLE_SIGNING_IDENTITY=%s\n' "$identity" >> "$GITHUB_ENV"
+
+      - name: Build the native desktop installer
+        env:
+          NOTARIZE_MACOS: ${{ inputs.notarize_macos == true }}
+          APPLE_ID: ${{ inputs.notarize_macos && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ inputs.notarize_macos && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ inputs.notarize_macos && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          if [[ "$CONFIG" == macos ]]; then
+            export APPLE_SIGNING_IDENTITY="${APPLE_SIGNING_IDENTITY:--}"
+            if [[ "$NOTARIZE_MACOS" == true ]]; then
+              : "${APPLE_ID:?Set APPLE_ID for notarization}"
+              : "${APPLE_PASSWORD:?Set APPLE_PASSWORD for notarization}"
+              : "${APPLE_TEAM_ID:?Set APPLE_TEAM_ID for notarization}"
+            fi
+            bash packaging/prepare_macos_backend.sh "$DESKTOP_TARGET"
+          fi
+          npm --prefix frontend ci
+          npm --prefix frontend run tauri -- build --target "$DESKTOP_TARGET" \
+            --config "src-tauri/tauri.$CONFIG.release.conf.json" -- --locked
+
+      - name: Install the candidate and verify the packaged runtime
+        timeout-minutes: 15
+        env:
+          NOTARIZE_MACOS: ${{ inputs.notarize_macos == true }}
+          APPLE_ID: ${{ inputs.notarize_macos && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ inputs.notarize_macos && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ inputs.notarize_macos && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          shopt -s nullglob
+          version=$(node -p 'require("./frontend/package.json").version')
+          bundle="$PWD/src-tauri/target/$DESKTOP_TARGET/release/bundle"
+          destination="$RUNNER_TEMP/unix-package"
+          report="$RUNNER_TEMP/unix-runtime"
+          mkdir -p "$destination" "$report"
+          sample="$PWD/examples/soundings/14061619.OAX"
+          if [[ "$CONFIG" == linux ]]; then
+            packages=("$bundle"/deb/*.deb)
+            [[ "${#packages[@]}" == 1 ]]
+            package="$destination/SHARPpy-Reimagined-v$version-$PLATFORM.deb"
+            cp "${packages[0]}" "$package"
+            [[ $(dpkg-deb -f "$package" Architecture) == amd64 ]]
+            [[ $(dpkg-deb -f "$package" Version) == "$version" ]]
+            sudo apt-get install --no-install-recommends -y "$package"
+            app="/usr/bin/sharppy-reimagined"
+            backend="/usr/lib/SHARPpy Reimagined/backend/sharppy-backend"
+          else
+            packages=("$bundle"/dmg/*.dmg)
+            [[ "${#packages[@]}" == 1 ]]
+            package="$destination/SHARPpy-Reimagined-v$version-$PLATFORM.dmg"
+            cp "${packages[0]}" "$package"
+            if [[ "$NOTARIZE_MACOS" == true ]]; then
+              codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$package"
+              xcrun notarytool submit "$package" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" --wait --output-format json > "$report/notarization.json"
+              jq -e '.status == "Accepted"' "$report/notarization.json"
+              xcrun stapler staple "$package"
+              xcrun stapler validate "$package"
+            fi
+            mount=$(mktemp -d "$RUNNER_TEMP/sharppy-dmg.XXXXXX")
+            hdiutil attach -readonly -nobrowse -mountpoint "$mount" "$package"
+            trap 'hdiutil detach "$mount"' EXIT
+            installed="$RUNNER_TEMP/installed/SHARPpy Reimagined.app"
+            ditto "$mount/SHARPpy Reimagined.app" "$installed"
+            codesign --verify --deep --strict "$installed"
+            if [[ "$NOTARIZE_MACOS" == true ]]; then
+              spctl --assess --type execute "$installed"
+            fi
+            app="$installed/Contents/MacOS/sharppy-reimagined"
+            backend="$installed/Contents/Resources/backend/sharppy-backend"
+          fi
+          bash packaging/verify_unix_artifact.sh "$app" "$backend" "$version" "$sample" "$report"
+
+      - name: Upload the tested desktop package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: unix-package-${{ matrix.platform }}
+          path: ${{ runner.temp }}/unix-package/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Preserve bundled runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: unix-runtime-${{ matrix.platform }}
+          path: ${{ runner.temp }}/unix-runtime/*.json
+          if-no-files-found: ignore
+          retention-days: 14

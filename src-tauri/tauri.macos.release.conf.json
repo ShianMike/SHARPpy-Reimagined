@@ -1,0 +1,14 @@
+{
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": false,
+    "targets": ["app", "dmg"],
+    "macOS": {
+      "minimumSystemVersion": "15.0",
+      "hardenedRuntime": true,
+      "files": {
+        "Resources/backend": "../dist/sharppy-backend"
+      }
+    }
+  }
+}

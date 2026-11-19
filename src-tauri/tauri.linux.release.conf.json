@@ -1,0 +1,17 @@
+{
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": false,
+    "targets": ["deb"],
+    "category": "Weather",
+    "shortDescription": "Forecast maps and atmospheric soundings",
+    "resources": {
+      "../dist/sharppy-backend/": "backend/"
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libegl1", "libgl1", "libgomp1", "libxkbcommon-x11-0", "libxcb-cursor0", "xdg-utils"]
+      }
+    }
+  }
+}

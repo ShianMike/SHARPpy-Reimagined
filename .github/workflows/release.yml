@@ -15,6 +15,10 @@ on:
         required: true
         type: boolean
         default: false
+      notarize_macos:
+        description: "Sign and notarize macOS downloads for publication using the repository's Apple credentials."
+        type: boolean
+        default: false
 
 # Build and test jobs have no repository write permission. A dedicated job can
 # write only provenance attestations, and only the isolated publish job can
@@ -696,9 +700,23 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  build-unix-desktop:
+    name: Build and verify Linux and macOS packages
+    needs: resolve-release
+    uses: ./.github/workflows/unix-desktop.yml
+    with:
+      ref: ${{ needs.resolve-release.outputs.source_sha }}
+      notarize_macos: ${{ inputs.notarize_macos == true }}
+    secrets:
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
   attest-windows-release:
-    name: Attest Windows release provenance
-    needs: [resolve-release, test-release, test-desktop, build-windows-exe, native-windows-acceptance]
+    name: Attest desktop release provenance
+    needs: [resolve-release, test-release, test-desktop, build-windows-exe, native-windows-acceptance, build-unix-desktop]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -714,6 +732,45 @@ jobs:
           name: windows-release-${{ needs.resolve-release.outputs.tag }}
           path: release-artifacts
 
+      - &download_linux
+        name: Download the tested Linux package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unix-package-linux-x64
+          path: release-artifacts
+
+      - &download_macos
+        name: Download the tested notarized macOS packages
+        if: inputs.notarize_macos == true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: unix-package-macos-*
+          merge-multiple: true
+          path: release-artifacts
+
+      - &hash_desktop_downloads
+        name: Assemble and checksum the desktop downloads
+        working-directory: release-artifacts
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
+          NOTARIZE_MACOS: ${{ inputs.notarize_macos == true }}
+        run: |
+          export LC_ALL=C
+          prefix="SHARPpy-Reimagined-$RELEASE_TAG"
+          sums="$prefix-SHA256SUMS.txt"
+          sha256sum --check "$sums"
+          test -s "$prefix-linux-x64.deb"
+          if [[ "$NOTARIZE_MACOS" == true ]]; then
+            test -s "$prefix-macos-arm64.dmg"
+            test -s "$prefix-macos-x64.dmg"
+          fi
+          files=()
+          for file in *; do
+            [[ "$file" == "$sums" ]] || files+=("$file")
+          done
+          sha256sum -- "${files[@]}" > "$sums"
+
       - name: Attest tested release artifacts
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
@@ -722,7 +779,7 @@ jobs:
   publish:
     if: github.event_name == 'push' || inputs.publish_release
     name: Publish GitHub Release
-    needs: [resolve-release, test-release, test-desktop, build-windows-exe, native-windows-acceptance, attest-windows-release]
+    needs: [resolve-release, test-release, test-desktop, build-windows-exe, native-windows-acceptance, build-unix-desktop, attest-windows-release]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
@@ -737,6 +794,10 @@ jobs:
         with:
           name: windows-release-${{ needs.resolve-release.outputs.tag }}
           path: release-artifacts
+
+      - *download_linux
+      - *download_macos
+      - *hash_desktop_downloads
 
       - name: Check out publication policy
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -771,9 +832,12 @@ jobs:
 
             Use the `setup.exe` to install the new desktop interface, or extract the ZIP and run `SHARPpy-Reimagined.exe`. Keep its `backend` folder beside it; Python and the scientific engine are included.
 
+            **Linux:** Install the `linux-x64.deb` with your package manager on Ubuntu 24.04 x64.
+            **macOS:** If this release includes DMGs, choose `macos-arm64.dmg` for Apple Silicon or `macos-x64.dmg` for Intel. Open the disk image and drag the app to Applications. macOS 15 or later is required.
+
             The v3 downloads use the React/Tauri interface. The final old GUI remains available as v2.0.0 Legacy below.
 
-            These executables are not code-signed, so Windows SmartScreen may warn on first launch. Check a download against the published `SHA256SUMS.txt`, and verify GitHub build provenance with `gh attestation verify PATH-TO-ASSET --repo ShianMike/SHARPpy-Reimagined`.
+            The Windows executables are not code-signed, so Windows SmartScreen may warn on first launch. Check a download against the published `SHA256SUMS.txt`, and verify GitHub build provenance with `gh attestation verify PATH-TO-ASSET --repo ShianMike/SHARPpy-Reimagined`.
 
             **Legacy GUI download:** [v2.0.0 Legacy](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0) is the final PySide6/Qt GUI release. Its original Windows ZIP and portable executable remain available there after newer releases are published.
           overwrite_files: true

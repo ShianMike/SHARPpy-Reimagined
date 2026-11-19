@@ -1,6 +1,6 @@
 import { Copy, Download, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useState } from "react";
-import { copyPngToClipboard } from "../../lib/imageClipboard";
+import { copyPngToClipboard, useCanCopyPng } from "../../lib/imageClipboard";
 import { useUiStore } from "../../stores/uiStore";
 import { Action } from "../../ui/Controls";
 import type { ImageMode } from "../../types/soundings";
@@ -22,6 +22,7 @@ export function SoundingExport({ view, quality, onQualityChange, ready, busy, fi
   const currentNotice = ready && notice?.image === view?.image ? notice : null;
   const exporting = currentNotice?.pending === true;
   const enabled = ready && url !== null && view !== undefined && !exporting;
+  const canCopy = useCanCopyPng();
   const StatusIcon = busy || exporting ? LoaderCircle : ready && !currentNotice?.failed ? null : TriangleAlert;
   const description = annotations.length === 0 ? "Lossless PNG" : "Lossless PNG with edited levels in your display units";
   const exportImage = async (copy: boolean): Promise<void> => {
@@ -56,7 +57,7 @@ export function SoundingExport({ view, quality, onQualityChange, ready, busy, fi
     <SourceSelect<ImageMode> label="Image resolution" value={quality} disabled={busy || exporting} options={[{ value: "uhd", label: "UHD · lossless" }, { value: "hd", label: "HD · lossless" }]} onChange={onQualityChange} />
     <div className={styles.exportButtons}>
       <Action tone="accent" disabled={!enabled} title={description} aria-description={description} onClick={() => { void exportImage(false); }}><Download className="icon-sm" aria-hidden="true" />Export PNG</Action>
-      <Action aria-label="Copy sounding image" disabled={!enabled} title={description} aria-description={description} onClick={() => { void exportImage(true); }}><Copy className="icon-sm" aria-hidden="true" />Copy</Action>
+      {canCopy ? <Action aria-label="Copy sounding image" disabled={!enabled} title={description} aria-description={description} onClick={() => { void exportImage(true); }}><Copy className="icon-sm" aria-hidden="true" />Copy</Action> : null}
     </div>
     {currentNotice?.failed ? <Notice tone="danger" role="alert" title={currentNotice.copy ? "Image copy unavailable" : "Image export failed"}
       icon={currentNotice.copy ? Copy : Download} message={currentNotice.text}

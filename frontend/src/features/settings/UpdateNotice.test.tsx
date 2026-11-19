@@ -36,7 +36,7 @@ beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true);
   useLogStore.getState().clear();
   check.mockReset();
-  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  useAppStore.setState({ platform: "windows" });
   vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -229,8 +229,8 @@ it("keeps background failures quiet and preserves a known update for installatio
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Update now" }).disabled).toBe(false);
 });
 
-it("does not check or announce desktop updates in a browser", () => {
-  vi.unstubAllGlobals();
+it.each(["browser", "linux", "macos", "detecting", "unknown"] as const)("skips the built-in updater on %s", (platform) => {
+  useAppStore.setState({ platform });
   render(<UpdateNotice />);
   fireEvent(window, new Event("online"));
   expect(screen.queryByRole("status")).toBeNull();

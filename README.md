@@ -95,6 +95,10 @@ folder before launching it. Existing installations can check **Settings →
 Updates**. Release assets include checksums and build provenance; the Windows
 executables are unsigned.
 
+See [Linux and macOS desktop builds](docs/DESKTOP_BUILDS.md) for platform
+requirements, source setup, and installer availability. The v3.8.5 release
+provides Windows downloads.
+
 To run from source, use Python **3.11–3.13**, Node.js **24.12 or newer**, stable
 Rust and your platform's Tauri prerequisites. From the repository root in
 PowerShell:

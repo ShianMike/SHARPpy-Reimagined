@@ -7,6 +7,19 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Build the desktop app for Ubuntu 24.04 x64 and macOS 15 on Apple Silicon
+  and Intel. The Linux package and macOS disk images include the scientific
+  backend and verify model and WRF dependencies, file-sounding import, and
+  Severe and Winter rendering after installation.
+
+### Changed
+
+- Include the tested Linux package in future GitHub releases and support
+  publishing macOS disk images with Apple signing and notarization. On Linux
+  and macOS, Settings → Updates links to GitHub Releases for manual installs.
+
 ## [v3.8.5] - 2026-11-19
 
 ### Fixed

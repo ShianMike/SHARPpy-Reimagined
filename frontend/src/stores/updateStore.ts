@@ -1,6 +1,7 @@
 import type { Update } from "@tauri-apps/plugin-updater";
 import { create } from "zustand";
 import { hasLocalWork } from "../features/sounding/viewHistory";
+import { useAppStore } from "./appStore";
 import { recordLog } from "./logStore";
 import { createPreferencesRepository, currentPreferences } from "./preferences";
 import { useSoundingStore } from "./soundingStore";
@@ -32,7 +33,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
   dismiss: () => { set({ dismissedVersion: get().update?.version ?? null }); },
   noteSoundingWork: () => { if (get().status === "downloading" && !get().soundingWorkChanged) set({ soundingWorkChanged: true }); },
   check: async (automatic = false) => {
-    if (busy(get().status)) return;
+    if (useAppStore.getState().platform !== "windows" || busy(get().status)) return;
     if (automatic && !navigator.onLine) return;
     const windowStart = Math.floor(Date.now() / AUTOMATIC_UPDATE_INTERVAL_MS) * AUTOMATIC_UPDATE_INTERVAL_MS;
     if (automatic && useUiStore.getState().lastUpdateCheckWindow === windowStart) return;
@@ -55,7 +56,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
   },
   install: () => {
     const { update, status } = get();
-    if (update === null || busy(status)) return;
+    if (useAppStore.getState().platform !== "windows" || update === null || busy(status)) return;
     set({ status: "reviewing", installReview: "download", error: null });
   },
   resolveInstallReview: async (proceed) => {

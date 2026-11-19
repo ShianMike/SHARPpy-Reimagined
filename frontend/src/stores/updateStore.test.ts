@@ -34,11 +34,20 @@ beforeEach(() => {
   useUpdateStore.setState(useUpdateStore.getInitialState(), true);
   useSoundingStore.setState(useSoundingStore.getInitialState(), true);
   useAppStore.setState(useAppStore.getInitialState(), true);
+  useAppStore.setState({ platform: "windows" });
   useUiStore.setState({ lastUpdateCheckWindow: null });
   localStorage.removeItem(PREFERENCES_KEY);
   check.mockReset();
 });
 afterEach(() => { vi.restoreAllMocks(); });
+
+it.each(["linux", "macos"] as const)("skips update checks and schedule writes on %s", async (platform) => {
+  useAppStore.setState({ platform });
+  await useUpdateStore.getState().check(true);
+  await useUpdateStore.getState().check();
+  expect(check).not.toHaveBeenCalled();
+  expect(useUiStore.getState().lastUpdateCheckWindow).toBeNull();
+});
 
 it.each(work)("requires review and keeps $name at an inactive sounding time on cancel", async ({ view }) => {
   const { download, install } = availableUpdate();

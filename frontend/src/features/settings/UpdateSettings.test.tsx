@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { version } from "../../../package.json";
 import releaseNotes from "../../../release-notes.json";
+import { useAppStore } from "../../stores/appStore";
 import { useLogStore } from "../../stores/logStore";
 import { PREFERENCES_KEY } from "../../stores/preferences";
 import { useUpdateStore } from "../../stores/updateStore";
@@ -13,8 +14,11 @@ import { UpdateInstallReview } from "./UpdateInstallReview";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { PointEditor } from "../sounding/PointEditor";
 
-const check = vi.hoisted(() => vi.fn<() => Promise<Update | null>>());
-vi.mock("../../lib/backend/tauriTransport", () => ({ checkForUpdates: check }));
+const { check, openReleases } = vi.hoisted(() => ({
+  check: vi.fn<() => Promise<Update | null>>(),
+  openReleases: vi.fn<() => Promise<void>>(),
+}));
+vi.mock("../../lib/backend/tauriTransport", () => ({ checkForUpdates: check, openUpdateReleases: openReleases }));
 
 function SettingsWithReview() {
   const review = useUpdateStore((state) => state.installReview);
@@ -37,9 +41,10 @@ beforeEach(() => {
   useUiStore.setState({ whatsNewOpen: false });
   localStorage.removeItem(PREFERENCES_KEY);
   check.mockReset();
-  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  openReleases.mockReset();
+  useAppStore.setState({ platform: "windows" });
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); useAppStore.setState({ platform: "browser" }); vi.restoreAllMocks(); });
 
 it("shows a newer version and downloads only after an explicit install click, preserving preferences", async () => {
   const { update, download, install } = availableUpdate();
@@ -146,7 +151,7 @@ it("reviews inputs typed during download before installation even when they have
 });
 
 it("explains the desktop requirement in the browser without contacting an update server", () => {
-  vi.unstubAllGlobals();
+  useAppStore.setState({ platform: "browser" });
   render(<UpdateSettings />);
   expect(screen.getByRole("status").textContent).toContain("The Windows app checks at 00:00 and 12:00 UTC, or when next opened online. You choose when to install.");
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Check for updates" }).disabled).toBe(true);
@@ -155,6 +160,33 @@ it("explains the desktop requirement in the browser without contacting an update
   expect(screen.getByText(releaseNotes[version as keyof typeof releaseNotes].summary)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "View highlights" }));
   expect(useUiStore.getState().whatsNewOpen).toBe(true);
+});
+
+it.each([
+  { platform: "linux", installer: "Linux x64 .deb" },
+  { platform: "macos", installer: "macOS .dmg" },
+] as const)("offers the $installer and opens GitHub Releases on $platform", async ({ platform, installer }) => {
+  useAppStore.setState({ platform });
+  openReleases.mockResolvedValue(undefined);
+  render(<UpdateSettings />);
+  expect(screen.getByRole("status").textContent).toContain("Manual updates");
+  expect(screen.getByRole("status").textContent).toContain(installer);
+  expect(screen.queryByRole("button", { name: "Check for updates" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Install update" })).toBeNull();
+  expect(screen.getByRole("heading", { name: `What’s new in ${version}` })).toBeTruthy();
+  const releases = screen.getByRole("link", { name: "GitHub Releases" });
+  expect(releases.getAttribute("href")).toBe("https://github.com/ShianMike/SHARPpy-Reimagined/releases");
+  fireEvent.click(releases);
+  await waitFor(() => { expect(openReleases).toHaveBeenCalledOnce(); });
+  expect(check).not.toHaveBeenCalled();
+});
+
+it("shows a copyable release address when the browser cannot open", async () => {
+  useAppStore.setState({ platform: "linux" });
+  openReleases.mockRejectedValue(new Error("no browser"));
+  render(<UpdateSettings />);
+  fireEvent.click(screen.getByRole("link", { name: "GitHub Releases" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("https://github.com/ShianMike/SHARPpy-Reimagined/releases");
 });
 
 it("distinguishes incoming release notes from installed highlights and renders them as text", async () => {

@@ -10,13 +10,13 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#unreleased)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v386---2026-11-19)
 
 If SHARPpy Reimagined helps your weather analysis, select **Star** at the top of this GitHub page to support the project.
 
 </div>
 
-## What's new in 3.8.6 (Unreleased)
+## What's new in 3.8.6
 
 - **Model soundings.** HRRR and other models that use NOMADS can open point
   soundings again. Standard ECMWF IFS uses the combined 0.25° feed, and

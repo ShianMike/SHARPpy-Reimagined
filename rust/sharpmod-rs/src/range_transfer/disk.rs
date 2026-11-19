@@ -271,7 +271,7 @@ impl Store {
     }
 }
 
-pub(super) fn valid_grib(path: &Path) -> bool {
+pub(crate) fn valid_grib(path: &Path) -> bool {
     let read = || -> std::io::Result<bool> {
         let mut file = File::open(path)?;
         if file.metadata()?.len() < 8 {

@@ -7,6 +7,20 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v3.8.6] - 2026-11-19
+
+### Fixed
+
+- Restore model sounding downloads that use the NOMADS geographic subset.
+  The Rust downloader now checks cached GRIB files directly and lets model
+  retrieval fall back to indexed downloads when the subset is unavailable.
+- Request the combined 0.25° ECMWF IFS feed explicitly so standard IFS
+  soundings receive both pressure levels and surface fields.
+- Remove Canadian GeoMet pressure levels at or below the verified terrain
+  height before validating the sounding.
+- Use J/kg for HGZ CAPE and ECAPE, and J/kg/m for NCAPE in Severe sounding
+  images so the units render correctly.
+
 ### Added
 
 - Build the desktop app for Ubuntu 24.04 x64 and macOS 15 on Apple Silicon
@@ -16,7 +30,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Include the tested Linux package in future GitHub releases and support
+- Include the tested Linux package in GitHub releases and support
   publishing macOS disk images with Apple signing and notarization. On Linux
   and macOS, Settings → Updates links to GitHub Releases for manual installs.
 - Cache Ubuntu package downloads and compiled macOS dependencies in GitHub

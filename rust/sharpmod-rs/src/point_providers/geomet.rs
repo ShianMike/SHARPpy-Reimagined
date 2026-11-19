@@ -3,6 +3,12 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 type PointResult = (String, Option<u16>, Py<PyAny>);
 
+fn remove_terrain_levels(rows: &mut Vec<[f64; 9]>, surface_height: f64) -> usize {
+    let fetched = rows.len();
+    rows.retain(|row| row[1] > surface_height);
+    fetched - rows.len()
+}
+
 #[pyfunction]
 #[allow(clippy::too_many_arguments)] // Keep the existing provider adapter signature.
 fn geomet_point_value<'py>(
@@ -354,6 +360,8 @@ fn fetch_geomet_point<'py>(
             -speed * r.cos(),
         ]);
     }
+    let surface_height = get("SurfaceHeight", None);
+    let terrain_removed = remove_terrain_levels(&mut rows, surface_height);
     let speed = get("SurfaceWindSpeed", None);
     let dir = get("SurfaceWindDir", None).to_radians();
     let merge = merged(
@@ -361,7 +369,7 @@ fn fetch_geomet_point<'py>(
         &rows,
         [
             pressure,
-            get("SurfaceHeight", None),
+            surface_height,
             get("SurfaceTemperature", None),
             get("SurfaceDewpoint", None),
             -speed * dir.sin(),
@@ -395,11 +403,45 @@ fn fetch_geomet_point<'py>(
     fields.set_item("surface_pressure_hpa", merge.getattr("surface_pressure")?)?;
     fields.set_item(
         "below_ground_levels_removed",
-        requested.len() - levels.len() + merge.getattr("removed_levels")?.extract::<usize>()?,
+        requested.len() - levels.len()
+            + terrain_removed
+            + merge.getattr("removed_levels")?.extract::<usize>()?,
     )?;
     api.getattr("GeoMetPointDataset")?.call((), Some(&fields))
 }
 pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(fetch_geomet_point, module)?)?;
     module.add_function(wrap_pyfunction!(geomet_point_value, module)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::remove_terrain_levels;
+    use crate::model_surface::{merge, GroundLevel};
+    use crate::quality_control::profile_qc;
+
+    #[test]
+    fn geomet_removes_terrain_levels_and_keeps_aloft_inversions_for_qc() {
+        let missing = -9999.;
+        let surface = [1015.1291, 113.41721, 10., 8., 5., 0.];
+        let ground = GroundLevel::verified(surface, Some(missing)).unwrap();
+        let above = [1000., 220., 9., 7., 270., 12., -0.3, 6., 0.];
+        let inverted_aloft = [975., 210., 8., 6., 270., 14., -0.4, 7., 0.];
+        let mut rows = vec![
+            [1015., 99.742554, 10., 8., 270., 10., -0.1, 5., 0.],
+            [1010., surface[1], 10., 8., 270., 10., -0.2, 5., 0.],
+            above,
+            inverted_aloft,
+        ];
+
+        assert_eq!(remove_terrain_levels(&mut rows, surface[1]), 2);
+        assert_eq!(rows, [above, inverted_aloft]);
+
+        let columns = std::array::from_fn(|i| rows.iter().map(|row| row[i]).collect());
+        let merged = merge(columns, ground, missing);
+        assert_eq!(merged.columns[0], [surface[0], above[0], inverted_aloft[0]]);
+        let core = std::array::from_fn(|i| merged.columns[i].as_slice());
+        let qc = profile_qc(core, Some(missing), true).unwrap();
+        assert_eq!(qc.issues, ["height_not_strictly_increasing"]);
+    }
 }

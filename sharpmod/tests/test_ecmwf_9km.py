@@ -20,7 +20,10 @@ def test_9km_uses_its_own_grid_and_the_published_ifs_steps():
     assert [max(mx.forecast_hours(MODEL, cycle_hour=h)) for h in config.cycles] \
         == [360, 144, 360, 144]
     assert 147 not in mx.forecast_hours(MODEL)
-    assert mx.get_config("ecmwf").key == "ecmwf-ifs"
+    standard = mx.get_config("ecmwf")
+    assert standard.key == "ecmwf-ifs"
+    assert mx._herbie_kwargs(standard) == {"resolution": "0p25"}
+    assert mx._herbie_kwargs(standard, surface=True) == {"resolution": "0p25"}
 
 
 @pytest.mark.parametrize("resolution,levtype,suffix", [

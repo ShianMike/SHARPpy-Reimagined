@@ -1,6 +1,9 @@
 use super::*;
 use pyo3::types::{PyDict, PyTuple};
 
+#[cfg(test)]
+mod tests;
+
 #[allow(clippy::too_many_arguments)] // Shared transport hooks and explicit HTTP mode.
 fn transfer(
     py: Python<'_>,
@@ -186,7 +189,8 @@ fn download_nomads_native<'py>(
         herbie.setattr("save_dir", path.call1((dir,))?.call_method0("expanduser")?)?;
     }
     let output = path.call1((herbie.call_method1("get_localFilePath", (search,))?,))?;
-    if api.call_method1("_valid_grib", (&output,))?.is_truthy()? {
+    let output_path: PathBuf = output.extract()?;
+    if py.detach(|| range_transfer::valid_grib(&output_path)) {
         let count = output.call_method0("stat")?.getattr("st_size")?;
         return (output, count, url).into_pyobject(py);
     }
@@ -202,37 +206,31 @@ fn download_nomads_native<'py>(
         .get_item("session")?
         .filter(|v| !v.is_none())
         .map(Bound::unbind);
-    let count = transfer(
+    let count = match transfer(
         py,
         &url,
         Vec::new(),
-        output.extract()?,
+        output_path,
         session,
         options,
         (10., 120.),
         true,
-    )
-    .map_err(|failure| {
-        if failure.is_instance(
-            py,
-            &PyModule::import(py, "sharpmod.models.model_transport")
-                .unwrap()
-                .getattr("DownloadCancelled")
-                .unwrap(),
-        ) {
-            failure
-        } else {
-            PyErr::from_value(
-                api.getattr("SourceRoutingUnavailable")
-                    .unwrap()
-                    .call1((format!(
-                        "NOMADS geographic subset failed: {}",
-                        failure.value(py)
-                    ),))
-                    .unwrap(),
-            )
+    ) {
+        Ok(count) => count,
+        Err(failure) => {
+            let cancelled = PyModule::import(py, "sharpmod.models.model_transport")?
+                .getattr("DownloadCancelled")?;
+            if failure.is_instance(py, &cancelled) {
+                return Err(failure);
+            }
+            return Err(PyErr::from_value(
+                api.getattr("SourceRoutingUnavailable")?.call1((format!(
+                    "NOMADS geographic subset failed: {}",
+                    failure.value(py)
+                ),))?,
+            ));
         }
-    })?;
+    };
     (output, count, url).into_pyobject(py)
 }
 pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

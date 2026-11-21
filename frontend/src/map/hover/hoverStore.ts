@@ -5,6 +5,7 @@
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import type { SpotterPosition } from "../../types/spotters";
 import type { SurfacePlot } from "../../types/surface";
 
 export interface HoveredStation {
@@ -25,12 +26,20 @@ export interface HoveredOutlook {
   y: number;
 }
 
-/** A storm report marker under the pointer. */
+/** A report or observation marker under the pointer. */
 export interface HoveredReport {
   observation?: Pick<SurfacePlot, "temperatureC" | "dewpointC">;
+  source?: { kind: "spotter"; panel: number; position: SpotterPosition };
   label: string;
   description: string;
   caption: string;
+  x: number;
+  y: number;
+}
+
+interface SpotterDetails {
+  panel: number;
+  position: SpotterPosition;
   x: number;
   y: number;
 }
@@ -51,13 +60,14 @@ export interface HoverState {
   hovered: HoveredStation | null;
   outlook: HoveredOutlook | null;
   report: HoveredReport | null;
+  pinnedSpotter: SpotterDetails | null;
   pointer: PointerPosition | null;
   setHovered: (hovered: HoveredStation | null) => void;
   setOutlook: (outlook: HoveredOutlook | null) => void;
   setReport: (report: HoveredReport | null) => void;
   setPointer: (pointer: PointerPosition | null) => void;
-  /** A drag started or the runtime went away: nothing is hovered. */
-  clear: () => void;
+  /** Clear pointer readouts. Leaving the map canvas can keep a clicked card open. */
+  clear: (keepPinnedSpotter?: boolean) => void;
 }
 
 const sameStation = (a: HoveredStation | null, b: HoveredStation | null): boolean =>
@@ -67,11 +77,12 @@ export const useHoverStore = create<HoverState>()(
   subscribeWithSelector((set, get) => ({
     inspecting: true,
     setInspecting: (inspecting) => {
-      set({ inspecting, hovered: null, outlook: null, report: null, pointer: null });
+      set({ inspecting, hovered: null, outlook: null, report: null, pinnedSpotter: null, pointer: null });
     },
     hovered: null,
     outlook: null,
     report: null,
+    pinnedSpotter: null,
     pointer: null,
     setHovered: (hovered) => {
       if (!sameStation(get().hovered, hovered)) {
@@ -106,8 +117,25 @@ export const useHoverStore = create<HoverState>()(
       }
       set({ pointer });
     },
-    clear: () => {
-      set({ hovered: null, outlook: null, report: null, pointer: null });
+    clear: (keepPinnedSpotter = false) => {
+      set({ hovered: null, outlook: null, report: null, pointer: null,
+        pinnedSpotter: keepPinnedSpotter ? get().pinnedSpotter : null });
     },
   })),
 );
+
+export function clearRemovedSpotterHover(panel: number, positions: readonly SpotterPosition[] | null): void {
+  const { report, pinnedSpotter } = useHoverStore.getState();
+  const removed = (source: Pick<SpotterDetails, "panel" | "position"> | undefined): boolean => {
+    if (source?.panel !== panel) return false;
+    const { longitude, latitude, updatedAt, chaseCam } = source.position;
+    return positions?.some((position) => position.longitude === longitude && position.latitude === latitude
+      && position.updatedAt === updatedAt && position.chaseCam === chaseCam) !== true;
+  };
+  const clearReport = removed(report?.source);
+  const clearPinned = removed(pinnedSpotter ?? undefined);
+  if (clearReport || clearPinned) useHoverStore.setState({
+    report: clearReport ? null : report,
+    pinnedSpotter: clearPinned ? null : pinnedSpotter,
+  });
+}

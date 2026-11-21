@@ -145,6 +145,61 @@ fn accepts_numeric_boundaries_and_all_existing_plot_options() {
 }
 
 #[test]
+fn wind_measurement_validates_and_normalizes_the_view() {
+    Python::initialize();
+    Python::attach(|py| {
+        for json in [
+            r#"{"edits": [], "measureWind": null}"#,
+            r#"{"edits": [], "measureWind": 1}"#,
+            r#"{"edits": [], "measureWind": "true"}"#,
+            r#"{"edits": [], "measureWind": true, "animationRange": 80}"#,
+            r#"{"edits": [], "measureWind": true, "drag": {"target": "wind:0", "x": 0.2, "y": 0.3}}"#,
+        ] {
+            rejected(py, &request(py, json));
+        }
+        let measured = validate_sounding_view(
+            py,
+            &request(py, r#"{"edits": [], "measureWind": true, "drag": null, "mode": "winter", "timeIndex": 2}"#),
+        )
+        .unwrap();
+        assert!(measured
+            .get_item("measureWind")
+            .unwrap()
+            .unwrap()
+            .is_truthy()
+            .unwrap());
+        assert_eq!(
+            measured
+                .get_item("mode")
+                .unwrap()
+                .unwrap()
+                .extract::<String>()
+                .unwrap(),
+            "winter"
+        );
+        assert_eq!(
+            measured
+                .get_item("timeIndex")
+                .unwrap()
+                .unwrap()
+                .extract::<usize>()
+                .unwrap(),
+            2
+        );
+        assert!(!measured.contains("drag").unwrap());
+
+        let normal = request(
+            py,
+            r#"{"edits": [], "animationRange": 80, "drag": {"target": "wind:0", "x": 0.2, "y": 0.3}}"#,
+        );
+        let omitted = validate_sounding_view(py, &normal).unwrap();
+        normal.set_item("measureWind", false).unwrap();
+        let explicit_false = validate_sounding_view(py, &normal).unwrap();
+        assert!(explicit_false.eq(omitted).unwrap());
+    });
+}
+
+#[test]
 fn bounds_animation_ranges_before_rendering() {
     Python::initialize();
     Python::attach(|py| {

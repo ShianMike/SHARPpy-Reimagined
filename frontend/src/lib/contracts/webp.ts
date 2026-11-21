@@ -17,7 +17,10 @@ export function parseWebpFrame(value: unknown): WebpFrame {
     catch {
         throw new ContractError("dataBase64", "expected base64 WebP");
     }
-    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < bytes.length; index++) {
+        bytes[index] = binary.charCodeAt(index);
+    }
     if (binary.slice(0, 4) !== "RIFF" || binary.slice(8, 12) !== "WEBP" || new DataView(bytes.buffer).getUint32(4, true) + 8 !== bytes.length)
         throw new ContractError("dataBase64", "expected a complete WebP frame");
     return { width, height, bytes };

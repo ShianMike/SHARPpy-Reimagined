@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../lib/backend/fixtureTransport";
 import { useAppStore } from "../stores/appStore";
+import { useForecastDrawingStore } from "../stores/forecastDrawingStore";
 import { useForecastStore } from "../stores/forecastStore";
 import { useGraphicsStore } from "../stores/graphicsStore";
 import { useMapStore } from "../stores/mapStore";
@@ -23,6 +24,7 @@ vi.mock("../map/WeatherMap", async () => {
 
 const app = useAppStore.getState(), forecast = useForecastStore.getState(), graphics = useGraphicsStore.getState();
 const map = useMapStore.getState(), ui = useUiStore.getState();
+const drawing = useForecastDrawingStore.getInitialState();
 beforeEach(() => {
   useAppStore.setState(app, true); useForecastStore.setState(forecast, true);
   useGraphicsStore.setState(graphics, true);
@@ -30,7 +32,7 @@ beforeEach(() => {
   mapMounts.mockClear();
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); useForecastDrawingStore.setState(drawing, true); vi.unstubAllGlobals(); });
 
 function pendingExit(element: HTMLElement) {
   let finish = (): void => undefined;
@@ -86,6 +88,41 @@ it("hides Point controls only in Live Tracking and returns focus to Layers after
   fireEvent.click(screen.getByRole("button", { name: "Model Viewer" }));
   expect(screen.getByRole("button", { name: "Point details" })).toBeTruthy();
   queryClient.clear();
+});
+
+it("keeps the map clear of a floating forecast notice throughout Draw Forecast", async () => {
+  useAppStore.getState().setActiveWorkspace("map");
+  useForecastDrawingStore.setState({ enabled: true });
+  const { queryClient } = renderWithBackend(<Shell />, createTransport());
+  try {
+    await screen.findByTestId("map-canvas");
+    for (const mode of ["idle", "draw", "edit"] as const) {
+      act(() => { useForecastDrawingStore.setState({ mode }); });
+      expect(screen.queryByRole("note", { name: "Unofficial user forecast" })).toBeNull();
+    }
+  } finally { queryClient.clear(); }
+});
+
+it("routes undo and redo shortcuts to a forecast draft outside text inputs", async () => {
+  useAppStore.getState().setActiveWorkspace("map");
+  const { queryClient } = renderWithBackend(<><Shell /><input aria-label="Shortcut test input" /></>, createTransport());
+  try {
+    await screen.findByTestId("map-canvas");
+    act(() => {
+      const draft = useForecastDrawingStore.getState();
+      draft.setEnabled(true);
+      draft.startDraw();
+      draft.addVertex([-100, 35]);
+      draft.addVertex([-99, 36]);
+    });
+    const input = screen.getByRole("textbox", { name: "Shortcut test input" });
+    fireEvent.keyDown(input, { key: "z", ctrlKey: true });
+    expect(useForecastDrawingStore.getState().points).toHaveLength(2);
+    fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
+    expect(useForecastDrawingStore.getState().points).toEqual([[-100, 35]]);
+    fireEvent.keyDown(document.body, { key: "y", ctrlKey: true });
+    expect(useForecastDrawingStore.getState().points).toHaveLength(2);
+  } finally { queryClient.clear(); }
 });
 
 it.each(["overview", "settings", "status", "sounding"] as const)("transitions from %s to Model Viewer without rebuilding the map", async (workspace) => {

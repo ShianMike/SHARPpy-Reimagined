@@ -2,7 +2,7 @@
 // countries, lakes, and coastline lines, coloured and sized from the --map-*
 // tokens. MapLibre types only; nothing here loads maplibre-gl.
 
-import type { LayerSpecification, LineLayerSpecification, Map as MapLibreMap } from "maplibre-gl";
+import type { ExpressionFilterSpecification, LayerSpecification, LineLayerSpecification, Map as MapLibreMap } from "maplibre-gl";
 import { documentTokenReader, parseLength, type CanvasTokens, type Rgba } from "../canvasTokens";
 import type { LayerState } from "../layers/registry";
 
@@ -180,23 +180,42 @@ export function applyBasemapState(map: MapLibreMap, state: LayerState): void {
   }
 }
 
+function applyNativeVisibility(map: MapLibreMap, layer: LayerSpecification, visible: boolean): void {
+  const visibility = visible ? layer.layout?.visibility ?? "visible" : "none";
+  if ((map.getLayoutProperty(layer.id, "visibility") ?? "visible") !== visibility) map.setLayoutProperty(layer.id, "visibility", visibility);
+}
+
 /** Native road lines, shields and names keep their provider styling. */
 export function applyRoadNetworkState(map: MapLibreMap, state: LayerState): void {
   const layers = nativeStyles.get(map)?.layers ?? map.getStyle().layers;
   for (const layer of layers) {
     if (!("source-layer" in layer) || layer.source !== "openmaptiles"
       || !["transportation", "transportation_name"].includes(layer["source-layer"] ?? "")) continue;
-    const visibility = state.visible ? layer.layout?.visibility ?? "visible" : "none";
-    if ((map.getLayoutProperty(layer.id, "visibility") ?? "visible") !== visibility) map.setLayoutProperty(layer.id, "visibility", visibility);
+    applyNativeVisibility(map, layer, state.visible);
+  }
+}
+
+/** Wide rivers are also drawn as polygons in the provider's shared water fill. */
+export function applyRiverState(map: MapLibreMap, state: LayerState): void {
+  const layers = nativeStyles.get(map)?.layers ?? map.getStyle().layers;
+  for (const layer of layers) {
+    if (!("source-layer" in layer) || layer.source !== "openmaptiles") continue;
+    if (layer.type === "line" && layer["source-layer"] === "waterway") {
+      applyNativeVisibility(map, layer, state.visible);
+    } else if (layer.type === "fill" && layer["source-layer"] === "water") {
+      // Both provider styles use expression filters.
+      const original = (layer.filter ?? true) as ExpressionFilterSpecification;
+      map.setFilter(layer.id, state.visible ? layer.filter : ["all", original, ["!=", ["get", "class"], "river"]]);
+    }
   }
 }
 
 /** Place labels are independent of the road network's own names and shields. */
-export function applyBasemapLabels(map: MapLibreMap, state: LayerState): void {
-  for (const layer of map.getStyle().layers) {
+export function applyBasemapLabels(map: MapLibreMap, state: LayerState, riversVisible: boolean): void {
+  const layers = nativeStyles.get(map)?.layers ?? map.getStyle().layers;
+  for (const layer of layers) {
     if (layer.type !== "symbol" || layer.source !== "openmaptiles"
       || ["transportation", "transportation_name"].includes(layer["source-layer"] ?? "")) continue;
-    const visibility = state.visible ? "visible" : "none";
-    if ((map.getLayoutProperty(layer.id, "visibility") ?? "visible") !== visibility) map.setLayoutProperty(layer.id, "visibility", visibility);
+    applyNativeVisibility(map, layer, state.visible && (riversVisible || layer["source-layer"] !== "waterway"));
   }
 }

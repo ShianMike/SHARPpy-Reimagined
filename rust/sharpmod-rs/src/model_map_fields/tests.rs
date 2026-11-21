@@ -141,6 +141,193 @@ fn value(py: Python<'_>, grids: &Py<PyDict>, name: &str) -> PyResult<f32> {
         .as_array()[[0, 0]])
 }
 
+fn load_fixture_value(key: &str, field: &str, cancelled: Option<Py<PyAny>>) -> PyResult<f32> {
+    Python::attach(|py| {
+        let result = download_map_fields(
+            py,
+            &product(py, key)?,
+            &run(py)?,
+            1,
+            10.,
+            cancelled,
+            "hrrr".into(),
+        )?;
+        value(py, &result, field)
+    })
+}
+
+#[track_caller]
+fn wait_for_fixture(condition: impl Fn() -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !condition() {
+        assert!(
+            Instant::now() < deadline,
+            "fixture did not reach the expected state"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+fn cancellation_callback(check: impl Fn() -> bool + Send + Sync + 'static) -> Py<PyAny> {
+    Python::attach(|py| {
+        pyo3::types::PyCFunction::new_closure(py, None, None, move |_, _| Ok::<_, PyErr>(check()))
+            .unwrap()
+            .into_any()
+            .unbind()
+    })
+}
+
+fn overlapping_fixture_loads(server: &Server) -> (u64, PyResult<f32>, PyResult<f32>) {
+    let before_probes = server.identity_requests.load(Ordering::Relaxed);
+    let follower_polls = Arc::new(AtomicUsize::new(0));
+    std::thread::scope(|scope| {
+        let gate = server.identity_gate.lock().unwrap();
+        let leader = scope.spawn(|| load_fixture_value("tmp-2m", "tmp2m", None));
+        wait_for_fixture(|| server.identity_requests.load(Ordering::Relaxed) > before_probes);
+        let follower = scope.spawn(|| {
+            let polls = follower_polls.clone();
+            let callback = cancellation_callback(move || {
+                polls.fetch_add(1, Ordering::Relaxed);
+                false
+            });
+            load_fixture_value("dpt-2m", "dpt2m", Some(callback))
+        });
+        // Both transports poll cancellation while their response or ticket is pending.
+        wait_for_fixture(|| follower_polls.load(Ordering::Relaxed) >= 3);
+        let while_blocked = server.identity_requests.load(Ordering::Relaxed) - before_probes;
+        drop(gate);
+        (
+            while_blocked,
+            leader.join().unwrap(),
+            follower.join().unwrap(),
+        )
+    })
+}
+
+#[test]
+fn overlapping_warm_products_share_one_probe_and_sequential_loads_revalidate() {
+    let _guard = crate::lock_python_backend_test();
+    Python::initialize();
+    clear_model_field_cache();
+    let body = [message(2, 24), message(3, 24)].concat();
+    let index =
+        b"1:0:d:TMP:2 m above ground:1 hour fcst:\n2:24:d:DPT:2 m above ground:1 hour fcst:\n"
+            .to_vec();
+    let server = Server::start(body.clone(), index.clone());
+    let _provider = Python::attach(|py| {
+        Provider::new(
+            py,
+            &server,
+            Some(wrap_pyfunction!(fixture_decode, py)?.into_any()),
+        )
+    })
+    .unwrap();
+    assert_eq!(load_fixture_value("tmp-2m", "tmp2m", None).unwrap(), 2.);
+    assert_eq!(load_fixture_value("dpt-2m", "dpt2m", None).unwrap(), 3.);
+    let before_probes = server.identity_requests.load(Ordering::Relaxed);
+    let before_requests = server.requests.load(Ordering::Relaxed);
+    let before_decodes = DECODED.load(Ordering::Relaxed);
+    let (while_blocked, temperature, dewpoint) = overlapping_fixture_loads(&server);
+    assert_eq!(temperature.unwrap(), 2.);
+    assert_eq!(dewpoint.unwrap(), 3.);
+    let probes = server.identity_requests.load(Ordering::Relaxed) - before_probes;
+    let requests = server.requests.load(Ordering::Relaxed) - before_requests;
+    let decodes = DECODED.load(Ordering::Relaxed) - before_decodes;
+    assert_eq!(load_fixture_value("tmp-2m", "tmp2m", None).unwrap(), 2.);
+    let sequential_probes =
+        server.identity_requests.load(Ordering::Relaxed) - before_probes - probes;
+    eprintln!(
+        "warm pair: probes={probes}, held={while_blocked}, requests={requests}, decodes={decodes}; sequential: probes={sequential_probes}"
+    );
+    assert_eq!((probes, while_blocked, requests, decodes), (1, 1, 1, 0));
+    assert_eq!(sequential_probes, 1);
+
+    server.replace(body, index, "W/\"weak\"");
+    let before_probes = server.identity_requests.load(Ordering::Relaxed);
+    let before_requests = server.requests.load(Ordering::Relaxed);
+    let before_decodes = DECODED.load(Ordering::Relaxed);
+    let (_, temperature, dewpoint) = overlapping_fixture_loads(&server);
+    assert_eq!(temperature.unwrap(), 2.);
+    assert_eq!(dewpoint.unwrap(), 3.);
+    let probes = server.identity_requests.load(Ordering::Relaxed) - before_probes;
+    let requests = server.requests.load(Ordering::Relaxed) - before_requests;
+    let decodes = DECODED.load(Ordering::Relaxed) - before_decodes;
+    eprintln!("weak revision pair: probes={probes}, requests={requests}, decodes={decodes}");
+    assert_eq!((probes, requests, decodes), (1, 5, 2));
+
+    server.identity_missing.store(true, Ordering::Relaxed);
+    let before_probes = server.identity_requests.load(Ordering::Relaxed);
+    let (_, temperature, dewpoint) = overlapping_fixture_loads(&server);
+    Python::attach(|py| {
+        let unavailable = PyModule::import(py, "sharpmod.providers.hrrr_field")
+            .unwrap()
+            .getattr("HrrrFieldUnavailable")
+            .unwrap();
+        assert!(temperature.unwrap_err().is_instance(py, &unavailable));
+        assert!(dewpoint.unwrap_err().is_instance(py, &unavailable));
+    });
+    let probes = server.identity_requests.load(Ordering::Relaxed) - before_probes;
+    eprintln!("unavailable pair: probes={probes}");
+    assert_eq!(probes, 1);
+    clear_model_field_cache();
+}
+
+#[test]
+fn cancelling_the_probe_initiator_leaves_the_live_follower_running() {
+    let _guard = crate::lock_python_backend_test();
+    Python::initialize();
+    clear_model_field_cache();
+    let server = Server::start(
+        message(2, 24),
+        b"1:0:d:TMP:2 m above ground:1 hour fcst:\n".to_vec(),
+    );
+    let _provider = Python::attach(|py| {
+        Provider::new(
+            py,
+            &server,
+            Some(wrap_pyfunction!(fixture_decode, py)?.into_any()),
+        )
+    })
+    .unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let follower_polls = Arc::new(AtomicUsize::new(0));
+    std::thread::scope(|scope| {
+        let gate = server.identity_gate.lock().unwrap();
+        let (send, received) = std::sync::mpsc::sync_channel(1);
+        let cancel = stop.clone();
+        scope.spawn(move || {
+            let callback = cancellation_callback(move || cancel.load(Ordering::Acquire));
+            send.send(load_fixture_value("tmp-2m", "tmp2m", Some(callback)))
+                .unwrap();
+        });
+        wait_for_fixture(|| server.identity_requests.load(Ordering::Relaxed) == 1);
+        let follower = scope.spawn(|| {
+            let polls = follower_polls.clone();
+            let callback = cancellation_callback(move || {
+                polls.fetch_add(1, Ordering::Relaxed);
+                false
+            });
+            load_fixture_value("tmp-2m", "tmp2m", Some(callback))
+        });
+        wait_for_fixture(|| follower_polls.load(Ordering::Relaxed) >= 3);
+        stop.store(true, Ordering::Release);
+        let cancelled = received.recv_timeout(Duration::from_secs(5));
+        drop(gate);
+        let error = cancelled.unwrap().unwrap_err();
+        Python::attach(|py| {
+            let expected = PyModule::import(py, "sharpmod.models.model_transport")
+                .unwrap()
+                .getattr("DownloadCancelled")
+                .unwrap();
+            assert!(error.is_instance(py, &expected));
+        });
+        assert_eq!(follower.join().unwrap().unwrap(), 2.);
+    });
+    assert_eq!(server.identity_requests.load(Ordering::Relaxed), 1);
+    assert_eq!(server.requests.load(Ordering::Relaxed), 3);
+    clear_model_field_cache();
+}
+
 #[test]
 fn real_native_path_reuses_ingredients_without_aliasing_or_reusing_a_stale_inventory() {
     let _guard = crate::lock_python_backend_test();

@@ -14,6 +14,7 @@ import { parseStormReports } from "../../lib/contracts/reports";
 import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
 import { useAppStore } from "../../stores/appStore";
 import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
+import { useForecastDrawingStore } from "../../stores/forecastDrawingStore";
 import tokensCss from "../../styles/tokens.css?raw";
 import { cssTokenReader } from "../../test/cssTokens";
 import { readCanvasTokens } from "../canvasTokens";
@@ -42,6 +43,7 @@ afterEach(() => {
   useMapStore.setState(useMapStore.getInitialState(), true);
   useAppStore.setState(useAppStore.getInitialState(), true);
   useBoxSoundingStore.setState(useBoxSoundingStore.getInitialState(), true);
+  useForecastDrawingStore.setState(useForecastDrawingStore.getInitialState(), true);
   useHoverStore.setState(useHoverStore.getInitialState(), true);
 });
 
@@ -90,6 +92,43 @@ it("preserves point and station selection in box mode and restores ordinary poin
   expect(useAppStore.getState().selectedPoint).toEqual({ longitude: -98, latitude: 36 });
 });
 
+it("excludes station and selection layers from every Draw Forecast panel while preserving map preferences", () => {
+  useAppStore.getState().setActiveWorkspace("map");
+  const station = stationFixture.stations[0] as Station;
+  useAppStore.getState().selectStation(station.id);
+  const map = useMapStore.getState();
+  map.setPanelLayout(2);
+  map.setLayerVisible("station-labels", true);
+  map.setActivePanel(1);
+  map.setLayerVisible("stations", false);
+  const read = cssTokenReader(tokensCss);
+  const outlook = parseSpcOutlook(outlookFixture).outlook;
+  if (outlook === null) throw new Error("Missing outlook fixture");
+  for (const panel of [0, 1]) {
+    const submit = vi.fn<(props: { layers: Layer[] }) => void>();
+    const onSubmitted = vi.fn();
+    const scene = new StationScene({ setProps: submit } as unknown as MapLibreOverlay,
+      readCanvasTokens(read), read("--font-mono"), panel, onSubmitted);
+    scene.setStations([station]);
+    scene.render();
+    expect(scene.shownLayerIds.includes("stations")).toBe(panel === 0);
+    expect(scene.shownLayerIds).toContain("selection-marker");
+
+    useForecastDrawingStore.setState({ enabled: true, results: { cat: { areas: outlook.areas, clippedHatches: [], hiddenHatches: [], generatedContours: [] } } });
+    scene.render();
+    const capturedLayers = submit.mock.lastCall?.[0].layers.map(({ id }) => id) ?? [];
+    expect(capturedLayers).toContain("custom-outlook-cat-fill");
+    expect(capturedLayers.filter((id) => id === "stations" || id === "station-labels" || id.startsWith("selection-"))).toEqual([]);
+    expect(onSubmitted).toHaveBeenLastCalledWith(false);
+    expect(panelLayers(useMapStore.getState(), panel).stations.visible).toBe(panel === 0);
+
+    useForecastDrawingStore.setState({ enabled: false });
+    scene.render();
+    expect(scene.shownLayerIds.includes("stations")).toBe(panel === 0);
+    expect(scene.shownLayerIds).toContain("selection-marker");
+  }
+});
+
 it("submits independent pressure geometry per panel and removes it from the live scene", () => {
   const pressure: ContourLines = { product: "mslp", runTime: "2026-11-06T00:00:00Z", forecastHour: 6,
     unit: "hPa", interval: 4, segments: [[[-100, 35], [-99, 36]]], labels: [{ position: [-99.5, 35.5], value: 1004 }], wind: null };
@@ -102,8 +141,8 @@ it("submits independent pressure geometry per panel and removes it from the live
   useMapStore.getState().setLayerVisible("isobars", true);
   useMapStore.getState().setLayerOpacity("isobars", 0.55);
   useMapStore.getState().setLayerVisible("model-field", false);
-  expect(scene.setData({ isobars: pressure })).toBe(true);
-  expect(scene.setData({ isobars: pressure })).toBe(false);
+  expect(scene.setData({ isobars: pressure })).toEqual(["isobars"]);
+  expect(scene.setData({ isobars: pressure })).toEqual([]);
   scene.render();
   expect(submit.mock.lastCall?.[0].layers.find(({ id }) => id === "isobars")?.props).toMatchObject({ visible: true, opacity: 0.55 });
   expect(scene.shownLayerIds).toContain("isobars");
@@ -144,6 +183,65 @@ it("reuses unchanged label layouts during four-panel contour playback, invalidat
   east = -95;
   scenes[0]?.updateLabels(map);
   expect(project).toHaveBeenCalled();
+});
+
+it("reuses settled report captions and reprojects them before a pan finishes", () => {
+  useMapStore.setState({ view: "map", projection: "mercator" });
+  useMapStore.getState().setLayerVisible("storm-reports", true);
+  const [wind, hail] = parseStormReports(reportsFixture).reports;
+  if (wind === undefined || hail === undefined) throw new Error("Missing reports");
+  const reports = [{ ...wind, longitude: -98.4 }, { ...hail, longitude: -97.2 }];
+  let longitude = -98.4;
+  let width = 800;
+  let projection = "mercator";
+  const project = vi.fn(([lon]: readonly number[]) => ({ x: 25 + ((lon ?? 0) - longitude) * 150, y: 180 }));
+  const map = {
+    isStyleLoaded: () => true, getProjection: () => ({ type: projection }), getTerrain: () => null,
+    getCenter: () => ({ lng: longitude, lat: 35 }), getPadding: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+    getBounds: () => ({ getWest: () => -100, getEast: () => -96, getSouth: () => 34, getNorth: () => 40 }),
+    getCanvas: () => ({ clientWidth: width, clientHeight: 600 }), getZoom: () => 5,
+    getBearing: () => 0, getPitch: () => 0, getRoll: () => 0, getVerticalFieldOfView: () => 37, project,
+  } as unknown as MapLibreMap;
+  const read = cssTokenReader(tokensCss);
+  const submit = vi.fn<(props: { layers: Layer[] }) => void>();
+  const scene = new StationScene({ setProps: submit } as unknown as MapLibreOverlay,
+    readCanvasTokens(read), read("--font-mono"), 0, vi.fn());
+  const captions = () => submit.mock.lastCall?.[0].layers.find(({ id }) => id === "storm-reports-captions")?.props.data;
+  scene.setData({ reports });
+  scene.updateLabels(map);
+  scene.render();
+  const beforePan = captions();
+  expect(beforePan).toEqual([reports[1], reports[0]]);
+
+  project.mockClear();
+  scene.setData({ fieldMix: 0.5 });
+  scene.render();
+  expect(project).not.toHaveBeenCalled();
+  expect(captions()).toBe(beforePan);
+
+  longitude = -97.9;
+  scene.render();
+  expect(project).toHaveBeenCalledTimes(reports.length);
+  expect(captions()).toEqual([reports[1]]);
+
+  project.mockClear();
+  width = 600;
+  scene.updateLabels(map);
+  scene.render();
+  expect(project).toHaveBeenCalledTimes(reports.length);
+  expect(captions()).toEqual([reports[1]]);
+
+  project.mockClear();
+  scene.setData({ reports: reports.slice(0, 1) });
+  scene.render();
+  expect(project).toHaveBeenCalledTimes(1);
+  expect(captions()).toEqual([]);
+
+  project.mockClear();
+  projection = "globe";
+  scene.render();
+  scene.render();
+  expect(project).toHaveBeenCalledTimes(2);
 });
 
 it("ignores live point clicks and hides the forecast point until Model Viewer is restored", () => {

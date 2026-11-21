@@ -216,7 +216,7 @@ export function Popover({
       closeToAnchor(event, "escape");
       return;
     }
-    if (movable && event.target instanceof HTMLElement && event.target.hasAttribute("data-popover-move")) {
+    if (movable && event.target instanceof HTMLElement && element.contains(event.target) && event.target.hasAttribute("data-popover-move")) {
       const step = parseFloat(getComputedStyle(element).getPropertyValue("--space-5")) || 1;
       const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[event.key];
       if (delta !== undefined || event.key === "Home") {
@@ -242,7 +242,9 @@ export function Popover({
 
   const onPointerDown = (event: ReactPointerEvent<HTMLElement>): void => {
     const target = event.target;
-    if (!movable || event.button !== 0 || !(target instanceof Element) || target.closest("[data-popover-drag]") === null) return;
+    if (!movable || event.button !== 0 || !(target instanceof Element)) return;
+    const handle = target.closest("[data-popover-drag]");
+    if (handle === null || !event.currentTarget.contains(handle)) return;
     const control = target.closest("button, input, select, a");
     if (control !== null && !control.hasAttribute("data-popover-move")) return;
     const box = event.currentTarget.getBoundingClientRect();

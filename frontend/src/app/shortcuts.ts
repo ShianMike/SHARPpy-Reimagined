@@ -1,11 +1,14 @@
 // Global keyboard shortcuts (DESIGN-frontend F8 keyboard map).
 // - Ctrl+K, or "/" outside text fields, focuses the station search.
+// - Ctrl+Z and Ctrl+Y undo and redo the current forecast draft.
 // - Esc closes the innermost popover first: popovers and the search stop or
 //   claim the event, so it is ignored here. Otherwise Esc clears the selection.
 
 import { useEffect } from "react";
 import { STATION_SEARCH_INPUT_ID, STATION_SEARCH_TRIGGER_ID } from "../features/search/StationSearch";
 import { useAppStore } from "../stores/appStore";
+import { useForecastDrawingStore } from "../stores/forecastDrawingStore";
+import { useMapStore } from "../stores/mapStore";
 
 export function isPlainKey(event: KeyboardEvent): boolean {
   return !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
@@ -45,7 +48,19 @@ export function handleGlobalKey(event: KeyboardEvent): void {
   if (event.defaultPrevented) {
     return;
   }
-  const ctrlK = event.key.toLowerCase() === "k" && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
+  const key = event.key.toLowerCase();
+  const modified = (event.ctrlKey || event.metaKey) && !event.altKey;
+  if (modified && (key === "z" || (key === "y" && !event.shiftKey)) && !event.isComposing
+    && !isTextField(event.target) && useAppStore.getState().activeWorkspace === "map" && useMapStore.getState().view === "map") {
+    const drawing = useForecastDrawingStore.getState();
+    if (drawing.enabled && drawing.mode !== "idle") {
+      event.preventDefault();
+      if (key === "y" || event.shiftKey) drawing.redo();
+      else drawing.undo();
+      return;
+    }
+  }
+  const ctrlK = key === "k" && modified && !event.shiftKey;
   if (ctrlK || (event.key === "/" && isPlainKey(event) && !isTextField(event.target))) {
     focusSearch(event);
     return;

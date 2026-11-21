@@ -44,7 +44,7 @@ afterEach(() => {
 });
 
 function openMap(): void {
-  render(<MapOverlaySlotsProvider slots={{ left, centre: null, rightEnd: null }}><WeatherMap /></MapOverlaySlotsProvider>);
+  render(<MapOverlaySlotsProvider slots={{ left, centre: null, timelineFeedback: null, rightEnd: null }}><WeatherMap /></MapOverlaySlotsProvider>);
 }
 const labels: Record<PanelLayout, string> = { 1: "One map", 2: "Two synchronized panels", 4: "Four synchronized panels" };
 function choose(layout: PanelLayout): void { fireEvent.click(screen.getByRole("button", { name: labels[layout] })); }

@@ -133,6 +133,7 @@ HANDLER_VALIDATED = frozenset({
     "fields.grid",
     "fields.cached",
     "outlooks.spc",
+    "outlooks.build_forecast",
     "alerts.weather",
     "radar.mosaic",
     "radar.site",

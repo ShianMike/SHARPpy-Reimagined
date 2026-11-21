@@ -8,6 +8,8 @@
 .identity { display: grid; gap: var(--space-1); }
 .identity > span { font-size: var(--font-size-caption); color: var(--text-secondary); }
 .identity strong { font-size: var(--font-size-subhead); }
+.outlookDetails { display: grid; gap: var(--space-2); }
+.outlookDetails h3 { font-size: var(--font-size-small); font-weight: var(--font-weight-semibold); }
 .hoursSection { min-width: 0; margin: 0; padding: 0; border: 0; }
 .hoursSection legend { width: 100%; padding: 0; font-size: var(--font-size-small); font-weight: var(--font-weight-semibold); }
 .hoursSection legend span { float: right; font-size: var(--font-size-caption); color: var(--text-secondary); font-weight: var(--font-weight-regular); }

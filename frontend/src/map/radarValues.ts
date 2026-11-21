@@ -110,11 +110,12 @@ export async function decodeRadarValues(png: Blob): Promise<RadarValues | null> 
   }
   if (wide) {
     if (typeof object.codes !== "string") throw new Error("Invalid radar gate codes");
-    const raw = Uint8Array.from(atob(object.codes), (char) => char.charCodeAt(0));
-    if (raw.byteLength !== width * height * 2) throw new Error("Radar gate codes do not match dimensions");
+    const raw = atob(object.codes);
+    if (raw.length !== width * height * 2) throw new Error("Radar gate codes do not match dimensions");
     const cells = new Uint16Array(width * height);
     for (let i = 0; i < cells.length; i += 1) {
-      const entry = (raw[i * 2] ?? 0) | ((raw[i * 2 + 1] ?? 0) << 8);
+      // The binary string holds exactly two little-endian bytes per gate.
+      const entry = raw.charCodeAt(i * 2) | (raw.charCodeAt(i * 2 + 1) << 8);
       if (entry >= values.length) throw new Error("Radar gate code out of range");
       cells[i] = entry;
     }

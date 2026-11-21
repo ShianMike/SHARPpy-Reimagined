@@ -114,8 +114,31 @@ fn model_cache_entries<'py>(
     Ok(result)
 }
 
+pub(super) fn maintenance_rows<'py>(cache: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyList>> {
+    let scan = cache.getattr("_entries")?;
+    // An older cache owner or a replacement scan may only accept the original
+    // no-argument call. Only the built-in scan advertises the new option.
+    if let Some(built_in) = cache.getattr_opt("_entries_with_payload_option")? {
+        if scan.eq(built_in)? {
+            let options = PyDict::new(cache.py());
+            options.set_item("validate_payloads", false)?;
+            return Ok(scan.call((), Some(&options))?.cast_into::<PyList>()?);
+        }
+    }
+    Ok(scan.call0()?.cast_into::<PyList>()?)
+}
+
+#[pyfunction]
+fn model_cache_storage_entries<'py>(
+    py: Python<'py>,
+    cache: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyList>> {
+    model_cache_entries(py, &maintenance_rows(cache)?)
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(model_cache_entries, module)?)?;
+    module.add_function(wrap_pyfunction!(model_cache_storage_entries, module)?)?;
     Ok(())
 }
 

@@ -257,7 +257,7 @@ def test_the_grid_is_the_derived_field_quantized_without_visible_loss(offline):
     )
     cells = np.frombuffer(base64.b64decode(grid["data_base64"]), dtype="<u2")
     run = datetime(2026, 10, 4, 18, tzinfo=UTC)
-    values = hrrr_field.cached_derived("refc", run, 1, EXPORT.FIXTURE_FRAME).reshape(-1)
+    values = hrrr_field.cached_derived("hrrr:refc", run, 1, EXPORT.FIXTURE_FRAME).reshape(-1)
     decoded = np.where(
         cells == grid["nodata"], np.nan, cells * grid["scale"] + grid["offset"]
     )

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { DEFAULT_UNITS, parseUnitPreferences, type UnitPreferences } from "../lib/displayUnits";
+import { FORECAST_OUTLOOK_DAYS, MAX_FORECAST_AUTHOR_LENGTH, type ForecastDrawingDetails } from "../types/forecastDrawing";
 import type { SoundingColorStyle } from "../types/soundings";
 import { DEFAULT_FORECAST_EXPORT_SETTINGS, parseForecastExportSettings, type ForecastExportSettings } from "./forecastExportSettings";
 
@@ -28,6 +29,10 @@ interface UiState {
   setUnits(value: UnitPreferences): void;
   forecastExport: ForecastExportSettings;
   setForecastExport: (value: Partial<ForecastExportSettings>) => void;
+  forecastOutlinesOnly: boolean;
+  setForecastOutlinesOnly(value: boolean): void;
+  forecastDrawingDetails: ForecastDrawingDetails;
+  setForecastDrawingDetails(value: ForecastDrawingDetails): void;
   popupPositions: Record<string, PopupPosition>;
   setPopupPosition(id: string, value: PopupPosition): void;
   setCollapsed(value: boolean): void;
@@ -37,6 +42,11 @@ interface UiState {
   setLoop(value: boolean): void;
   setSmoothPlayback(value: boolean): void;
 }
+
+function cleanForecastAuthor(name: string): string {
+  return Array.from(name.trim().replace(/\s+/gu, " ")).slice(0, MAX_FORECAST_AUTHOR_LENGTH).join("");
+}
+
 export const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2, 3, 4] as const;
 export const useUiStore = create<UiState>()(persist((set, get) => ({
   lastUpdateCheckWindow: null,
@@ -65,6 +75,10 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
   setUnits: (units) => { set({ units: parseUnitPreferences(units) }); },
   forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS,
   setForecastExport: (value) => { set(state => ({ forecastExport: { ...state.forecastExport, ...value } })); },
+  forecastOutlinesOnly: false,
+  setForecastOutlinesOnly: (forecastOutlinesOnly) => { set({ forecastOutlinesOnly }); },
+  forecastDrawingDetails: { author: "", day: null },
+  setForecastDrawingDetails: ({ author, day }) => { set({ forecastDrawingDetails: { author: cleanForecastAuthor(author), day } }); },
   popupPositions: {},
   setPopupPosition: (id, position) => { set((state) => ({ popupPositions: { ...state.popupPositions, [id]: position } })); },
   setCollapsed: (collapsed) => { set({ collapsed }); },
@@ -92,10 +106,16 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
       removeItem: (name) => { memory = null; access(() => { localStorage.removeItem(name); }); },
     };
   }),
-  partialize: ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback, popupPositions, units, forecastExport }) => ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback, popupPositions, units, forecastExport }),
+  partialize: ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback,
+    popupPositions, units, forecastExport, forecastOutlinesOnly, forecastDrawingDetails }) => ({
+    lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback,
+    popupPositions, units, forecastExport, forecastOutlinesOnly, forecastDrawingDetails,
+  }),
   merge: (saved, current) => {
     const value = saved !== null && typeof saved === "object" ? saved as Record<string, unknown> : {};
     const positions = value.popupPositions !== null && typeof value.popupPositions === "object" ? value.popupPositions as Record<string, unknown> : {};
+    const drawing = value.forecastDrawingDetails;
+    const details = drawing !== null && typeof drawing === "object" ? drawing as Record<string, unknown> : {};
     return { ...current,
       lastUpdateCheckWindow: typeof value.lastUpdateCheckWindow === "number" && Number.isSafeInteger(value.lastUpdateCheckWindow) && value.lastUpdateCheckWindow >= 0 ? value.lastUpdateCheckWindow : null,
       lastVersion: typeof value.lastVersion === "string" && /^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/u.test(value.lastVersion) ? value.lastVersion : null,
@@ -107,6 +127,11 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
       smoothPlayback: typeof value.smoothPlayback === "boolean" ? value.smoothPlayback : current.smoothPlayback,
       units: parseUnitPreferences(value.units),
       forecastExport: parseForecastExportSettings(value.forecastExport),
+      forecastOutlinesOnly: typeof value.forecastOutlinesOnly === "boolean" ? value.forecastOutlinesOnly : current.forecastOutlinesOnly,
+      forecastDrawingDetails: {
+        author: typeof details.author === "string" ? cleanForecastAuthor(details.author) : "",
+        day: FORECAST_OUTLOOK_DAYS.find((day) => day === details.day) ?? null,
+      },
       popupPositions: Object.fromEntries(Object.entries(positions).flatMap(([id, point]) => {
         if (point === null || typeof point !== "object") return [];
         const { x, y } = point as Record<string, unknown>;

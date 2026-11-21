@@ -1,6 +1,15 @@
 //! Map data commands: the map catalogue, field and radar frames, single-site
-//! radar, SPC outlooks, place labels, and station availability.
+//! radar, SPC outlooks, drawn forecasts, place labels, and station availability.
 
+use serde::Deserialize;
+use serde_json::Value;
+use sharpmod_weather::spc_outlook::forecast::{
+    build_forecast, ForecastDrawing, ForecastPolygon, ForecastProduct,
+};
+use sharpmod_weather::spotter_network::{fetch_positions, SpotterPositions};
+use tauri::ipc::{InvokeBody, Request};
+
+use crate::backend::sounding_ops::invalid;
 use crate::dto::contours::ContourLines;
 use crate::dto::map::{
     AvailabilityReport, MapCatalog, PlaceLabels, RadarSiteCatalogPublic, SpcOutlook,
@@ -8,7 +17,7 @@ use crate::dto::map::{
 use crate::dto::radar::RadarTilts;
 use crate::dto::reports::{ReportOptions, StormReports};
 use crate::dto::surface::SurfacePlots;
-use crate::error::BackendError;
+use crate::error::{BackendError, ErrorCode, ErrorContext};
 use crate::state::AppState;
 
 #[tauri::command]
@@ -55,6 +64,22 @@ pub async fn get_weather_alerts(
     valid_time: String,
 ) -> Result<crate::dto::weather_alerts::WeatherAlerts, BackendError> {
     state.router.weather_alerts(&valid_time).await
+}
+
+/// Active positions from the personal-use Spotter Network placefiles.
+#[tauri::command]
+pub async fn get_spotter_positions() -> Result<SpotterPositions, BackendError> {
+    fetch_positions().await.map_err(|message| BackendError {
+        code: ErrorCode::OverlayFetchFailed,
+        message: message.to_owned(),
+        retryable: true,
+        context: Some(Box::new(ErrorContext::new(
+            "get_spotter_positions",
+            Some("spotter-network"),
+            None,
+        ))),
+        details: None,
+    })
 }
 
 /// What the map can draw: the selected model's fields, radar, outlooks.
@@ -109,6 +134,34 @@ pub async fn get_spc_outlook(
     day: Option<u8>,
 ) -> Result<SpcOutlook, BackendError> {
     state.router.spc_outlook(&product, &valid_time, day).await
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ForecastDrawingArgs {
+    product: ForecastProduct,
+    polygons: Vec<ForecastPolygon>,
+    #[serde(rename = "requestId")]
+    _request_id: Option<String>,
+}
+
+/// Build map areas for a user-drawn forecast using the shared Rust core.
+#[tauri::command]
+pub async fn build_forecast_drawing(request: Request<'_>) -> Result<ForecastDrawing, BackendError> {
+    const OPERATION: &str = "build_forecast_drawing";
+    let context = ErrorContext::new(OPERATION, Some("rust"), None);
+    let InvokeBody::Json(body @ Value::Object(_)) = request.body() else {
+        return Err(invalid(
+            &context,
+            "expected a JSON object with product and polygons",
+        ));
+    };
+    let args = ForecastDrawingArgs::deserialize(body)
+        .map_err(|error| invalid(&context, &error.to_string()))?;
+    tauri::async_runtime::spawn_blocking(move || build_forecast(args.product, &args.polygons))
+        .await
+        .map_err(|_| BackendError::internal(OPERATION))?
+        .map_err(|message| invalid(&context, message.trim_end_matches('.')))
 }
 
 /// The latest or requested recent radar scan, as an SHRF frame holding a PNG.
@@ -249,6 +302,14 @@ pub async fn get_surface_plots(
         .router
         .surface_plots(latitude, longitude, &valid_time)
         .await
+}
+
+/// The latest worldwide METAR station models.
+#[tauri::command]
+pub async fn get_latest_surface_plots(
+    state: tauri::State<'_, AppState>,
+) -> Result<SurfacePlots, BackendError> {
+    state.router.latest_surface_plots().await
 }
 
 /// Map place names: major cities and towns.

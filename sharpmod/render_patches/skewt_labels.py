@@ -78,6 +78,8 @@ def _install_skewt_sfc_label_mask():
         _cls = _skew.plotSkewT
         if getattr(_cls, "_sharpmod_sfc_mask", False):
             return
+        from sharpmod_rs import set_skewt_trace_opacity
+
         _tab = _skew.tab
         _QtGui = _skew.QtGui
         _QtCore = _skew.QtCore
@@ -128,6 +130,7 @@ def _install_skewt_sfc_label_mask():
                     path.lineTo(x[i], y[i])
                     if stdev is not None:
                         self.drawSTDEV(pres[i], data[i], stdev[i], color, qp)
+                set_skewt_trace_opacity(self, source_data, p, qp)
                 qp.drawPath(path)
 
                 if label is True:
@@ -478,17 +481,7 @@ def _skewt_trace_left_edge(widget, tab, pbot, ptop, step=10.0):
 
 
 def _skewt_effective_layer_labels(widget, qtcore, qtgui, tab):
-    """Return the effective-inflow-layer bracket geometry and label rects.
-
-    Shared by the effective-layer drawing and the max-lapse-rate placement, so
-    the lapse-rate label can avoid these without depending on which annotation
-    is drawn first. The order genuinely differs between panels: every panel but
-    winter draws the lapse rate from inside ``plotData``, while the winter panel
-    draws it from a later pass, so a first-come reservation would place the same
-    label differently depending on which panel happened to be open.
-
-    Returns ``None`` when there is no effective inflow layer to draw.
-    """
+    """Return the effective-inflow bracket and its labels, when available."""
     prof = getattr(widget, "prof", None)
     if prof is None:
         return None
@@ -497,8 +490,10 @@ def _skewt_effective_layer_labels(widget, qtcore, qtgui, tab):
     if not (tab.utils.QC(ptop) and tab.utils.QC(pbot)):
         return None
 
-    x1 = widget.tmpc_to_pix(-20, 1000)
-    x2 = widget.tmpc_to_pix(-33, 1000)
+    from sharpmod_rs import effective_inflow_tag_columns
+
+    x1 = widget.tmpc_to_pix(-15, 1000)
+    label_x = x1 + SKEWT_ANNOTATION_CLEARANCE
     scale = float(getattr(widget, "scale", 1.0)) or 1.0
     originy = float(getattr(widget, "originy", 0.0))
     y1 = originy + widget.pres_to_pix(pbot) / scale
@@ -549,13 +544,19 @@ def _skewt_effective_layer_labels(widget, qtcore, qtgui, tab):
     # Preserve the surface label's column; the other values yield if a
     # shallow layer puts them on the same row. An elevated base still yields.
     right_limit = float(getattr(widget, "brx", 0))
-    rect_bot = _rect(x2, bottom_top, text_bot)
-    rect_top = _rect(x2, y2 - rect_h, text_top)
+    rect_bot = _rect(label_x, bottom_top, text_bot)
+    rect_top = _rect(label_x, y2 - rect_h, text_top)
+    rect_esrh = _rect(label_x, y2 - rect_h, text_esrh)
+    top_left, esrh_left = effective_inflow_tag_columns(
+        x1, rect_top.width(), rect_esrh.width(), SKEWT_ANNOTATION_CLEARANCE,
+        gutter, right_limit - 2.0)
+    rect_top.moveLeft(top_left)
+    rect_esrh.moveLeft(esrh_left)
     if surface_based:
         rect_top = _skewt_clear_of(
             rect_top, (rect_bot,), qtcore, right_limit=right_limit)
     rect_esrh = _skewt_clear_of(
-        _rect(x1 - 15.0, y2 - rect_h, text_esrh),
+        rect_esrh,
         (rect_top, rect_bot) if surface_based else (rect_top,), qtcore,
         right_limit=right_limit)
     if not surface_based:

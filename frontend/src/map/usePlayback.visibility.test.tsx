@@ -49,7 +49,7 @@ it.each(["overview", "live", "sounding", "status", "settings"] as const)("does n
   } finally { hook.unmount(); queryClient.clear(); }
 });
 
-it.each([1, 3, 4])("waits for both render modes across four panels at %s times speed and cancels the old window", async (speed) => {
+it.each([1, 3, 4])("waits for both render modes across four panels at %s times speed and carries the next load forward", async (speed) => {
   vi.useFakeTimers();
   useAppStore.setState({ activeWorkspace: "map" });
   vi.stubGlobal("ImageData", class { constructor(public data: Uint8ClampedArray, public width: number, public height: number) {} });
@@ -88,6 +88,9 @@ it.each([1, 3, 4])("waits for both render modes across four panels at %s times s
     expect(useForecastStore.getState().forecastHour).toBe(0);
     await act(async () => { pending[1]?.finish(); await vi.advanceTimersByTimeAsync(1); });
     expect(useForecastStore.getState().forecastHour).toBe(1);
+    expect(pending.filter(({ hour }) => hour === 2)).toHaveLength(2);
+    expect(pending.slice(2, 4).every(({ signal }) => !signal.aborted)).toBe(true);
+    act(() => { useAppStore.getState().setActiveWorkspace("overview"); });
     expect(pending.slice(2, 4).every(({ signal }) => signal.aborted)).toBe(true);
   } finally {
     hook.unmount();

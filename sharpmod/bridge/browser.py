@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -97,6 +99,21 @@ class BrowserHandler(BaseHTTPRequestHandler):
             if command == "get_backend_health":
                 p.keys(request.params, ())
                 result = backend_health(self.server.since)
+            elif (
+                command == "get_spotter_positions"
+                and os.environ.get("SHARPPY_LOCAL_SPOTTER_NETWORK") == "1"
+            ):
+                p.keys(request.params, ())
+                from sharpmod_rs import spotter_positions
+
+                if not self.server.admission.acquire(blocking=False):
+                    raise BridgeError("INTERNAL", "The backend is busy. Try again shortly.", True)
+                try:
+                    result = json.loads(spotter_positions())
+                except RuntimeError as exc:
+                    raise BridgeError("OVERLAY_FETCH_FAILED", str(exc), True) from None
+                finally:
+                    self.server.admission.release()
             elif command in COMMANDS or command == "open_sounding":
                 method, params = bridge_request(command, request.params)
                 check_params(Request(request.id, method, params))

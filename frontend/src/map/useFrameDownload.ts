@@ -1,20 +1,20 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useForecastContext } from "../features/forecast/useForecast";
 import { useBackendClient } from "../lib/backend/BackendProvider";
-import { failureOf } from "../lib/backend/errors";
 import { useForecastStore } from "../stores/forecastStore";
 import { contourQueryOptions } from "./contourQueries";
 import { fieldQueryOptions, useMapCatalog } from "./mapQueries";
 import { useDrawnProducts } from "./panelField";
 import { queryFrame } from "./queryFrame";
-import { mapKeys } from "../lib/backend/queryOptions";
+import { forecastHourMemory, idleForecastHourMemory } from "./forecastHourMemory";
 
 interface DownloadStatus { key: string; done: number; failed: number[]; running: boolean; }
 export type ForecastHourState = "cached" | "loading" | "missing" | "failed" | "unknown";
+const NO_HOURS: readonly number[] = [];
 
 /** Load the entire selected run through the normal field and disk caches. */
-export function useFrameDownload() {
+export function useFrameDownload(watchHours = true) {
   const context = useForecastContext();
   const drawnProducts = useDrawnProducts();
   const catalogQuery = useMapCatalog();
@@ -24,10 +24,16 @@ export function useFrameDownload() {
   const controller = useRef<AbortController | null>(null);
   const retries = useRef(new Map<number, AbortController>());
   const [status, setStatus] = useState<DownloadStatus | null>(null);
-  const scope = JSON.stringify([context?.model.key, context?.run, context?.hours]);
-  const nextKey = JSON.stringify([scope, drawnProducts.map((p) => `${p.key}/${String(p.minimumForecastHour)}`).sort()]);
-  const [selection, setSelection] = useState({ scope, key: nextKey, products: drawnProducts });
-  if (selection.scope !== scope || !checkingProducts && selection.key !== nextKey) setSelection({ scope, key: nextKey, products: drawnProducts });
+  const model = context?.model.key;
+  const run = context?.run;
+  const forecastHours = context?.hours ?? NO_HOURS;
+  const scope = JSON.stringify([model, run, forecastHours]);
+  const nextKey = JSON.stringify([scope, drawnProducts.map((p) =>
+    `${p.key}/${String(p.minimumForecastHour)}/${String(p.contour !== null || p.wind)}`).sort()]);
+  const [selection, setSelection] = useState({ scope, key: nextKey, products: drawnProducts, hours: forecastHours });
+  if (selection.scope !== scope || !checkingProducts && selection.key !== nextKey) {
+    setSelection({ scope, key: nextKey, products: drawnProducts, hours: forecastHours });
+  }
   // Checking another hour must not replace the active queue's verified selection.
   const key = checkingProducts && selection.scope === scope ? selection.key : nextKey;
   const products = checkingProducts && selection.scope === scope ? selection.products : drawnProducts;
@@ -41,29 +47,21 @@ export function useFrameDownload() {
     queryFn: () => client.getCachedForecastHours(context?.model.key ?? "hrrr", products.map((product) => product.key), context?.run ?? "", hours),
     enabled: context !== null && products.length > 0, retry: false, refetchInterval: running ? 1500 : 30_000 });
   const cached = saved.data ?? [];
-  const memory = useSyncExternalStore((changed) => queryClient.getQueryCache().subscribe(changed), () =>
-    context === null ? "" : context.hours.map((hour) => {
-      if (hour < minimumForecastHour) return "unavailable";
-      const states = products.flatMap((product) => {
-        const keys = [mapKeys.field(product.key, context.run, hour, context.model.key),
-          ...(product.contour !== null || product.wind ? [mapKeys.contours(product.key, context.run, hour, context.model.key)] : [])];
-        return keys.map((queryKey) => queryClient.getQueryState(queryKey));
-      });
-      if (states.some((state) => state?.fetchStatus === "fetching" || state?.fetchStatus === "paused")) return "loading";
-      if (states.some((state) => state?.status === "error" && failureOf(state.error)?.code !== "FIELD_UNAVAILABLE")) return "failed";
-      if (states.some((state) => state?.status === "error")) return "unavailable";
-      return states.length > 0 && states.every((state) => state?.status === "success" && state.data !== undefined) ? "cached" : "missing";
-    }).join(","));
-  const memoryStates = memory === "" ? [] : memory.split(",");
-  const ready = memoryStates.filter((state) => state === "cached").length;
-  const hourStates = context?.hours.map((hour, index): { hour: number; state: ForecastHourState } => {
-    const state = memoryStates[index];
+  const started = current !== null || cached.length > 0;
+  const observe = watchHours || started;
+  const memory = useMemo(() => observe && model !== undefined && run !== undefined
+    ? forecastHourMemory(queryClient, model, run, selection.hours, selection.products, minimumForecastHour)
+    : idleForecastHourMemory, [observe, queryClient, model, run, selection, minimumForecastHour]);
+  const memoryStates = useSyncExternalStore(memory.subscribe, memory.snapshot);
+  const ready = [...memoryStates.values()].filter((state) => state === "cached").length;
+  const hourStates = watchHours ? forecastHours.map((hour): { hour: number; state: ForecastHourState } => {
+    const state = memoryStates.get(hour);
     return { hour, state: state === "loading" || state === "failed" || state === "cached" ? state
-      : state === "unavailable" ? "missing"
+      : state === "unavailable" || hour < minimumForecastHour ? "missing"
       : current?.failed.includes(hour) === true ? "failed"
       : cached.includes(hour) ? "cached"
       : saved.isSuccess && products.length > 0 ? "missing" : "unknown" };
-  }) ?? [];
+  }) : [];
   const complete = total > 0 && cached.length === total;
   const missing = hours.filter((hour) => !cached.includes(hour));
   useEffect(() => {
@@ -135,7 +133,7 @@ export function useFrameDownload() {
     : (current?.failed.length ?? 0) > 0 ? `${String(current?.failed.length)} forecast hours could not load.`
     : `${String(cached.length)} of ${String(total)} hours saved to cache; ${String(ready)} ready in memory.`;
   return { toggle, running, complete, loaded, total, message,
-    started: current !== null || cached.length > 0, failed: (current?.failed.length ?? 0) > 0,
+    started, failed: (current?.failed.length ?? 0) > 0,
     cached: cached.length, ready, missing, failedHours: current?.failed ?? [], cacheError: saved.isError, hourStates, retryHour,
     refresh: () => { void refetch(); },
     disabled: context === null || products.length === 0 || total === 0,

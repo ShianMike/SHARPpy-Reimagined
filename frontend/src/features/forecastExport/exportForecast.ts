@@ -7,6 +7,8 @@ import { forecastOverlayLoads } from "../../map/forecastOverlayLoads";
 import { fieldAuxiliaries } from "../../map/panelField";
 import { prepareFieldImage } from "../../map/fieldImages";
 import { buildLut } from "../../map/field/colourize";
+import { trackForecastDrawingCapture } from "../../map/forecastDrawing/forecastDrawingCapture";
+import { layoutForecastDrawingFooter } from "../../map/forecastDrawing/forecastDrawingExportFooter";
 import { queryFrame } from "../../map/queryFrame";
 import { mapCaptureSources } from "../../map/runtime/mapCapture";
 import { useForecastStore } from "../../stores/forecastStore";
@@ -41,8 +43,8 @@ export function forecastExportFilename(options: ForecastExportOptions): string {
     return `sharppy-${options.context.model.key}-${product}-${run}-${hours}.${options.format ?? "gif"}`.replace(/[^a-zA-Z0-9._-]/g, "-");
 }
 /** All selected panels and hours exist as lossless PNGs before encoding begins. */
-export async function exportForecast(options: ForecastExportOptions, client: BackendClient, queryClient: QueryClient, signal: AbortSignal, preview: HTMLCanvasElement, progress: (value: ExportProgress) => void): Promise<Blob> {
-    signal.throwIfAborted();
+export async function exportForecast(options: ForecastExportOptions, client: BackendClient, queryClient: QueryClient, callerSignal: AbortSignal, preview: HTMLCanvasElement, progress: (value: ExportProgress) => void): Promise<Blob> {
+    callerSignal.throwIfAborted();
     const format = options.format ?? "gif", animated = format !== "png";
     if (animated && options.hours.length < 2)
         throw new Error("Select at least two forecast hours.");
@@ -72,7 +74,7 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
             });
         }
     };
-    const load = async (part: typeof panels[number], hour: number, loadSignal = signal, keepUntil?: AbortSignal) => {
+    const load = async (part: typeof panels[number], hour: number, loadSignal: AbortSignal, keepUntil?: AbortSignal) => {
         const request: FrameRequest = { model: options.context.model.key, product: part.product.key, runTime: options.run, forecastHour: hour };
         const catalog = await queryFrame(queryClient, mapCatalogQueryOptions(client, request.model, request.runTime, hour), loadSignal, { keepUntil });
         const product = catalog.products.find(p => p.key === part.product.key);
@@ -95,28 +97,34 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
     const context = canvas.getContext("2d");
     if (context === null)
         throw new Error("Map export is unavailable.");
-    const columns = panels.length === 1 ? 1 : 2, rows = panels.length === 4 ? 2 : 1;
-    const cellWidth = options.width / columns, cellHeight = options.height / rows;
+    const drawing = trackForecastDrawingCapture(callerSignal);
+    const { signal } = drawing;
     let bytes = 0;
-    useForecastStore.setState({ playing: false, exporting: true });
-    smooth(false);
-    const captureState = useMapStore.getState();
     let displayedHour = original.forecastHour;
-    const checkSelection = (): void => {
-        signal.throwIfAborted();
-        const forecast = useForecastStore.getState(), mapState = useMapStore.getState();
-        if (forecast.modelKey !== original.modelKey || forecast.runTime !== original.runTime || forecast.forecastHour !== displayedHour)
-            throw new Error("The selected forecast changed during export. Try again.");
-        if (mapState.panelLayout !== captureState.panelLayout || mapState.view !== captureState.view)
-            throw new Error("The map layout changed during export. Try again.");
-        if (mapState.layerOrder !== captureState.layerOrder || panels.some(({ panel }) =>
-            panelLayers(mapState, panel) !== panelLayers(captureState, panel)
-            || panelProduct(mapState, panel) !== panelProduct(captureState, panel)
-            || panelReports(mapState, panel).reportFilter !== panelReports(captureState, panel).reportFilter
-            || panelReports(mapState, panel).reportWindowS !== panelReports(captureState, panel).reportWindowS))
-            throw new Error("The map products, layers or storm-report settings changed during export. Try again.");
-    };
     try {
+        useForecastStore.setState({ playing: false, exporting: true });
+        smooth(false);
+        const captureState = useMapStore.getState();
+        const checkSelection = (): void => {
+            signal.throwIfAborted();
+            const forecast = useForecastStore.getState(), mapState = useMapStore.getState();
+            if (forecast.modelKey !== original.modelKey || forecast.runTime !== original.runTime || forecast.forecastHour !== displayedHour)
+                throw new Error("The selected forecast changed during export. Try again.");
+            if (mapState.panelLayout !== captureState.panelLayout || mapState.view !== captureState.view)
+                throw new Error("The map layout changed during export. Try again.");
+            if (mapState.layerOrder !== captureState.layerOrder || panels.some(({ panel }) =>
+                panelLayers(mapState, panel) !== panelLayers(captureState, panel)
+                || panelProduct(mapState, panel) !== panelProduct(captureState, panel)
+                || panelReports(mapState, panel).reportFilter !== panelReports(captureState, panel).reportFilter
+                || panelReports(mapState, panel).reportWindowS !== panelReports(captureState, panel).reportWindowS))
+                throw new Error("The map products, layers or storm-report settings changed during export. Try again.");
+        };
+        const footer = drawing.kind === "unofficial"
+            ? layoutForecastDrawingFooter(context, options.width, { details: drawing.details, product: drawing.product }) : null;
+        const columns = panels.length === 1 ? 1 : 2, rows = panels.length === 4 ? 2 : 1;
+        const cellWidth = options.width / columns;
+        const cellHeight = footer === null ? options.height / rows : Math.floor((options.height - footer.height) / rows);
+        if (cellHeight <= 0) throw new Error("The export is too small for the forecast drawing disclaimer. Choose a larger size.");
         const pending = options.hours.flatMap(hour => panels.map(part => ({ part, hour })));
         let next = 0, loaded = 0;
         const failed = new AbortController(), preloadSignal = AbortSignal.any([signal, failed.signal]);
@@ -163,7 +171,9 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
                     const item = loaded[i], source = sources[i];
                     if (item === undefined || source === undefined)
                         throw new Error("A selected panel is unavailable.");
-                    const map = await source.captureFrame(item.request, loadSignal, { width: cellWidth, height: cellHeight });
+                    const resolution = { width: cellWidth, height: cellHeight };
+                    const map = drawing.kind === "unofficial" ? await source.captureFrame(item.request, loadSignal, resolution, drawing)
+                        : await source.captureFrame(item.request, loadSignal, resolution);
                     const cell = document.createElement("canvas");
                     try {
                         checkSelection();
@@ -180,6 +190,7 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
                 }
             }
             finally { hold.abort(); }
+            footer?.draw(cellHeight * rows, options.height);
             const png = await new Promise<Blob>((resolve, reject) => {
                 canvas.toBlob(blob => {
                     if (blob === null)
@@ -194,6 +205,7 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
             preview.getContext("2d")?.drawImage(canvas, 0, 0);
             if (!animated) {
                 progress({ phase: "capturing", done: 1, total: 1, hour });
+                signal.throwIfAborted();
                 return png;
             }
             bytes += png.size;
@@ -210,9 +222,12 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
             offset += item.length;
         }
         progress({ phase: "encoding", done: 0, total: frames.length, hour: options.hours[0] ?? 0 });
-        return await encodeAnimation(frames, options.width, options.height, format as "gif" | "webp", options.delay, client, signal, done => { progress({ phase: "encoding", done, total: frames.length, hour: options.hours[done - 1] ?? 0 }); }, preview, ramp);
+        const result = await encodeAnimation(frames, options.width, options.height, format as "gif" | "webp", options.delay, client, signal, done => { progress({ phase: "encoding", done, total: frames.length, hour: options.hours[done - 1] ?? 0 }); }, preview, ramp);
+        checkSelection();
+        return result;
     }
     finally {
+        drawing.dispose();
         frames.length = 0;
         canvas.width = 0;
         canvas.height = 0;

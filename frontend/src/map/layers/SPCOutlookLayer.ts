@@ -7,7 +7,7 @@ import { LayerExtension, type Layer } from "@deck.gl/core";
 import { PathLayer, SolidPolygonLayer, TextLayer } from "@deck.gl/layers";
 import type { Outlook, OutlookArea, OutlookKey } from "../../types/map";
 import { parseColour } from "../canvasTokens";
-import { closedPaths, labelPoint, type LonLat } from "./outlookGeometry";
+import { bandLabelPoints, closedPaths, labelPoint, type LonLat } from "./outlookGeometry";
 import type { LayerBuildContext, LayerState } from "./registry";
 import { deckColour } from "./StationLayer";
 
@@ -18,9 +18,11 @@ const FILL_ALPHA = 0.18;
 /** Hatch strokes keep more opacity: they qualify the band beneath (vector.py OVERLAY_HATCH_ALPHA). */
 const HATCH_ALPHA = 155;
 
+type OutlookGraphic = Pick<Outlook, "title" | "subtitle" | "areas"> & { labelBands?: boolean };
+
 export interface AreaFill {
   area: OutlookArea;
-  outlook: Outlook;
+  outlook: OutlookGraphic;
   polygon: LonLat[][];
   colour: Colour;
 }
@@ -28,6 +30,7 @@ export interface AreaFill {
 interface Stroke {
   path: LonLat[];
   colour: Colour;
+  hatch: boolean;
 }
 
 interface AreaLabel {
@@ -40,6 +43,11 @@ interface OutlookShapes {
   hatches: [AreaFill[], AreaFill[], AreaFill[]];
   outlines: Stroke[];
   labels: { candidates: LonLat[]; text: string }[];
+}
+
+interface OutlookRenderOptions {
+  custom?: boolean;
+  outlinesOnly?: boolean;
 }
 
 function colourOf(hex: string, alpha: number): Colour {
@@ -76,10 +84,11 @@ class IntensityHatchExtension extends LayerExtension<{ hatchLevel: number }> {
 }
 
 const HATCH_EXTENSIONS = [1, 2, 3].map((hatchLevel) => [new IntensityHatchExtension({ hatchLevel })]);
-const cache = new WeakMap<Outlook, OutlookShapes>();
+const cache = new WeakMap<OutlookGraphic, OutlookShapes>();
+const LABEL_LATITUDES = [0.5, 0.35, 0.65, 0.2, 0.8, 0.1, 0.9];
 
 /** Built once per outlook object, so a rebuild hands deck.gl the same arrays. */
-export function outlookShapes(outlook: Outlook): OutlookShapes {
+export function outlookShapes(outlook: OutlookGraphic): OutlookShapes {
   const cached = cache.get(outlook);
   if (cached !== undefined) {
     return cached;
@@ -95,9 +104,12 @@ export function outlookShapes(outlook: Outlook): OutlookShapes {
     } else if (area.fill !== null) {
       shapes.fills.push({ area, outlook, polygon, colour: colourOf(area.fill, Math.round(FILL_ALPHA * 255)) });
     }
-    shapes.outlines.push(...closedPaths(area.rings).map((path) => ({ path, colour: stroke })));
+    shapes.outlines.push(...closedPaths(area.rings).map((path) => ({ path, colour: stroke, hatch: area.hatch })));
     if (area.label !== "") {
-      shapes.labels.push({ candidates: [0.5, 0.35, 0.65, 0.2, 0.8, 0.1, 0.9].map((fraction) => labelPoint(area.rings, fraction)), text: area.label });
+      const candidates = outlook.labelBands === true && !area.hatch
+        ? bandLabelPoints(area.rings, outlook.areas.filter((other) => !other.hatch && other.rank > area.rank).map((other) => other.rings), LABEL_LATITUDES)
+        : LABEL_LATITUDES.map((fraction) => labelPoint(area.rings, fraction));
+      shapes.labels.push({ candidates, text: area.label });
     }
   }
   cache.set(outlook, shapes);
@@ -111,16 +123,38 @@ export function outlookLayerId(key: OutlookKey): string {
 
 export function buildOutlookLayers(key: OutlookKey, ctx: LayerBuildContext, state: LayerState): Layer[] {
   const outlook = ctx.outlooks[key];
-  if (outlook === undefined) {
-    return [];
-  }
+  return outlook === undefined ? [] : drawOutlookLayers(key, outlook, ctx, state);
+}
+
+export function drawOutlookLayers(key: OutlookKey, outlook: OutlookGraphic,
+  ctx: Pick<LayerBuildContext, "tokens" | "outlookLabelLayout">, state: LayerState,
+  { custom = false, outlinesOnly = false }: OutlookRenderOptions = {},
+): Layer[] {
   const shapes = outlookShapes(outlook);
   const { colours, lengths } = ctx.tokens;
-  const id = outlookLayerId(key);
+  const hatchStroke = deckColour(colours.labelText);
+  const id = custom ? `custom-outlook-${key}` : outlookLayerId(key);
   const shown = { visible: state.visible, opacity: state.opacity };
+  const outline = new PathLayer<Stroke>({
+    id: `${id}-outline`,
+    data: shapes.outlines,
+    getPath: (stroke) => stroke.path,
+    getColor: (stroke) => custom && stroke.hatch ? hatchStroke : stroke.colour,
+    widthUnits: "pixels",
+    getWidth: lengths.outlookWidth,
+    jointRounded: true,
+    ...shown,
+  });
+  if (custom && outlinesOnly) return [outline];
+
+  // Nested translucent risks blend in rank order. A lower risk's triangles can otherwise occlude
+  // pieces of higher risks where the globe meshes meet at different depths.
+  const fillStyle = custom ? { ...shown, parameters: { depthWriteEnabled: false } } : shown;
+  const hatchInk: Colour = [hatchStroke[0], hatchStroke[1], hatchStroke[2], HATCH_ALPHA];
   const layout = ctx.outlookLabelLayout;
   const labels: AreaLabel[] = [...shapes.labels].reverse().flatMap((label) => {
-    const text = `${key === "torn" ? "TOR" : key.toUpperCase()} ${label.text.replace(/^CIG([123])$/, "CIG $1")}`;
+    const labelText = label.text.replace(/^CIG([123])$/u, "CIG $1");
+    const text = custom ? labelText : `${key === "torn" ? "TOR" : key.toUpperCase()} ${labelText}`;
     const width = text.length * lengths.outlookLabelSize * 0.7 + 8;
     const height = lengths.outlookLabelSize + 8;
     const position = layout === undefined ? label.candidates[0] : label.candidates.find((candidate) => {
@@ -139,28 +173,19 @@ export function buildOutlookLayers(key: OutlookKey, ctx: LayerBuildContext, stat
       data: shapes.fills,
       getPolygon: (fill) => fill.polygon,
       getFillColor: (fill) => fill.colour,
-      pickable: true,
-      ...shown,
+      pickable: !custom,
+      ...fillStyle,
     }),
     ...shapes.hatches.map((data, index) => new SolidPolygonLayer<AreaFill>({
       id: `${id}-hatch-${String(index + 1)}`,
       data,
       extensions: HATCH_EXTENSIONS[index] ?? [],
       getPolygon: (fill) => fill.polygon,
-      getFillColor: (fill) => fill.colour,
+      getFillColor: (fill) => custom ? hatchInk : fill.colour,
       pickable: false,
-      ...shown,
+      ...fillStyle,
     })),
-    new PathLayer<Stroke>({
-      id: `${id}-outline`,
-      data: shapes.outlines,
-      getPath: (stroke) => stroke.path,
-      getColor: (stroke) => stroke.colour,
-      widthUnits: "pixels",
-      getWidth: lengths.outlookWidth,
-      jointRounded: true,
-      ...shown,
-    }),
+    outline,
     new TextLayer<AreaLabel>({
       id: `${id}-labels`,
       data: labels,

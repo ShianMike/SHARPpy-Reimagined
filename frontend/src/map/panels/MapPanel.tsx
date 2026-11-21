@@ -9,6 +9,7 @@ import { Action } from "../../ui/Controls";
 import { useGraphicsStore } from "../../stores/graphicsStore";
 import { useAppStore } from "../../stores/appStore";
 import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
+import { useForecastDrawingStore } from "../../stores/forecastDrawingStore";
 import { boxBetween } from "../box/boxGeometry";
 import { mapProjection, panelLayers, panelWeather, useMapStore, type PanelLayout } from "../../stores/mapStore";
 import { RadarScale } from "../../features/tracking/RadarScale";
@@ -176,10 +177,23 @@ export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode
         aria-describedby={MAP_HINT_ID}
         data-testid={panel === 0 ? "map" : undefined}
         onKeyDown={(event) => {
-          if (event.key !== "Enter" || event.repeat || !isMap || live || event.target instanceof HTMLElement && event.target.tagName !== "CANVAS") return;
+          if (event.repeat || !isMap || live || event.target instanceof HTMLElement && event.target.tagName !== "CANVAS") return;
+          const drawing = useForecastDrawingStore.getState();
+          if (drawing.enabled && event.key === "Escape") {
+            if (drawing.mode !== "idle" || drawing.editTool === "move") { event.preventDefault(); drawing.cancel(); }
+            return;
+          }
+          if (event.key !== "Enter") return;
           const center = runtime?.map?.getCenter();
           if (center === undefined) return;
           event.preventDefault();
+          if (drawing.enabled) {
+            if (drawing.mode === "draw") {
+              const { lng, lat } = center.wrap();
+              drawing.addVertex([lng, lat]);
+            }
+            return;
+          }
           if (useBoxSoundingStore.getState().mode === "box") {
             useBoxSoundingStore.getState().commit(boxBetween([center.lng - 0.025, center.lat - 0.025], [center.lng + 0.025, center.lat + 0.025]));
             return;

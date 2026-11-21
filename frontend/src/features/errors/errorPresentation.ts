@@ -75,6 +75,7 @@ const TITLES: Readonly<Record<string, string>> = {
   get_map_catalog: "Map parameters unavailable",
   get_weather_field: "Forecast field unavailable",
   get_spc_outlook: "SPC outlook unavailable",
+  build_forecast_drawing: "Forecast drawing unavailable",
   get_weather_alerts: "Warnings and watches unavailable",
   get_radar_frame: "Radar mosaic unavailable",
   get_radar_sites: "Radar sites unavailable",
@@ -84,6 +85,8 @@ const TITLES: Readonly<Record<string, string>> = {
   get_report_options: "Report dates unavailable",
   get_field_contours: "Map contours unavailable",
   get_surface_plots: "Surface observations unavailable",
+  get_latest_surface_plots: "Surface observations unavailable",
+  get_spotter_positions: "Spotter Network unavailable",
   get_place_labels: "Place names unavailable",
   get_station_availability: "Station availability unknown",
 } satisfies Record<CommandName | "start_backend", string>;
@@ -119,6 +122,8 @@ const RECOVERY: Partial<Record<CommandName, readonly [string, LucideIcon]>> = {
   get_report_options: ["Reload dates", MapPin],
   get_field_contours: ["Retry contours", Wind],
   get_surface_plots: ["Retry observations", Wind],
+  get_latest_surface_plots: ["Retry observations", Wind],
+  get_spotter_positions: ["Retry Spotter Network", MapPin],
   get_place_labels: ["Retry place names", MapPin],
   get_station_availability: ["Check station", MapPin],
 };

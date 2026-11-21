@@ -26,7 +26,7 @@ def saved_frames(tmp_path, monkeypatch):
     monkeypatch.setattr(hf, "index_map", lambda size, bounds, **_: SimpleNamespace(
         flat=np.arange(size[0] * size[1]) % 8,
         inside=np.ones(size[0] * size[1], dtype=bool),
-        width=size[0], height=size[1], bounds=bounds,
+        width=size[0], height=size[1], bounds=bounds, fractional=None,
     ))
     monkeypatch.setattr(hf, "_download_fields", lambda product, *_args, **_kwargs: {
         spec.name: np.full((2, 4), 10, dtype=np.float32) for spec in product.all_fields
@@ -92,7 +92,7 @@ def test_fallback_requires_the_exact_readable_saved_frame(saved_frames, monkeypa
     elif damage == "missing":
         target.unlink()
     elif damage == "old-version":
-        target.rename(target.with_name(target.name.replace("grid-v1_", "grid-v0_")))
+        target.rename(target.with_name(target.name.replace("grid-v2_", "grid-v0_")))
     elif damage == "other-model":
         request["model"] = "aigfs"
     elif damage == "other-run":

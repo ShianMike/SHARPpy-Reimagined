@@ -28,6 +28,7 @@ export type CommandName =
   | "get_weather_field"
   | "get_cached_forecast_hours"
   | "get_spc_outlook"
+  | "build_forecast_drawing"
   | "get_weather_alerts"
   | "get_radar_frame"
   | "get_radar_site_frame"
@@ -38,6 +39,8 @@ export type CommandName =
   | "get_report_options"
   | "get_field_contours"
   | "get_surface_plots"
+  | "get_latest_surface_plots"
+  | "get_spotter_positions"
   | "get_place_labels"
   | "get_station_availability";
 export type EventName = "bridge-status-changed";

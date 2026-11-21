@@ -4,10 +4,21 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it } from "vitest";
 import { useHoverStore } from "../../map/hover/hoverStore";
+import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
+import { useForecastDrawingStore } from "../../stores/forecastDrawingStore";
+import { useForecastStore } from "../../stores/forecastStore";
+import { useMapStore } from "../../stores/mapStore";
 import { hoverFromPick } from "../../map/runtime/stationScene";
 import { MapInteractionControls } from "./MapInteractionControls";
 
-afterEach(() => { cleanup(); useHoverStore.setState(useHoverStore.getInitialState(), true); });
+afterEach(() => {
+  cleanup();
+  useHoverStore.setState(useHoverStore.getInitialState(), true);
+  useBoxSoundingStore.setState(useBoxSoundingStore.getInitialState(), true);
+  useForecastDrawingStore.setState(useForecastDrawingStore.getInitialState(), true);
+  useForecastStore.setState(useForecastStore.getInitialState(), true);
+  useMapStore.setState(useMapStore.getInitialState(), true);
+});
 
 it("shares the mode, clears every hover readout and resumes inspection on the next pointer move", async () => {
   render(<><MapInteractionControls /><MapInteractionControls /></>);
@@ -25,7 +36,7 @@ it("shares the mode, clears every hover readout and resumes inspection on the ne
   for (const group of groups) {
     expect(within(group).getByRole("button", { name: "Navigate" }).getAttribute("aria-pressed")).toBe("true");
     expect(group.querySelector("input")).toBeNull();
-    expect(group.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(2);
+    expect(group.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(3);
   }
   hoverFromPick(pick, 0, { left: 0, top: 0 });
   expect(useHoverStore.getState()).toMatchObject({ inspecting: false, hovered: null, outlook: null, report: null, pointer: null });
@@ -33,4 +44,25 @@ it("shares the mode, clears every hover readout and resumes inspection on the ne
   hoverFromPick(pick, 2, { left: 0, top: 0 });
   expect(useHoverStore.getState().pointer).toMatchObject({ panel: 2, longitude: -97, latitude: 35 });
   expect(groups.every((group) => within(group).getByRole("button", { name: "Inspect" }).getAttribute("aria-pressed") === "true")).toBe(true);
+});
+
+it("switches from soundings and playback into Draw Forecast and returns to Inspect", async () => {
+  useBoxSoundingStore.getState().setMode("box");
+  useForecastStore.getState().setPlaying(true);
+  render(<MapInteractionControls />);
+  const draw = screen.getByRole("button", { name: "Draw Forecast" });
+  await userEvent.click(draw);
+  expect(draw.getAttribute("aria-pressed")).toBe("true");
+  expect(useBoxSoundingStore.getState().mode).toBe("point");
+  expect(useForecastStore.getState().playing).toBe(false);
+  expect(useHoverStore.getState().inspecting).toBe(false);
+  await userEvent.click(screen.getByRole("button", { name: "Inspect" }));
+  expect(draw.getAttribute("aria-pressed")).toBe("false");
+  expect(useHoverStore.getState().inspecting).toBe(true);
+});
+
+it("leaves forecast drawing controls out of the live timeline", () => {
+  useMapStore.setState({ view: "live" });
+  render(<MapInteractionControls />);
+  expect(screen.queryByRole("button", { name: "Draw Forecast" })).toBeNull();
 });

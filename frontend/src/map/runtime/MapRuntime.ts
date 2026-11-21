@@ -10,7 +10,7 @@ import type { Station } from "../../types/contracts";
 import { documentTokenReader, readCameraDurationMs, readCanvasTokens, type CanvasTokens } from "../canvasTokens";
 import { applyBasemapLabels, prepareBasemap } from "../basemap/basemapLayers";
 import { basemapStyle } from "../basemap/basemapStyle";
-import { useHoverStore } from "../hover/hoverStore";
+import { clearRemovedSpotterHover, useHoverStore } from "../hover/hoverStore";
 import { LAYER_REGISTRY } from "../layers/descriptors";
 import { applyStyleLayers, type SceneData } from "../layers/registry";
 import { useMapNoticeStore } from "../notices/mapNoticeStore";
@@ -21,7 +21,7 @@ import { createPanelOverlay, wireMapEvents, wireOverlayEvents, type RuntimeEvent
 import { createRuntimeWatch, subscribeToStores } from "./runtimeWiring";
 import type { StartupWatch } from "./startupWatch";
 import { StationScene } from "./stationScene";
-import { wireBoxSelection } from "../box/boxRuntime";
+import { wireMapDrawingTools } from "../forecastDrawing/forecastDrawingRuntime";
 type E2eModule = typeof import("./e2eHooks");
 type E2eTarget = import("./e2eHooks").E2eTarget; // type-only: the module loads in fixture builds alone
 
@@ -76,7 +76,7 @@ export class MapRuntime implements RuntimeEventTarget {
       return;
     }
     this.unsubscribers.push(linkCamera(this.map, this.live(() => { this.moveEnded(); })));
-    this.unsubscribers.push(wireBoxSelection(this.map, panel));
+    this.unsubscribers.push(wireMapDrawingTools(this.map, panel, this.live(() => { this.scene?.render(); })));
     this.subscribe();
     this.redraw();
     if (import.meta.env.MODE === "fixture" && this.primary) {
@@ -99,12 +99,15 @@ export class MapRuntime implements RuntimeEventTarget {
 
   /** The field, overlays, domain, and places this panel draws. */
   setScene(patch: Partial<SceneData>): void {
-    if (!this.disposed && this.scene?.setData(patch) === true) {
-      if (patch.places !== undefined || patch.radarSites !== undefined || patch.surfacePlots !== undefined || patch.contours !== undefined || patch.selectedRadarSite !== undefined) {
-        this.redraw();
-      } else {
-        this.scene.render();
-      }
+    if (this.disposed || this.scene === null) return;
+    const changed = this.scene.setData(patch);
+    if (changed.includes("spotterPositions") && patch.spotterPositions !== undefined) {
+      clearRemovedSpotterHover(this.panel, patch.spotterPositions);
+    }
+    if (changed.some((key) => key === "places" || key === "radarSites" || key === "surfacePlots" || key === "contours" || key === "selectedRadarSite")) {
+      this.redraw();
+    } else if (changed.some((key) => key !== "captureReady" && key !== "captureTime")) {
+      this.scene.render();
     }
   }
 
@@ -224,17 +227,13 @@ export class MapRuntime implements RuntimeEventTarget {
     };
     this.unsubscribers.push(
       ...subscribeToStores(this.panel, {
-        selectionChanged: () => {
-          this.redraw();
-        },
+        selectionChanged: this.redraw.bind(this),
         layersChanged: (labelsChanged) => {
           this.applyStyleState();
           if (labelsChanged) this.redraw();
           else this.scene?.render();
         },
-        focus: (request) => {
-          this.focus(request);
-        },
+        focus: this.focus.bind(this),
         profileChanged: () => {
           applyPixelRatio();
           this.redraw();
@@ -263,7 +262,7 @@ export class MapRuntime implements RuntimeEventTarget {
     if (!this.disposed && this.styleReady && this.map !== null) {
       const layers = panelLayers(useMapStore.getState(), this.panel);
       applyStyleLayers(this.map, LAYER_REGISTRY, layers);
-      applyBasemapLabels(this.map, layers["place-labels"]);
+      applyBasemapLabels(this.map, layers["place-labels"], layers.rivers.visible);
     }
   }
 

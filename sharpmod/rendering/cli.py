@@ -791,21 +791,22 @@ def render(infile: str, outfile: str | None = None,
             if view_result is not None:
                 view_result.update(metadata)
 
-        # Atomic write: render to a temp file in the destination directory,
-        # verify it is a non-empty image, then rename onto the destination.
-        fd, tmp_path = tempfile.mkstemp(suffix=".png", dir=out_dir)
-        os.close(fd)
-        try:
-            if not save_widget_png(win.spc_widget, tmp_path,
-                                   image_mode=image_mode):
-                raise RenderError(infile, "Qt could not save the PNG image")
-            if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
-                raise RenderError(infile, "renderer produced an empty image")
-            os.replace(tmp_path, outfile)
-        except BaseException:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-            raise
+        if view is None or not view.get("measureWind", False):
+            # Atomic write: render to a temp file in the destination directory,
+            # verify it is a non-empty image, then rename onto the destination.
+            fd, tmp_path = tempfile.mkstemp(suffix=".png", dir=out_dir)
+            os.close(fd)
+            try:
+                if not save_widget_png(win.spc_widget, tmp_path,
+                                       image_mode=image_mode):
+                    raise RenderError(infile, "Qt could not save the PNG image")
+                if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+                    raise RenderError(infile, "renderer produced an empty image")
+                os.replace(tmp_path, outfile)
+            except BaseException:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                raise
     except RenderError:
         raise
     except Exception as exc:  # noqa: BLE001 - name the input in every failure

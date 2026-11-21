@@ -2,10 +2,10 @@ use super::{Dataset, Observation, SurfaceClient};
 use crate::format_rfc3339_utc;
 use serde::Serialize;
 use std::collections::HashSet;
-use std::sync::OnceLock;
 use time::{OffsetDateTime, UtcOffset};
 
 pub const MAX_PLOTS: usize = 64;
+pub const MAX_LATEST_OFFSET_MIN: f64 = 1440.0;
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct StaffSpec {
@@ -164,62 +164,97 @@ fn fmt_utc_ymdhm(dt: OffsetDateTime) -> String {
     )
 }
 
+pub(super) enum PlotReference {
+    Requested(OffsetDateTime),
+    Snapshot(OffsetDateTime),
+}
+
+pub(super) fn observed_plot(
+    id: String,
+    label: String,
+    (latitude, longitude): (f64, f64),
+    obs: &Observation,
+    reference: PlotReference,
+) -> SurfacePlot {
+    let reference_time = match reference {
+        PlotReference::Requested(time) | PlotReference::Snapshot(time) => time,
+    };
+    let offset_secs = (obs.observed_at - reference_time).as_seconds_f64();
+    let offset = offset_secs / 60.0;
+    let offset_rounded = (offset * 10.0).round() / 10.0;
+    // Keep the real observation time even if the report falls outside the plot offset range.
+    let offset_rounded = match reference {
+        PlotReference::Requested(_) => offset_rounded,
+        PlotReference::Snapshot(_) => {
+            offset_rounded.clamp(-MAX_LATEST_OFFSET_MIN, MAX_LATEST_OFFSET_MIN)
+        }
+    };
+    let offset_min = if offset_rounded == 0.0 {
+        0.0
+    } else {
+        offset_rounded
+    };
+    let state = wind_state(obs);
+    let observed = fmt_utc_ymdhms(obs.observed_at);
+    let readings = format!(
+        "Temperature {}; dewpoint {}; wind {}",
+        sample_text(obs.temperature_c),
+        sample_text(obs.dewpoint_c),
+        wind_text(obs, state)
+    );
+    let (stale, description) = match reference {
+        PlotReference::Requested(_) => {
+            let stale = offset_secs.abs() > 1800.0;
+            let offset_whole = if offset.round() == 0.0 { 0.0 } else { offset };
+            let mut description = format!(
+                "Observed {observed} ({offset_whole:+.0} min from requested)\n{readings}\nSource: NOAA/NWS API station observation"
+            );
+            if stale {
+                description
+                    .push_str("\nStale/mismatched: more than 30 minutes from requested time");
+            }
+            (stale, description)
+        }
+        PlotReference::Snapshot(_) => (
+            offset_secs < -1800.0,
+            format!(
+                "Observed {observed}\n{readings}\nSource: NOAA/NWS Aviation Weather Center METAR"
+            ),
+        ),
+    };
+    SurfacePlot {
+        id,
+        longitude,
+        latitude,
+        valid: Some(format_rfc3339_utc(obs.observed_at)),
+        offset_min: Some(offset_min),
+        stale,
+        availability: "available".to_owned(),
+        wind_state: state.to_owned(),
+        staff: wind_uv_kt(obs, state).and_then(|(u, v)| staff_spec(u, v)),
+        temperature_c: obs.temperature_c,
+        dewpoint_c: obs.dewpoint_c,
+        upper_text: reading(obs.temperature_c),
+        lower_text: reading(obs.dewpoint_c),
+        label,
+        description,
+    }
+}
+
 pub fn build_plots(dataset: &Dataset) -> Result<SurfacePlotsSnapshot, String> {
     let requested_stamp = fmt_utc_ymdhm(dataset.requested);
     let mut out = Vec::with_capacity(dataset.matched.len() + dataset.unmatched.len());
-    let mut stale_count = 0_u32;
     for (station_idx, obs) in &dataset.matched {
         let station = &dataset.catalog[*station_idx];
-        let state = wind_state(obs);
-        let staff = wind_uv_kt(obs, state).and_then(|(u, v)| staff_spec(u, v));
-        let offset_secs = (obs.observed_at - dataset.requested).as_seconds_f64();
-        let offset = offset_secs / 60.0;
-        let offset_rounded = (offset * 10.0).round() / 10.0;
-        let offset_min = if offset_rounded == 0.0 {
-            0.0
-        } else {
-            offset_rounded
-        };
-        let stale = offset_secs.abs() > 1800.0;
-        if stale {
-            stale_count += 1;
-        }
-        let offset_whole = if offset.round() == 0.0 { 0.0 } else { offset };
-        let mut body = vec![
-            format!(
-                "Observed {} ({:+.0} min from requested)",
-                fmt_utc_ymdhms(obs.observed_at),
-                offset_whole
-            ),
-            format!(
-                "Temperature {}; dewpoint {}; wind {}",
-                sample_text(obs.temperature_c),
-                sample_text(obs.dewpoint_c),
-                wind_text(obs, state)
-            ),
-            "Source: NOAA/NWS API station observation".to_owned(),
-        ];
-        if stale {
-            body.push("Stale/mismatched: more than 30 minutes from requested time".to_owned());
-        }
-        out.push(SurfacePlot {
-            id: station.id.clone(),
-            longitude: station.lon,
-            latitude: station.lat,
-            valid: Some(format_rfc3339_utc(obs.observed_at)),
-            offset_min: Some(offset_min),
-            stale,
-            availability: "available".to_owned(),
-            wind_state: state.to_owned(),
-            staff,
-            temperature_c: obs.temperature_c,
-            dewpoint_c: obs.dewpoint_c,
-            upper_text: reading(obs.temperature_c),
-            lower_text: reading(obs.dewpoint_c),
-            label: format!("{} — {}", station.id, station.name),
-            description: body.join("\n"),
-        });
+        out.push(observed_plot(
+            station.id.clone(),
+            format!("{} — {}", station.id, station.name),
+            (station.lat, station.lon),
+            obs,
+            PlotReference::Requested(dataset.requested),
+        ));
     }
+    let stale_count = out.iter().filter(|plot| plot.stale).count() as u32;
     let failed_set: HashSet<usize> = dataset.failed.iter().copied().collect();
     let mut unmatched_unique = HashSet::new();
     for &station_idx in &dataset.unmatched {
@@ -288,7 +323,6 @@ pub async fn fetch_plots(
     lon: f64,
     when: OffsetDateTime,
 ) -> Result<SurfacePlotsSnapshot, String> {
-    static CLIENT: OnceLock<SurfaceClient> = OnceLock::new();
     let request = super::Request {
         lat,
         lon,
@@ -298,16 +332,12 @@ pub async fn fetch_plots(
         workers: super::MAX_WORKERS as i64,
         timeout: 15.0,
     };
-    let dataset = super::fetch(
-        CLIENT.get_or_init(Default::default).clone(),
-        request,
-        || Ok(false),
-    )
-    .await
-    .map_err(|error| match error {
-        super::FetchError::Cancelled => "surface-observation request cancelled".to_owned(),
-        super::FetchError::Provider(msg) => msg,
-    })?;
+    let dataset = super::fetch(SurfaceClient::shared().clone(), request, || Ok(false))
+        .await
+        .map_err(|error| match error {
+            super::FetchError::Cancelled => "surface-observation request cancelled".to_owned(),
+            super::FetchError::Provider(msg) => msg,
+        })?;
     build_plots(&dataset)
 }
 

@@ -1,5 +1,137 @@
 use super::*;
-use pyo3::ffi::c_str;
+use pyo3::{ffi::c_str, types::PyCFunction};
+
+#[test]
+fn storage_scan_reuses_inventory_without_checking_payload_readiness() {
+    use std::{
+        fs,
+        path::PathBuf,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+        time::{Duration, UNIX_EPOCH},
+    };
+
+    let _backend = crate::lock_python_backend_test();
+    Python::initialize();
+    Python::attach(|py| -> PyResult<()> {
+        let fixture = PyModule::import(py, "tempfile")?
+            .getattr("TemporaryDirectory")?
+            .call0()?;
+        let root: PathBuf = fixture.getattr("name")?.extract()?;
+        let ready = root.join("ready");
+        let corrupt = root.join("corrupt");
+        let unknown = root.join("unknown");
+        for directory in [&ready, &corrupt, &unknown] {
+            fs::create_dir(directory)?;
+        }
+        fs::write(
+            ready.join(".cache.json"),
+            br#"{"accessed":2,"contract_version":6}"#,
+        )?;
+        fs::write(
+            corrupt.join(".cache.json"),
+            br#"{"accessed":3,"contract_version":6,"pinned":true}"#,
+        )?;
+        let unknown_metadata = unknown.join(".cache.json");
+        fs::write(&unknown_metadata, b"[]")?;
+        fs::OpenOptions::new()
+            .write(true)
+            .open(unknown_metadata)?
+            .set_modified(UNIX_EPOCH + Duration::from_secs(1))?;
+        fs::write(ready.join("subset.grib2"), b"GRIB7777")?;
+        fs::write(ready.join("unfinished.part"), b"partial")?;
+        fs::write(
+            ready.join(format!(".lease-{}-active", std::process::id())),
+            b"{}",
+        )?;
+        fs::write(corrupt.join("subset.grib2"), b"GRIBbroken")?;
+        fs::write(corrupt.join("point.npz"), b"invalid")?;
+        fs::write(unknown.join("subset.grib2"), b"GRIB7777")?;
+
+        let numpy = PyModule::import(py, "numpy")?;
+        let fields = PyDict::new(py);
+        for (key, levels) in [
+            ("pres", [1000., 900., 800.]),
+            ("hght", [0., 1000., 2000.]),
+            ("tmpc", [16., 8., 0.]),
+            ("dwpc", [12., 4., -4.]),
+            ("wdir", [180., 200., 220.]),
+            ("wspd", [5., 15., 25.]),
+            ("omeg", [0., 0., 0.]),
+        ] {
+            fields.set_item(key, levels.to_vec())?;
+        }
+        fields.set_item("run", "2026-11-16 00:00")?;
+        fields.set_item("valid", "2026-11-16 00:00")?;
+        fields.set_item("loc", "test")?;
+        fields.set_item("lat", 35.)?;
+        numpy.call_method("savez", (ready.join("point.npz"),), Some(&fields))?;
+        fs::write(ready.join("point.json"), b"{}")?;
+
+        let cache = PyModule::import(py, "sharpmod.models.model_disk_cache")?
+            .getattr("ModelDiskCache")?
+            .call1((root,))?;
+        let calls = Arc::new(AtomicUsize::new(0));
+        for name in ["_valid_grib", "_valid_sounding"] {
+            let validator = cache.getattr(name)?.unbind();
+            let calls = Arc::clone(&calls);
+            let counted = PyCFunction::new_closure(
+                py,
+                None,
+                None,
+                move |args: &Bound<'_, PyTuple>, _: Option<&Bound<'_, PyDict>>| -> PyResult<bool> {
+                    calls.fetch_add(1, Ordering::Relaxed);
+                    validator.bind(args.py()).call1(args)?.extract()
+                },
+            )?;
+            cache.setattr(name, counted)?;
+        }
+
+        let full = cache.call_method0("entries")?.cast_into::<PyList>()?;
+        let full_calls = calls.load(Ordering::Relaxed);
+        assert!(full_calls > 0);
+        let storage = model_cache_storage_entries(py, &cache)?;
+        assert_eq!(calls.load(Ordering::Relaxed), full_calls);
+        assert_eq!(full.len(), 3);
+        assert_eq!(storage.len(), full.len());
+        for (i, (expected, actual)) in full.iter().zip(storage.iter()).enumerate() {
+            for field in [
+                "path",
+                "accessed",
+                "size",
+                "pinned",
+                "protected",
+                "file_count",
+            ] {
+                assert!(
+                    expected.getattr(field)?.eq(actual.getattr(field)?)?,
+                    "{field}"
+                );
+            }
+            let path: PathBuf = expected.getattr("path")?.extract()?;
+            assert_eq!(
+                path.file_name().unwrap(),
+                ["corrupt", "ready", "unknown"][i]
+            );
+            assert_eq!(actual.getattr("protected")?.extract::<bool>()?, i == 1);
+            assert_eq!(actual.getattr("pinned")?.extract::<bool>()?, i == 0);
+            for flag in ["valid_grib", "valid_sounding"] {
+                assert_eq!(expected.getattr(flag)?.extract::<bool>()?, i == 1);
+            }
+            for validator in ["valid_grib_paths", "valid_sounding_paths"] {
+                assert_eq!(
+                    cache.call_method1(validator, (&path,))?.len()?,
+                    usize::from(i == 1)
+                );
+            }
+        }
+        fixture.call_method0("cleanup")?;
+        Ok(())
+    })
+    .unwrap();
+}
 
 #[test]
 fn cache_listing_tolerates_optional_container_values_and_null_source_fields() {
@@ -143,7 +275,8 @@ with TemporaryDirectory(prefix='rust-cache-qc-') as temp:
         session = sounding_cache.SoundingCache(root/'session')
         with patch.object(sounding_cache, 'cache', return_value=session):
             for implementation in [None, native]:
-                with patch.object(sharpmod_rs, 'model_cache_entries', implementation, create=True):
+                with patch.object(sharpmod_rs, 'model_cache_entries', implementation, create=True), \
+                     patch.object(sharpmod_rs, 'model_cache_storage_entries', None, create=True):
                     row = storage.usage({})['caches'][0]
                     assert row == {'key':'models', 'bytes':8, 'files':1, 'clearable_bytes':0}, row
                     assert storage.clear({'cache':'models'})['freed_bytes'] == 0

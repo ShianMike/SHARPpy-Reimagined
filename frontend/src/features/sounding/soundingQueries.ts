@@ -65,14 +65,18 @@ const requestedModels = (catalog: ModelCatalog): ModelCatalog => ({
     .toSorted((left, right) => MODEL_REGIONS.indexOf(modelRegion(left)) - MODEL_REGIONS.indexOf(modelRegion(right))),
 });
 
-export function useModelCatalog(): UseQueryResult<ModelCatalog> {
+export function useModelCatalog({ includeAll = false, enabled = true }: {
+  includeAll?: boolean;
+  enabled?: boolean;
+} = {}): UseQueryResult<ModelCatalog> {
   const client = useBackendClient();
   return useQuery({
     ...BASE_QUERY_OPTIONS,
     queryKey: QUERY_KEYS.models,
     queryFn: () => client.getModelCatalog(),
     staleTime: MODEL_LIST_STALE_MS,
-    select: requestedModels,
+    enabled,
+    ...(includeAll ? {} : { select: requestedModels }),
   });
 }
 

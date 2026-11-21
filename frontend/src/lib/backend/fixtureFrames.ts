@@ -19,6 +19,9 @@ import reportsHail from "@contracts/public/map/reports.hail.json";
 import reportsWind from "@contracts/public/map/reports.wind.json";
 import reportsSignificant from "@contracts/public/map/reports.significant.json";
 import reportOptions from "@contracts/public/map/reports-options.json";
+import outlookCat from "@contracts/public/map/outlook.cat.json";
+import outlookTorn from "@contracts/public/map/outlook.torn.json";
+import outlookWind from "@contracts/public/map/outlook.wind.json";
 import contoursFixture from "@contracts/public/map/contours.json";
 import surfaceFixture from "@contracts/public/map/surface.json";
 import thresholdFixture from "@contracts/public/soundings/threshold.example.json";
@@ -59,6 +62,22 @@ export async function satelliteFrameFor(args: Readonly<Record<string, unknown>> 
   const validTime = typeof args?.validTime === "string" ? args.validTime : fallback;
   const header = { ...frame.header, validTime, requestedTime: validTime };
   return encodeShrf(header, frame.body);
+}
+
+const OUTLOOKS: Readonly<Record<string, unknown>> = { cat: outlookCat, torn: outlookTorn, wind: outlookWind };
+
+/** The fixture outlook of a product, for the requested time. */
+export function outlookFor(args: Readonly<Record<string, unknown>> | undefined): unknown {
+  const product = String(args?.product);
+  const validTime = String(args?.validTime);
+  if (args?.day !== undefined && args.day !== 1) return { product, validTime, outlook: null };
+  const base = structuredClone(OUTLOOKS[product] ?? { ...outlookWind, product }) as Record<string, unknown>;
+  const outlook = base.outlook as { validFrom: string; validTo: string; covers: boolean } | null;
+  if (outlook !== null) {
+    const t = Date.parse(validTime);
+    outlook.covers = Date.parse(outlook.validFrom) <= t && t < Date.parse(outlook.validTo);
+  }
+  return { ...base, validTime };
 }
 
 const REPORT_FIXTURES: Readonly<Record<string, unknown>> = {
@@ -126,6 +145,15 @@ export function surfacePlotsFor(args: Readonly<Record<string, unknown>> | undefi
     base.validTime = args.validTime;
   }
   return base;
+}
+
+export function latestSurfacePlotsFixture(): unknown {
+  const { validTime, counts, plots } = structuredClone(surfaceFixture);
+  return {
+    validTime,
+    counts: { ...counts, nearby: counts.matched, queried: counts.matched, noObservation: 0, failed: 0, unqueried: 0 },
+    plots: plots.filter((plot) => plot.availability === "available"),
+  };
 }
 
 /**

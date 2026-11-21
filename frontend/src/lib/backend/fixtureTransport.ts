@@ -26,17 +26,14 @@ import { fixtureFrameCache } from "./fixtureFrameCache";
 import modelMapCatalogs from "@contracts/public/map/catalog.models.json";
 // no-inline: a small file would otherwise become a data: URL, which the CSP's connect-src refuses.
 import fieldShrfUrl from "@contracts/public/map/field.shrf?url&no-inline";
-import outlookCat from "@contracts/public/map/outlook.cat.json";
 import weatherAlerts from "@contracts/public/map/alerts.json";
-import outlookTorn from "@contracts/public/map/outlook.torn.json";
-import outlookWind from "@contracts/public/map/outlook.wind.json";
 import placeLabels from "@contracts/public/map/places.json";
 import radarShrfUrl from "@contracts/public/map/radar.shrf?url&no-inline";
 import { encodeShrf, parseShrf } from "../contracts/frames";
 import type { CommandName, Transport } from "./transport";
 import radarSites from "@contracts/public/map/radar-sites.json";
 import radarTilts from "@contracts/public/map/radar-tilts.json";
-import { contoursFor, hoursLater, reportsFor, satelliteFrameFor, siteFrameFor, surfacePlotsFor, thresholdFor } from "./fixtureFrames";
+import { contoursFor, hoursLater, latestSurfacePlotsFixture, outlookFor, reportsFor, satelliteFrameFor, siteFrameFor, surfacePlotsFor, thresholdFor } from "./fixtureFrames";
 import reportOptionsFixture from "@contracts/public/map/reports-options.json";
 import thresholdMetricsFixture from "@contracts/public/soundings/threshold-metrics.json";
 import thresholdCsvFixture from "@contracts/public/soundings/threshold-csv.example.json";
@@ -156,22 +153,6 @@ async function fieldFor(args: Readonly<Record<string, unknown>> | undefined): Pr
   return encodeShrf(header, frame.body);
 }
 
-const OUTLOOKS: Readonly<Record<string, unknown>> = { cat: outlookCat, torn: outlookTorn, wind: outlookWind };
-
-/** The fixture outlook of a product, for the requested time; hail has none. */
-function outlookFor(args: Readonly<Record<string, unknown>> | undefined): unknown {
-  const product = String(args?.product);
-  const validTime = String(args?.validTime);
-  if (args?.day !== undefined && args.day !== 1) return { product, validTime, outlook: null };
-  const base = copy(OUTLOOKS[product] ?? { ...outlookWind, product }) as Record<string, unknown>;
-  const outlook = base.outlook as { validFrom: string; validTo: string; covers: boolean } | null;
-  if (outlook !== null) {
-    const t = Date.parse(validTime);
-    outlook.covers = Date.parse(outlook.validFrom) <= t && t < Date.parse(outlook.validTo);
-  }
-  return { ...base, validTime };
-}
-
 /** Rejects with the raw fixture value, as Tauri rejects with the serialized BackendError. */
 function rejectWith(fixture: unknown): Promise<never> {
   // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the contract is a plain object
@@ -246,8 +227,11 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
     evaluate_threshold: (args) => Promise.resolve(thresholdFor(args)),
     export_threshold_csv: () => Promise.resolve(copy(thresholdCsvFixture)),
     render_sounding: () => fetch(renderExampleUrl).then((response) => response.arrayBuffer()),
-    render_sounding_view: async () => {
+    render_sounding_view: async (args) => {
       if (scenario === "render-disconnected" && renderAttempts++ === 0) throw new Error("Simulated connection loss");
+      if ((args?.view as { measureWind?: boolean } | undefined)?.measureWind === true) {
+        return { maximumWindKt: Math.max(0, ...viewExample.inspection.levels.map((level) => level.windSpeed)) };
+      }
       const response = await fetch(renderExampleUrl);
       const buffer = await response.arrayBuffer();
       const bytes = new Uint8Array(buffer);
@@ -266,6 +250,12 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
     get_weather_alerts: (args) => scenario === "overlay-error" ? rejectWith(overlayFailed) : Promise.resolve({ ...copy(weatherAlerts) as Record<string, unknown>, validTime: args?.validTime }),
     get_spc_outlook: (args) =>
       scenario === "overlay-error" ? rejectWith(overlayFailed) : Promise.resolve(outlookFor(args)),
+    build_forecast_drawing: () => rejectWith({
+      code: "METHOD_NOT_FOUND",
+      message: "Draw Forecast requires the live backend.",
+      retryable: false,
+      context: { operation: "build_forecast_drawing" },
+    }),
     get_radar_frame: () =>
       scenario === "overlay-error"
         ? rejectWith(overlayFailed)
@@ -285,6 +275,16 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
       scenario === "field-error" ? rejectWith(fieldUnavailable) : Promise.resolve(contoursFor(args)),
     get_surface_plots: (args) =>
       scenario === "overlay-error" ? rejectWith(overlayFailed) : Promise.resolve(surfacePlotsFor(args)),
+    get_latest_surface_plots: () =>
+      scenario === "overlay-error" ? rejectWith(overlayFailed) : Promise.resolve(latestSurfacePlotsFixture()),
+    get_spotter_positions: () => {
+      if (scenario === "overlay-error") return rejectWith(overlayFailed);
+      const checkedAt = new Date(Math.floor(Date.now() / 1000) * 1000).toISOString().replace(".000Z", "Z");
+      return Promise.resolve({ checkedAt, streamersAvailable: true, positions: [
+        { latitude: 35.3, longitude: -97.3, updatedAt: checkedAt, chaseCam: false, displayName: "Morgan Reed", motion: { kind: "stationary" } },
+        { latitude: 35.5, longitude: -98, updatedAt: checkedAt, chaseCam: true, displayName: "Taylor Lake", motion: { kind: "heading", degrees: 320 } },
+      ] });
+    },
     get_place_labels: () => Promise.resolve(copy(placeLabels)),
     get_station_availability: (args) =>
       scenario === "overlay-error"

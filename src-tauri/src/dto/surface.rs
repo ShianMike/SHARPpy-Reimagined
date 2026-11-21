@@ -4,6 +4,8 @@
 //! direction pair).
 
 use serde::{Deserialize, Serialize};
+pub use sharpmod_weather::surface::MAX_LATEST_PLOTS;
+use sharpmod_weather::surface::{SurfacePlotsSnapshot, MAX_LATEST_OFFSET_MIN};
 
 use crate::dto::checks::{check_lat_lon, check_text};
 
@@ -79,6 +81,49 @@ pub struct SurfacePlots {
     pub plots: Vec<SurfacePlot>,
 }
 
+impl From<SurfacePlotsSnapshot> for SurfacePlots {
+    fn from(snapshot: SurfacePlotsSnapshot) -> Self {
+        Self {
+            valid_time: snapshot.valid_time,
+            counts: SurfacePlotCounts {
+                matched: snapshot.counts.matched,
+                stale: snapshot.counts.stale,
+                no_observation: snapshot.counts.no_observation,
+                failed: snapshot.counts.failed,
+                nearby: snapshot.counts.nearby,
+                queried: snapshot.counts.queried,
+                unqueried: snapshot.counts.unqueried,
+            },
+            plots: snapshot
+                .plots
+                .into_iter()
+                .map(|plot| SurfacePlot {
+                    id: plot.id,
+                    longitude: plot.longitude,
+                    latitude: plot.latitude,
+                    valid: plot.valid,
+                    offset_min: plot.offset_min,
+                    stale: plot.stale,
+                    availability: plot.availability,
+                    wind_state: plot.wind_state,
+                    staff: plot.staff.map(|s| StaffSpec {
+                        angle_deg: s.angle_deg,
+                        pennants: s.pennants,
+                        barbs: s.barbs,
+                        halves: s.halves,
+                    }),
+                    temperature_c: plot.temperature_c,
+                    dewpoint_c: plot.dewpoint_c,
+                    upper_text: plot.upper_text,
+                    lower_text: plot.lower_text,
+                    label: plot.label,
+                    description: plot.description,
+                })
+                .collect(),
+        }
+    }
+}
+
 fn time_ok(value: &Option<String>) -> Result<(), String> {
     match value {
         None => Ok(()),
@@ -100,7 +145,7 @@ impl StaffSpec {
 }
 
 impl SurfacePlot {
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self, offset_ok: fn(f64) -> bool) -> Result<(), String> {
         if !self.temperature_c.is_none_or(f64::is_finite)
             || !self.dewpoint_c.is_none_or(f64::is_finite)
         {
@@ -128,7 +173,7 @@ impl SurfacePlot {
             );
         }
         match self.offset_min {
-            Some(offset) if self.valid.is_some() && (-60.0..=60.0).contains(&offset) => {}
+            Some(offset) if self.valid.is_some() && offset_ok(offset) => {}
             Some(_) => return Err("a plot offset must belong to a plot with a time".into()),
             None if self.valid.is_none() => {}
             None => return Err("a plot with a time carries its offset".into()),
@@ -145,8 +190,18 @@ impl SurfacePlot {
 
 impl SurfacePlots {
     pub fn validate(&self) -> Result<(), String> {
+        self.validate_with(MAX_PLOTS, |offset| (-60.0..=60.0).contains(&offset))
+    }
+
+    pub fn validate_latest(&self) -> Result<(), String> {
+        self.validate_with(MAX_LATEST_PLOTS, |offset| {
+            (-MAX_LATEST_OFFSET_MIN..=MAX_LATEST_OFFSET_MIN).contains(&offset)
+        })
+    }
+
+    fn validate_with(&self, max_plots: usize, offset_ok: fn(f64) -> bool) -> Result<(), String> {
         check_text("validTime", &self.valid_time, 10, 40)?;
-        if self.plots.len() > MAX_PLOTS {
+        if self.plots.len() > max_plots {
             return Err("too many station plots".into());
         }
         let mut seen = std::collections::BTreeSet::new();
@@ -155,7 +210,7 @@ impl SurfacePlots {
                 return Err("a station appears twice in the plots".into());
             }
         }
-        if self.counts.unqueried + self.counts.queried != self.counts.nearby {
+        if self.counts.unqueried.checked_add(self.counts.queried) != Some(self.counts.nearby) {
             return Err("the station counts do not add up".into());
         }
         let tallies = [
@@ -184,6 +239,8 @@ impl SurfacePlots {
                 return Err(format!("the {name} count disagrees with the records"));
             }
         }
-        self.plots.iter().try_for_each(SurfacePlot::validate)
+        self.plots
+            .iter()
+            .try_for_each(|plot| plot.validate(offset_ok))
     }
 }

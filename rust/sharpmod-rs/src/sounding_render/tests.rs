@@ -51,6 +51,24 @@ impl<'py> Fixture<'py> {
                 let py = args.py();
                 count.fetch_add(1, Ordering::Relaxed);
                 let path: PathBuf = args.get_item(1)?.extract()?;
+                let view = kwargs.unwrap().get_item("view")?;
+                if view
+                    .as_ref()
+                    .is_some_and(|view| view.contains("measureWind").unwrap())
+                {
+                    assert_eq!(args.get_item(3)?.extract::<String>()?, "hd");
+                    assert!(path.parent().unwrap().is_dir() && !path.exists());
+                    let metadata = PyModule::import(py, "json")?.call_method1(
+                        "loads",
+                        (r#"{"inspection":{"levels":[
+                            {"hodograph": null, "windSpeed": 270},
+                            {"hodograph": {"x": 0.2, "y": 0.3}, "windSpeed": 72.5},
+                            {"hodograph": {"x": 0.3, "y": 0.4}, "windSpeed": null},
+                            {"hodograph": {"x": 0.4, "y": 0.5}, "windSpeed": 25}
+                        ]}, "edits": []}"#,),
+                    )?;
+                    return Ok(metadata.cast_into::<PyDict>()?.unbind());
+                }
                 match state.load(Ordering::Relaxed) {
                     1 => fs::write(&path, b"partial invalid image")?,
                     2 => fs::write(&path, [PNG, &vec![0; 1024]].concat())?,
@@ -66,12 +84,16 @@ impl<'py> Fixture<'py> {
                 }
                 let metadata = PyDict::new(py);
                 if state.load(Ordering::Relaxed) != 4 {
-                    if let Some(view) = kwargs.unwrap().get_item("view")? {
+                    if let Some(view) = view {
                         let edits = if view.contains("drag")? {
-                            PyModule::import(py, "json")?.call_method1(
-                                "loads",
-                                (r#"[{"index": 0, "values": {"tmpc": 30}}]"#,),
-                            )?
+                            let drag = view.get_item("drag")?;
+                            let x: f64 = drag.get_item("x")?.extract()?;
+                            let values = PyDict::new(py);
+                            values.set_item("tmpc", 20.0 + 20.0 * x)?;
+                            let edit = PyDict::new(py);
+                            edit.set_item("index", 0)?;
+                            edit.set_item("values", values)?;
+                            PyList::new(py, [edit])?.into_any()
                         } else {
                             view.get_item("edits")?
                         };
@@ -166,6 +188,158 @@ impl Drop for Fixture<'_> {
             .unwrap();
         fs::remove_dir_all(&self.root).unwrap();
     }
+}
+
+#[test]
+fn wind_measurement_has_only_the_visible_maximum_and_preserves_image_cache() {
+    let _backend = crate::lock_python_backend_test();
+    Python::initialize();
+    Python::attach(|py| -> PyResult<()> {
+        let fixture = Fixture::new(py)?;
+        fixture.view(false)?;
+        fixture.params.set_item("image_mode", "uhd")?;
+        let original = fixture.render(true, 100)?;
+        let output = fixture.output();
+        let renders = fixture.entry.getattr("view_renders")?;
+        let previous = renders.call_method0("copy")?;
+        let view = fixture.params.get_item("view")?.unwrap();
+
+        view.set_item("measureWind", true)?;
+        let result = fixture.render(true, 0)?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result
+                .get_item("maximumWindKt")?
+                .unwrap()
+                .extract::<f64>()?,
+            72.5
+        );
+        assert!(renders.eq(previous)?);
+        assert_eq!(fs::read(&output)?, PNG);
+        assert_eq!(fs::read_dir(fixture.root.join("renders"))?.count(), 1);
+        fixture.assert_source_and_lock();
+
+        view.set_item("measureWind", false)?;
+        assert!(fixture.render(true, 100)?.eq(original)?);
+        assert_eq!(fixture.calls.load(Ordering::Relaxed), 2);
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn empty_and_ineligible_wind_levels_keep_the_zero_starting_maximum() {
+    Python::initialize();
+    Python::attach(|py| -> PyResult<()> {
+        let json = PyModule::import(py, "json")?;
+        for levels in [
+            "[]",
+            r#"[{"hodograph": null, "windSpeed": 150}, {"hodograph": {"x": 0.5, "y": 0.5}, "windSpeed": null}]"#,
+            r#"[{"hodograph": {"x": 0.5, "y": 0.5}, "windSpeed": 0}]"#,
+        ] {
+            let metadata = json.call_method1(
+                "loads",
+                (format!(r#"{{"inspection": {{"levels": {levels}}}}}"#),),
+            )?;
+            assert_eq!(maximum_visible_wind(&metadata)?, 0.0);
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn revisiting_one_of_three_dragged_views_reuses_its_png() {
+    let _backend = crate::lock_python_backend_test();
+    Python::initialize();
+    Python::attach(|py| -> PyResult<()> {
+        let fixture = Fixture::new(py)?;
+        let mut results = Vec::new();
+        for x in [0.25, 0.50, 0.75] {
+            fixture.view(true)?;
+            fixture
+                .params
+                .get_item("view")?
+                .unwrap()
+                .get_item("drag")?
+                .set_item("x", x)?;
+            results.push(fixture.render(true, 100)?);
+        }
+        assert_eq!(fixture.calls.load(Ordering::Relaxed), 3);
+        let view = PyDict::new(py);
+        view.set_item("edits", results[0].get_item("edits")?.unwrap())?;
+        fixture.params.set_item("view", view)?;
+        assert!(fixture.render(true, 100)?.eq(&results[0])?);
+        let calls = fixture.calls.load(Ordering::Relaxed);
+        println!("A → B → C → A worker calls: {calls}");
+        assert_eq!(calls, 3);
+        assert_eq!(fs::read_dir(fixture.root.join("renders"))?.count(), 3);
+        fixture.assert_source_and_lock();
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn interactive_cache_applies_file_recency_and_evicts_all_keys_for_a_png() {
+    let _backend = crate::lock_python_backend_test();
+    Python::initialize();
+    Python::attach(|py| -> PyResult<()> {
+        let fixture = Fixture::new(py)?;
+        fixture.view(true)?;
+        let drag = fixture
+            .params
+            .get_item("view")?
+            .unwrap()
+            .cast_into::<PyDict>()?;
+        let original = fixture.render(true, 100)?;
+
+        let winter = drag.copy()?;
+        winter.set_item("mode", "winter")?;
+        fixture.params.set_item("view", &winter)?;
+        let winter_result = fixture.render(true, 100)?;
+        let renders = fixture.entry.getattr("view_renders")?;
+        let winter_file: PathBuf = renders
+            .call_method0("values")?
+            .call_method0("__reversed__")?
+            .try_iter()?
+            .next()
+            .unwrap()?
+            .get_item(0)?
+            .extract()?;
+
+        fixture.params.set_item("view", &drag)?;
+        assert!(fixture.render(true, 100)?.eq(&original)?);
+        assert_eq!(fixture.calls.load(Ordering::Relaxed), 2);
+        for range in [60, 80, 100] {
+            fixture.view(false)?;
+            fixture
+                .params
+                .get_item("view")?
+                .unwrap()
+                .set_item("animationRange", range)?;
+            fixture.render(true, 100)?;
+        }
+
+        assert_eq!(fixture.calls.load(Ordering::Relaxed), 5);
+        assert_eq!(fs::read_dir(fixture.root.join("renders"))?.count(), 4);
+        assert!(!winter_file.exists());
+        assert!(image_keys(&renders, &winter_file)?.is_empty());
+        let resolved = PyDict::new(py);
+        resolved.set_item("edits", original.get_item("edits")?.unwrap())?;
+        fixture.params.set_item("view", resolved)?;
+        assert!(fixture.render(true, 100)?.eq(&original)?);
+        assert_eq!(fixture.calls.load(Ordering::Relaxed), 5);
+
+        fixture.params.set_item("view", &winter)?;
+        assert!(fixture.render(true, 100)?.eq(&winter_result)?);
+        assert_eq!(fixture.calls.load(Ordering::Relaxed), 6);
+        assert!(winter_file.is_file());
+        assert_eq!(fs::read_dir(fixture.root.join("renders"))?.count(), 4);
+        fixture.assert_source_and_lock();
+        Ok(())
+    })
+    .unwrap();
 }
 
 #[test]

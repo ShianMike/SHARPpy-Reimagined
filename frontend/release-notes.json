@@ -1,4 +1,33 @@
 {
+  "3.9.0": {
+    "summary": "Draw your own severe weather outlooks and read forecast maps and soundings more easily.",
+    "highlights": [
+      {
+        "title": "Draw Forecast",
+        "description": "Draw, move, or reshape smooth risk contours. Lower risks fill in automatically, about two miles apart. Copy a categorical outline into tornado, hail, or wind probabilities. Export any outlook with its author, day, and unofficial-forecast notice."
+      },
+      {
+        "title": "More readable maps",
+        "description": "Read values and units together in the point inspector, find stations faster, and switch layer controls beside the compact panel selector. Toggle rivers for each panel."
+      },
+      {
+        "title": "Weather layers and playback",
+        "description": "Model fields shade more smoothly and keep loading upcoming hours during playback. Worldwide METAR markers stay visible through zoom changes. In the local app, inspect public Spotter Network names, update times, and movement in Live Tracking."
+      },
+      {
+        "title": "Sounding workspace",
+        "description": "Find open profiles and restore saved sessions more easily. Animate GDPS, RDPS, and other model soundings from the opened run with a shared wind axis. Lossless WebP exports take less browser processing."
+      },
+      {
+        "title": "Cleaner Overview",
+        "description": "A shorter header gives the SPC briefing more room. Switch outlook products with compact icons and see their names on hover or keyboard focus."
+      },
+      {
+        "title": "Skew-T traces and annotations",
+        "description": "Read a higher-contrast lapse-rate bracket at −25 °C and centered inflow labels at −15 °C. Temperature and dewpoint lines are softer in the focused sounding."
+      }
+    ]
+  },
   "3.8.6": {
     "summary": "Open model soundings again, read CAPE units clearly and run the desktop app on Ubuntu.",
     "highlights": [

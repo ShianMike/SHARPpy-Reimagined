@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import type { LayerSpecification, LineLayerSpecification, Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
+import type { FilterSpecification, LayerSpecification, LineLayerSpecification, Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import tokensCss from "../../styles/tokens.css?raw";
 import { cssTokenReader } from "../../test/cssTokens";
 import { readCanvasTokens } from "../canvasTokens";
+import { LAYER_REGISTRY } from "../layers/descriptors";
+import { applyStyleLayers, defaultLayerStates } from "../layers/registry";
 import { applyBasemapLabels, applyBasemapState, applyRoadNetworkState, prepareBasemap } from "./basemapLayers";
 import { basemapSourceUrl, basemapStyle, MAP_STYLE_URLS } from "./basemapStyle";
 
@@ -156,14 +158,14 @@ it("toggles native labels without changing weather or the style's label opacity"
     getLayoutProperty: (id: string) => layout.get(id),
     setLayoutProperty, setPaintProperty,
   } as unknown as MapLibreMap;
-  applyBasemapLabels(map, { visible: true, opacity: 1 });
+  applyBasemapLabels(map, { visible: true, opacity: 1 }, true);
   expect(setLayoutProperty).not.toHaveBeenCalled();
   setLayoutProperty.mockClear();
-  applyBasemapLabels(map, { visible: false, opacity: 1 });
+  applyBasemapLabels(map, { visible: false, opacity: 1 }, true);
   expect(setLayoutProperty.mock.calls).toEqual([["city", "visibility", "none"]]);
-  applyBasemapLabels(map, { visible: false, opacity: 0.5 });
+  applyBasemapLabels(map, { visible: false, opacity: 0.5 }, true);
   expect(setLayoutProperty).toHaveBeenCalledTimes(1);
-  applyBasemapLabels(map, { visible: true, opacity: 1 });
+  applyBasemapLabels(map, { visible: true, opacity: 1 }, true);
   expect(setLayoutProperty.mock.calls.slice(1)).toEqual([["city", "visibility", "visible"]]);
   expect(setPaintProperty).not.toHaveBeenCalled();
 });
@@ -189,16 +191,75 @@ it("toggles native road lines and names independently of place names and preserv
   expect(setLayoutProperty.mock.calls).toEqual(["road", "road-name", "road-direction"].map((id) => [id, "visibility", "none"]));
   applyRoadNetworkState(map, { visible: false, opacity: 1 });
   expect(setLayoutProperty).toHaveBeenCalledTimes(3);
-  applyBasemapLabels(map, { visible: false, opacity: 1 });
+  applyBasemapLabels(map, { visible: false, opacity: 1 }, true);
   applyRoadNetworkState(map, { visible: true, opacity: 1 });
   for (const id of ["road", "road-name", "road-direction"]) expect(layout.get(id)).toBe("visible");
   expect(layout.get("hidden-road")).toBe("none");
   expect(layout.get("city")).toBe("none");
-  applyBasemapLabels(map, { visible: true, opacity: 1 });
+  applyBasemapLabels(map, { visible: true, opacity: 1 }, true);
   applyRoadNetworkState(map, { visible: false, opacity: 1 });
   expect(layout.get("road-name")).toBe("none");
   expect(layout.get("city")).toBe("visible");
   expect(layout.has("water")).toBe(false);
   expect(layout.has("weather-road")).toBe(false);
+  expect(setPaintProperty).not.toHaveBeenCalled();
+});
+
+it.each(["liberty", "dark"])("toggles the provider's river lines, fills and labels in %s", (styleName) => {
+  const liberty = styleName === "liberty";
+  const lines = liberty ? ["waterway_tunnel", "waterway_river", "waterway_other"] : ["waterway"];
+  const riverLabels = liberty ? ["waterway_line_label"] : [];
+  const aboveGround: FilterSpecification = ["!=", ["get", "brunnel"], "tunnel"];
+  const waterFilter: FilterSpecification = liberty ? aboveGround
+    : ["all", ["match", ["geometry-type"], ["MultiPolygon", "Polygon"], true, false], aboveGround];
+  const shorelineFilter: FilterSpecification = ["all", waterFilter, ["==", ["get", "class"], "ocean"]];
+  const layers: LayerSpecification[] = [
+    { id: "water", type: "fill", source: "openmaptiles", "source-layer": "water" },
+    { id: "geography-shoreline", type: "line", source: "openmaptiles", "source-layer": "water" },
+    ...lines.map((id): LayerSpecification => ({ id, type: "line", source: "openmaptiles", "source-layer": "waterway" })),
+    ...riverLabels.map((id): LayerSpecification => ({ id, type: "symbol", source: "openmaptiles", "source-layer": "waterway", minzoom: 10 })),
+    { id: "hidden-waterway", type: "line", source: "openmaptiles", "source-layer": "waterway" },
+    { id: "water-name", type: "symbol", source: "openmaptiles", "source-layer": "water_name" },
+    { id: "city", type: "symbol", source: "openmaptiles", "source-layer": "place" },
+    { id: "road", type: "line", source: "openmaptiles", "source-layer": "transportation" },
+    { id: "weather-line", type: "line", source: "weather", "source-layer": "waterway" },
+  ];
+  const visibility = new Map<string, "visible" | "none">([["hidden-waterway", "none"]]);
+  const filters = new Map<string, FilterSpecification | undefined>([["water", waterFilter], ["geography-shoreline", shorelineFilter]]);
+  const setLayoutProperty = vi.fn((id: string, _property: string, value: "visible" | "none") => { visibility.set(id, value); });
+  const setFilter = vi.fn((id: string, filter: FilterSpecification | undefined) => { filters.set(id, filter); });
+  const setPaintProperty = vi.fn();
+  const map = {
+    getStyle: () => ({ layers: layers.map((layer) => ({ ...layer, filter: filters.get(layer.id), layout: { visibility: visibility.get(layer.id) } })) }),
+    getSource: () => ({}), getLayer: (id: string) => layers.find((layer) => layer.id === id),
+    getLayoutProperty: (id: string) => visibility.get(id),
+    getPaintProperty: () => undefined, setLayoutProperty, setFilter, setPaintProperty,
+  } as unknown as MapLibreMap;
+  const states = defaultLayerStates();
+  const apply = () => {
+    applyStyleLayers(map, LAYER_REGISTRY, states);
+    applyBasemapLabels(map, states["place-labels"], states.rivers.visible);
+  };
+  apply();
+  expect(setLayoutProperty).not.toHaveBeenCalled();
+  expect(filters.get("water")).toEqual(waterFilter);
+
+  states.rivers.visible = false;
+  apply();
+  expect(setLayoutProperty.mock.calls).toEqual([...lines, ...riverLabels].map((id) => [id, "visibility", "none"]));
+  expect(filters.get("water")).toEqual(["all", waterFilter, ["!=", ["get", "class"], "river"]]);
+  expect(filters.get("geography-shoreline")).toEqual(shorelineFilter);
+  expect(new Set(setFilter.mock.calls.map(([id]) => id))).toEqual(new Set(["water"]));
+
+  states["place-labels"].visible = false;
+  apply();
+  states.rivers.visible = true;
+  apply();
+  expect(filters.get("water")).toEqual(waterFilter);
+  for (const id of lines) expect(visibility.get(id)).toBe("visible");
+  for (const id of ["hidden-waterway", "water-name", "city", ...riverLabels]) expect(visibility.get(id)).toBe("none");
+  states["place-labels"].visible = true;
+  apply();
+  for (const id of ["water-name", "city", ...riverLabels]) expect(visibility.get(id)).toBe("visible");
   expect(setPaintProperty).not.toHaveBeenCalled();
 });

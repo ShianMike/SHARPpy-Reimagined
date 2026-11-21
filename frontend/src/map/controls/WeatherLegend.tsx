@@ -16,6 +16,7 @@ import { useWeatherAlerts } from "../weatherAlertsQuery";
 import { FieldLegend } from "./FieldLegend";
 import { Legend } from "./Legend";
 import { SurfacePlotControls } from "./SurfacePlotControls";
+import { SpotterNetworkStatus } from "./SpotterNetworkStatus";
 import styles from "./Legend.module.css";
 
 const REPORT_TYPES = [
@@ -110,6 +111,7 @@ function WeatherKey({ id, panel }: { id: OrderableLayerId; panel: number }): Rea
     case "watches": return <AlertKey kind="watch" />;
     case "storm-reports": return <ReportKey panel={panel} />;
     case "surface-plots": return <SurfacePlotControls />;
+    case "spotter-network": return <SpotterNetworkStatus />;
     default: return <OutlookKey product={id.slice("spc-".length) as OutlookKey} />;
   }
 }

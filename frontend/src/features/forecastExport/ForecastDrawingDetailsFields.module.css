@@ -1,0 +1,9 @@
+.fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+@media (max-width: 280px) {
+  .fields { grid-template-columns: minmax(0, 1fr); }
+}

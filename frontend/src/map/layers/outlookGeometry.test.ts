@@ -5,7 +5,7 @@ import { readCanvasTokens } from "../canvasTokens";
 import type { Outlook } from "../../types/map";
 import { NO_SCENE_DATA, type LayerBuildContext } from "./registry";
 import { buildOutlookLayers, outlookShapes, type AreaFill } from "./SPCOutlookLayer";
-import { closedPaths, containsPoint, labelPoint, type Ring } from "./outlookGeometry";
+import { bandLabelPoints, closedPaths, containsPoint, labelPoint, type Ring } from "./outlookGeometry";
 
 const square: Ring = [
   [0, 0],
@@ -60,6 +60,14 @@ describe("outlook geometry", () => {
         expect(containsPoint(rings, labelPoint(rings, fraction))).toBe(true);
       }
     }
+  });
+
+  it("places lower-risk labels in the surrounding band, including when it has a hole", () => {
+    const higher: Ring = [[1, 1], [9, 1], [9, 9], [1, 9]];
+    const band = bandLabelPoints([square, hole], [[higher]], [0.5, 0.25, 0.75]);
+    expect(band.length).toBeGreaterThan(0);
+    expect(band.every((point) => containsPoint([square, hole], point) && !containsPoint([higher], point))).toBe(true);
+    expect(bandLabelPoints([square], [[square]], [0.5])).toEqual([]);
   });
 
   it("keeps CIG levels distinct, preserves holes, and reuses geometry across zoom and opacity", () => {

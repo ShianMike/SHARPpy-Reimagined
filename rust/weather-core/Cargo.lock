@@ -1155,7 +1155,7 @@ dependencies = [
 
 [[package]]
 name = "sharpmod-weather"
-version = "3.8.6"
+version = "3.9.0"
 dependencies = [
  "base64 0.22.1",
  "bzip2",

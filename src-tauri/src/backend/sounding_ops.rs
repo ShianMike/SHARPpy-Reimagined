@@ -282,7 +282,7 @@ impl Router {
         Ok(analysis)
     }
 
-    /// The edited PNG and normalized hit targets from sharpmod's native viewer.
+    /// The edited PNG and hit targets, or a wind measurement for animation.
     pub async fn render_sounding_view(
         &self,
         sounding_id: &str,
@@ -302,6 +302,7 @@ impl Router {
                 "A sounding id and view object are required",
             ));
         }
+        let measure_wind = view.get("measureWind").and_then(Value::as_bool) == Some(true);
         let result: Value = self
             .call(
                 &context,
@@ -313,6 +314,9 @@ impl Router {
                 RENDER_TIMEOUT,
             )
             .await?;
+        if measure_wind {
+            return Ok(result);
+        }
         let image = result.get("image").and_then(Value::as_str).unwrap_or("");
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(image)

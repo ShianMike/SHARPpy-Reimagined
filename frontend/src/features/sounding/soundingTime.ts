@@ -41,8 +41,8 @@ export function resolveModelRun(model: ForecastModel, requested: string | null):
     ? requested : model.suggestedRun;
 }
 
-/** "2026-10-04 12Z", or "2026-10-04 12:30Z" when the minutes are not zero; an em dash for null. */
-export function formatUtc(iso: string | null): string {
+/** A UTC date and hour, with minutes when nonzero and an optional year. */
+export function formatUtc(iso: string | null, { includeYear = true } = {}): string {
   if (iso === null) {
     return "\u2014";
   }
@@ -52,7 +52,8 @@ export function formatUtc(iso: string | null): string {
   }
   const minutes = moment.getUTCMinutes();
   const time = minutes === 0 ? pad(moment.getUTCHours()) : `${pad(moment.getUTCHours())}:${pad(minutes)}`;
-  return `${utcDate(moment)} ${time}Z`;
+  const date = utcDate(moment);
+  return `${includeYear ? date : date.slice(5)} ${time}Z`;
 }
 
 /** "10-04 16Z", for the toolbar and the timeline, where width is short. */

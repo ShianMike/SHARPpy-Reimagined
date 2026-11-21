@@ -1,6 +1,7 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { MapLibreOverlay } from "@deck.gl/maplibre";
 import type { FrameRequest } from "../mapQueries";
+import { assertPlainMapCapture, type UnofficialForecastDrawingCapture } from "../forecastDrawing/forecastDrawingCapture";
 
 export interface CaptureSize { width: number; height: number }
 export interface MapCaptureResolution extends CaptureSize {
@@ -9,7 +10,8 @@ export interface MapCaptureResolution extends CaptureSize {
 }
 
 export interface MapCaptureSource {
-  captureFrame(request: FrameRequest, signal: AbortSignal, resolution?: MapCaptureResolution): Promise<HTMLCanvasElement>;
+  captureFrame(request: FrameRequest, signal: AbortSignal, resolution?: MapCaptureResolution, drawing?: UnofficialForecastDrawingCapture): Promise<HTMLCanvasElement>;
+  captureCurrent?(drawing: UnofficialForecastDrawingCapture): Promise<HTMLCanvasElement>;
   attribution?(): string;
 }
 
@@ -17,11 +19,13 @@ export interface MapCaptureSource {
 export const mapCaptureSources = new Map<number, MapCaptureSource>();
 
 export function registerMapCapture(panel: number, map: MapLibreMap, overlay: MapLibreOverlay, ready: (request: FrameRequest) => boolean,
-  onOverlayRender: (listener: () => void) => () => void): void {
+  onOverlayRender: (listener: () => void) => () => void, isReadyForCurrent?: () => boolean): void {
   const lifetime = new AbortController();
   const source: MapCaptureSource = {
-    captureFrame: (request, signal, resolution) => captureMapFrame(map, overlay,
-      () => ready(request), onOverlayRender, AbortSignal.any([signal, lifetime.signal]), resolution),
+    captureFrame: (request, signal, resolution, drawing) => captureMapFrame(map, overlay,
+      () => ready(request), onOverlayRender, AbortSignal.any([signal, lifetime.signal]), resolution, drawing),
+    ...(isReadyForCurrent === undefined ? {} : { captureCurrent: (drawing: UnofficialForecastDrawingCapture) => captureMapFrame(map, overlay,
+      isReadyForCurrent, onOverlayRender, lifetime.signal, undefined, drawing) }),
     attribution: () => {
       const credits = Object.keys(map.getStyle().sources).flatMap((id) => {
         const source = map.getSource(id);
@@ -38,14 +42,15 @@ export function registerMapCapture(panel: number, map: MapLibreMap, overlay: Map
 }
 
 /** Copy WebGL buffers inside their render callbacks, without retaining drawing buffers during normal use. */
-export function captureMapFrame(map: MapLibreMap, overlay: MapLibreOverlay, ready: () => boolean,
-  onOverlayRender: (listener: () => void) => () => void, signal: AbortSignal, resolution?: MapCaptureResolution): Promise<HTMLCanvasElement> {
+export async function captureMapFrame(map: MapLibreMap, overlay: MapLibreOverlay, ready: () => boolean,
+  onOverlayRender: (listener: () => void) => () => void, signal: AbortSignal, resolution?: MapCaptureResolution,
+  drawing?: UnofficialForecastDrawingCapture): Promise<HTMLCanvasElement> {
+  if (drawing !== undefined) signal = AbortSignal.any([signal, drawing.signal]);
   signal.throwIfAborted();
+  if (drawing === undefined) assertPlainMapCapture();
   const crop = resolution?.crop;
-  if (resolution !== undefined) {
-    const canvas = map.getCanvas();
-    if (!(canvas.clientWidth > 0 && canvas.clientHeight > 0)) return Promise.reject(new Error("The map has no visible size. Open the map and try again."));
-  }
+  const canvas = map.getCanvas();
+  if (!(canvas.clientWidth > 0 && canvas.clientHeight > 0)) throw new Error("The map has no visible size. Open the map and try again.");
   return new Promise((resolve, reject) => {
     const base = document.createElement("canvas"), weather = document.createElement("canvas");
     const baseContext = base.getContext("2d"), weatherContext = weather.getContext("2d");
@@ -81,6 +86,7 @@ export function captureMapFrame(map: MapLibreMap, overlay: MapLibreOverlay, read
       resolve(base);
     };
     const canCopy = (): boolean => {
+      if (drawing === undefined) assertPlainMapCapture();
       if (ready() && map.areTilesLoaded() && !map.isMoving()) return true;
       invalidate();
       return false;
@@ -118,7 +124,7 @@ export function captureMapFrame(map: MapLibreMap, overlay: MapLibreOverlay, read
         finish();
       } catch (error) { fail(error); }
     };
-    const abort = (): void => { fail(new DOMException("Map capture cancelled.", "AbortError")); };
+    const abort = (): void => { fail(signal.reason); };
     const timeout = setTimeout(() => { fail(new Error("The map did not finish drawing. Retry the frame or reload maps.")); }, 30_000);
     unsubscribe = onOverlayRender(copyWeather);
     signal.addEventListener("abort", abort, { once: true });

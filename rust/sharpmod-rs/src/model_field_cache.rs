@@ -15,6 +15,25 @@ struct Flight<V> {
     users: AtomicUsize,
 }
 
+impl<V> Flight<V> {
+    fn try_join_transient(&self) -> bool {
+        let mut users = self.users.load(Ordering::Relaxed);
+        // One remaining user is the producer. A new consumer needs a new flight.
+        while users > 1 {
+            match self.users.compare_exchange_weak(
+                users,
+                users + 1,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return true,
+                Err(current) => users = current,
+            }
+        }
+        false
+    }
+}
+
 struct State<K, V> {
     entries: HashMap<K, (Arc<Flight<V>>, usize)>,
     order: VecDeque<K>,
@@ -55,25 +74,57 @@ impl<K: Eq + Hash + Clone, V> Cache<K, V> {
     }
 
     pub fn reserve(self: &Arc<Self>, key: Option<K>) -> Ticket<K, V> {
+        self.reserve_with(key, false)
+    }
+
+    /// Reserve a consumer ticket and, for a new flight, a separate producer.
+    pub fn reserve_transient(self: &Arc<Self>, key: K) -> (Ticket<K, V>, Option<Ticket<K, V>>) {
+        let ticket = self.reserve_with(Some(key), true);
+        if ticket.leader {
+            let consumer = Ticket {
+                cache: Arc::clone(self),
+                key: None,
+                flight: Arc::clone(&ticket.flight),
+                leader: false,
+            };
+            (consumer, Some(ticket))
+        } else {
+            (ticket, None)
+        }
+    }
+
+    fn reserve_with(self: &Arc<Self>, key: Option<K>, transient: bool) -> Ticket<K, V> {
         let mut state = self.state.lock().unwrap();
         if let Some(key) = &key {
-            if let Some((flight, _)) = state.entries.get(key) {
-                let flight = Arc::clone(flight);
-                flight.users.fetch_add(1, Ordering::Relaxed);
-                state.order.retain(|item| item != key);
-                state.order.push_back(key.clone());
-                return Ticket {
-                    cache: Arc::clone(self),
-                    key: Some(key.clone()),
-                    flight,
-                    leader: false,
+            if let Some((flight, bytes)) = state.entries.get(key) {
+                let joined = if transient {
+                    flight.try_join_transient()
+                } else {
+                    flight.users.fetch_add(1, Ordering::Relaxed);
+                    true
                 };
+                if joined {
+                    let flight = Arc::clone(flight);
+                    state.order.retain(|item| item != key);
+                    state.order.push_back(key.clone());
+                    return Ticket {
+                        cache: Arc::clone(self),
+                        key: Some(key.clone()),
+                        flight,
+                        leader: false,
+                    };
+                }
+                // The previous request left its producer with no consumers.
+                let bytes = *bytes;
+                state.entries.remove(key);
+                state.order.retain(|item| item != key);
+                state.bytes -= bytes;
             }
         }
         let flight = Arc::new(Flight {
             value: Mutex::new(None),
             changed: Condvar::new(),
-            users: AtomicUsize::new(1),
+            users: AtomicUsize::new(if transient { 2 } else { 1 }),
         });
         if key.is_some() && state.entries.len() >= self.capacity {
             if let Some(position) = state
@@ -141,10 +192,19 @@ impl<K: Eq + Hash + Clone, V> Ticket<K, V> {
     }
 
     pub fn complete(&self, value: Result<V, String>, bytes: usize) {
-        self.finish(value.map(Arc::new).map_err(WaitError::Failed), bytes);
+        self.finish(value.map(Arc::new).map_err(WaitError::Failed), Some(bytes));
     }
 
-    fn finish(&self, value: Result<Arc<V>, WaitError>, bytes: usize) {
+    /// Deliver a result only to callers that already hold this flight.
+    pub fn complete_transient(self, value: V) {
+        // Retire the key before a consumer can observe the result and reserve it again.
+        if let Some(key) = &self.key {
+            self.cache.finish(key, &self.flight, 0, false);
+        }
+        self.finish(Ok(Arc::new(value)), None);
+    }
+
+    fn finish(&self, value: Result<Arc<V>, WaitError>, bytes: Option<usize>) {
         let success = value.is_ok();
         let mut stored = self.flight.value.lock().unwrap();
         if stored.is_some() {
@@ -152,7 +212,7 @@ impl<K: Eq + Hash + Clone, V> Ticket<K, V> {
         }
         *stored = Some(value);
         drop(stored);
-        if let Some(key) = &self.key {
+        if let (Some(key), Some(bytes)) = (&self.key, bytes) {
             self.cache.finish(key, &self.flight, bytes, success);
         }
         self.flight.changed.notify_all();
@@ -182,7 +242,7 @@ impl<K: Eq + Hash + Clone, V> Ticket<K, V> {
 impl<K: Eq + Hash + Clone, V> Drop for Ticket<K, V> {
     fn drop(&mut self) {
         if self.leader {
-            self.finish(Err(WaitError::Abandoned), 0);
+            self.finish(Err(WaitError::Abandoned), Some(0));
         }
         self.flight.users.fetch_sub(1, Ordering::Relaxed);
     }
@@ -191,6 +251,25 @@ impl<K: Eq + Hash + Clone, V> Drop for Ticket<K, V> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transient_flights_retire_when_consumers_leave_or_the_result_is_ready() {
+        let cache = Cache::<u8, u8>::new(0, 1);
+        let (consumer, producer) = cache.reserve_transient(1);
+        let producer = producer.unwrap();
+        drop(consumer);
+        assert!(!producer.shared());
+
+        let (consumer, replacement) = cache.reserve_transient(1);
+        let replacement = replacement.unwrap();
+        producer.complete_transient(7);
+        let (follower, new_producer) = cache.reserve_transient(1);
+        assert!(new_producer.is_none());
+        replacement.complete_transient(8);
+        assert_eq!(*consumer.wait(|| Ok(false)).unwrap(), 8);
+        assert_eq!(*follower.wait(|| Ok(false)).unwrap(), 8);
+        assert!(cache.reserve_transient(1).1.is_some());
+    }
 
     #[test]
     fn shares_fields_preserves_independent_cancellation_and_retries_failed_producers() {

@@ -1,5 +1,9 @@
 import type { BackendClient } from "../../lib/backend/client";
 import { ContractError } from "../../lib/contracts/guards";
+
+const LOSSLESS_CHUNK = 0x5650384c; // "VP8L" in file order.
+const MAX_ANIMATION_BYTES = 128 * 1024 * 1024;
+
 function chunk(name: string, data: Uint8Array): Uint8Array<ArrayBuffer> {
     const bytes = new Uint8Array(8 + data.length + (data.length % 2));
     bytes.set(new TextEncoder().encode(name));
@@ -14,7 +18,7 @@ function set24(data: Uint8Array, index: number, value: number): void {
 }
 /** Lossless native frames in the standard looping ANIM/ANMF WebP container. */
 export class WebpWriter {
-    private readonly frames: Uint8Array<ArrayBuffer>[] = [];
+    private readonly frames: Blob[] = [];
     private size = 0;
     constructor(private readonly client: BackendClient, private readonly signal: AbortSignal, private readonly width: number, private readonly height: number) { }
     async write(png: Blob, delay: number): Promise<void> {
@@ -36,31 +40,35 @@ export class WebpWriter {
         this.signal.throwIfAborted();
         if (frame.width !== this.width || frame.height !== this.height)
             throw new ContractError("WebP", "frame dimensions changed");
-        const chunks: Uint8Array<ArrayBuffer>[] = [];
-        for (let offset = 12; offset + 8 <= frame.bytes.length;) {
-            const name = new TextDecoder().decode(frame.bytes.subarray(offset, offset + 4));
-            const count = new DataView(frame.bytes.buffer).getUint32(offset + 4, true);
+        const bytes = frame.bytes;
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        let lossless: Uint8Array<ArrayBuffer> | undefined;
+        for (let offset = 12; offset + 8 <= bytes.length;) {
+            const count = view.getUint32(offset + 4, true);
             const end = offset + 8 + count + (count % 2);
-            if (end > frame.bytes.length)
+            if (end > bytes.length)
                 throw new ContractError("WebP", "invalid frame chunk");
-            if (name === "VP8L")
-                chunks.push(frame.bytes.slice(offset, end));
+            if (view.getUint32(offset) === LOSSLESS_CHUNK) {
+                if (lossless !== undefined)
+                    throw new ContractError("WebP", "expected one lossless frame");
+                lossless = bytes.subarray(offset, end);
+            }
             offset = end;
         }
-        const lossless = chunks[0];
-        if (chunks.length !== 1 || lossless === undefined)
+        if (lossless === undefined)
             throw new ContractError("WebP", "expected one lossless frame");
-        const payload = new Uint8Array(16 + lossless.length);
-        set24(payload, 6, this.width - 1);
-        set24(payload, 9, this.height - 1);
-        set24(payload, 12, delay);
-        payload[15] = 2; // Every frame replaces the full canvas; never blend transitions.
-        payload.set(lossless, 16);
-        const next = chunk("ANMF", payload);
-        this.size += next.length;
-        if (this.size > 128 * 1024 * 1024)
+        const header = new Uint8Array(24);
+        const nextSize = this.size + header.length + lossless.length;
+        if (nextSize > MAX_ANIMATION_BYTES)
             throw new Error("The animation exceeds 128 MiB. Choose fewer hours or a smaller size.");
-        this.frames.push(next);
+        header.set(new TextEncoder().encode("ANMF"));
+        new DataView(header.buffer).setUint32(4, 16 + lossless.length, true);
+        set24(header, 14, this.width - 1);
+        set24(header, 17, this.height - 1);
+        set24(header, 20, delay);
+        header[23] = 2; // Each frame replaces the full canvas.
+        this.frames.push(new Blob([header, lossless]));
+        this.size = nextSize;
     }
     finish(): Blob {
         if (this.frames.length < 2)
@@ -73,9 +81,13 @@ export class WebpWriter {
         const header = new Uint8Array(12);
         header.set(new TextEncoder().encode("RIFF"));
         header.set(new TextEncoder().encode("WEBP"), 8);
-        const parts = [chunk("VP8X", extended), chunk("ANIM", anim), ...this.frames];
-        new DataView(header.buffer).setUint32(4, 4 + parts.reduce((sum, item) => sum + item.length, 0), true);
-        return new Blob([header, ...parts], { type: "image/webp" });
+        const extendedChunk = chunk("VP8X", extended);
+        const animationChunk = chunk("ANIM", anim);
+        new DataView(header.buffer).setUint32(4, 4 + extendedChunk.length + animationChunk.length + this.size, true);
+        return new Blob([header, extendedChunk, animationChunk, ...this.frames], { type: "image/webp" });
     }
-    close(): void { this.frames.length = 0; }
+    close(): void {
+        this.frames.length = 0;
+        this.size = 0;
+    }
 }

@@ -47,7 +47,7 @@ test("catalog-error: the notice after two automatic retries, then Retry loads th
   await page.goto("/?scenario=catalog-error");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   const notice = page.getByTestId("catalogue-error");
-  await expect(notice).toContainText("Stations unavailable", { timeout: 10_000 });
+  await expect(notice).toContainText("Stations unavailable");
   await expect(notice).toContainText("The station catalogue could not be loaded.");
   await expect(page.getByTestId("catalogue-announcement")).toHaveCount(0);
   expect(isInside(await boxOf(notice), viewportBox(page))).toBe(true);
@@ -92,6 +92,13 @@ test("slow-catalog: Loading stations until the catalogue arrives", async ({ page
   await page.goto("/?scenario=slow-catalog");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   const loading = page.getByTestId("catalogue-loading");
+  // Let the lazy map mount while keeping the fixture's 1.5 s catalogue request pending.
+  let frames = 0;
+  await expect.poll(async () => {
+    if (await loading.isVisible()) return true;
+    if (frames++ < 24) await page.clock.runFor(32);
+    return false;
+  }).toBe(true);
   await expect(loading).toHaveText("Loading stations");
   await expect(page.getByTestId("catalogue-announcement")).toHaveCount(0);
   await page.getByRole("button", { name: "Search stations" }).click();

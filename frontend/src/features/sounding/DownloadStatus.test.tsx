@@ -81,9 +81,10 @@ it("keeps stalled downloads honest and hides speed during processing", () => {
 });
 
 it("distinguishes a zero-byte download from waiting without inventing a percentage", () => {
-  render(<DownloadStatus label="HRRR F018" progress={{ stage: "downloading", downloadedBytes: 0, bytesPerSecond: 0 }} />);
-  expect(screen.getByText("Downloading model data · HRRR F018")).toBeTruthy();
-  expect(screen.getByRole("status").textContent).toContain("Receiving weather data from the provider");
+  const { rerender } = render(<DownloadStatus label="HRRR F018" progress={undefined} />);
+  expect(screen.getByRole("status").textContent).toBe("Waiting for data · HRRR F018");
+  rerender(<DownloadStatus label="HRRR F018" progress={{ stage: "downloading", downloadedBytes: 0, bytesPerSecond: 0 }} />);
+  expect(screen.getByRole("status").textContent).toBe("Downloading model data · HRRR F018");
   expect(screen.queryByRole("progressbar")).toBeNull();
 });
 

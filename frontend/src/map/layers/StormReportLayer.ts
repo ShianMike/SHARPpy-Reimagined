@@ -41,6 +41,35 @@ function position(report: ReportPoint): [number, number] {
 
 const markerSize = (report: ReportPoint): number => Math.max(20, report.radiusPx * 4 + 8);
 
+type ReportLayout = NonNullable<LayerBuildContext["outlookLabelLayout"]>;
+const NO_CAPTIONS: readonly ReportPoint[] = [];
+// One entry per panel layout, released with that layout's projection function.
+const captionCache = new WeakMap<ReportLayout["project"], {
+  view: string; data: readonly ReportPoint[]; labelSize: number; width: number; height: number;
+  captions: readonly ReportPoint[];
+}>();
+
+function reportCaptions(data: readonly ReportPoint[], ctx: LayerBuildContext): readonly ReportPoint[] {
+  if (!(ctx.span <= CAPTION_SPAN_DEG)) return NO_CAPTIONS;
+  const layout = ctx.outlookLabelLayout;
+  const labelSize = ctx.tokens.lengths.labelSize;
+  if (layout === undefined) return data.filter((report) => report.caption !== "");
+  const { project, width, height } = layout;
+  const view = layout.reportCaptionView?.();
+  if (view !== undefined) {
+    const cached = captionCache.get(project);
+    if (cached?.view === view && cached.data === data && cached.labelSize === labelSize &&
+      cached.width === width && cached.height === height) return cached.captions;
+  } else {
+    captionCache.delete(project);
+  }
+  const candidates = data.filter((report) => report.caption !== "").reverse();
+  const cell = candidates.reduce((size, report) => Math.max(size, report.caption.length * labelSize + markerSize(report)), labelSize * 4);
+  const captions = declutterPoints(candidates, (report) => project(position(report)), layout, cell);
+  if (view !== undefined) captionCache.set(project, { view, data, labelSize, width, height, captions });
+  return captions;
+}
+
 export function buildReportLayers(ctx: LayerBuildContext, state: LayerState) {
   const { lengths, colours } = ctx.tokens;
   const data = ctx.reports ?? [];
@@ -61,12 +90,7 @@ export function buildReportLayers(ctx: LayerBuildContext, state: LayerState) {
     visible: state.visible,
     opacity: state.opacity,
   }));
-  const candidates = ctx.span <= CAPTION_SPAN_DEG ? data.filter((report) => report.caption !== "") : [];
-  const layout = ctx.outlookLabelLayout;
-  // shortcut: reserve the longest caption on both axes; use per-label bounds if density becomes limiting.
-  const cell = candidates.reduce((size, report) => Math.max(size, report.caption.length * lengths.labelSize + markerSize(report)), lengths.labelSize * 4);
-  const captions = layout === undefined ? candidates : declutterPoints([...candidates].reverse(),
-    (report) => layout.project(position(report)), layout, cell);
+  const captions = reportCaptions(data, ctx);
   return [...markers, new TextLayer<ReportPoint>({
     id: `${REPORTS_LAYER_ID}-captions`,
     data: captions,

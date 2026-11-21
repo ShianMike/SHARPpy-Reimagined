@@ -6,7 +6,8 @@ use crate::{
 };
 use numpy::{
     ndarray::{ArrayD, IxDyn},
-    IntoPyArray, PyArrayDyn, PyReadonlyArrayDyn, PyReadwriteArrayDyn, PyUntypedArrayMethods,
+    IntoPyArray, PyArray2, PyArrayDyn, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArrayDyn,
+    PyReadwriteArrayDyn, PyUntypedArrayMethods,
 };
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyBytes};
 
@@ -105,6 +106,35 @@ fn draw_map_contours(
 }
 
 #[pyfunction]
+fn reproject_global_map_field<'py>(
+    py: Python<'py>,
+    field: PyReadonlyArray2<'py, f32>,
+    size: (usize, usize),
+    bounds: (f64, f64, f64, f64),
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    let field = field.as_array();
+    let values = py
+        .detach(|| map_raster::reproject::regular_global(field, size, bounds))
+        .map_err(PyValueError::new_err)?;
+    Ok(values.into_pyarray(py))
+}
+
+#[pyfunction]
+fn reproject_regional_map_field<'py>(
+    py: Python<'py>,
+    field: PyReadonlyArray2<'py, f32>,
+    x: PyReadonlyArray1<'py, f64>,
+    y: PyReadonlyArray1<'py, f64>,
+    size: (usize, usize),
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    let (field, x, y) = (field.as_array(), x.as_array(), y.as_array());
+    let values = py
+        .detach(|| map_raster::reproject::regional(field, x, y, size))
+        .map_err(PyValueError::new_err)?;
+    Ok(values.into_pyarray(py))
+}
+
+#[pyfunction]
 fn quantize_map_field<'py>(
     py: Python<'py>,
     values: NumericGrid<'py>,
@@ -146,6 +176,8 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(build_map_lut, module)?)?;
     module.add_function(wrap_pyfunction!(colorize_map_field, module)?)?;
     module.add_function(wrap_pyfunction!(draw_map_contours, module)?)?;
+    module.add_function(wrap_pyfunction!(reproject_global_map_field, module)?)?;
+    module.add_function(wrap_pyfunction!(reproject_regional_map_field, module)?)?;
     module.add_function(wrap_pyfunction!(quantize_map_field, module)?)?;
     module.add_function(wrap_pyfunction!(encode_map_png, module)?)?;
     Ok(())

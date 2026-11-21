@@ -54,6 +54,10 @@
 }
 
 .reportHeading { display: grid; gap: var(--space-1); }
+.spotterCard { --glass-fill: inherit; width: var(--popover-w); gap: var(--space-2); padding: var(--space-3); }
+.pinnedSpotterCard { pointer-events: auto; }
+.spotterHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
+.spotterCard time { font-variant-numeric: tabular-nums; }
 .reportTitle { font-size: var(--font-size-subhead); font-weight: var(--font-weight-semibold); }
 .reportFacts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); }
 .reportFacts dt { color: var(--text-secondary); }

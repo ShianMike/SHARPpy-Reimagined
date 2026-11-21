@@ -1,13 +1,16 @@
-//! Nearby NWS observations, with explicit time matching and missing-value semantics.
+//! Regional NWS observations and the latest worldwide AWC METAR snapshot.
 
 mod fetch;
+mod latest;
 mod parse;
 mod plots;
 
 pub use fetch::{fetch, FetchError, JsonSource, Request, SurfaceClient};
+pub use latest::{fetch_latest_plots, LatestSurfacePlots, MAX_LATEST_PLOTS};
 pub use parse::{nearest_index, observations, stations};
 pub use plots::{
     build_plots, fetch_plots, StaffSpec, SurfacePlot, SurfacePlotCounts, SurfacePlotsSnapshot,
+    MAX_LATEST_OFFSET_MIN,
 };
 use time::OffsetDateTime;
 

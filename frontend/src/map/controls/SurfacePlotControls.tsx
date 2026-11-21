@@ -1,55 +1,57 @@
-// The surface plots' own controls (REQUEST surface observations): the counts
-// behind what the layer marks. The provider takes no options; the anchor is
-// the map's own selection and the time is the forecast valid time.
-
 import type { ReactNode } from "react";
 import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { SoundingErrorNotice } from "../../features/sounding/SoundingErrorNotice";
-import { compactUtc } from "../../features/sounding/soundingTime";
-import { formatLatitude, formatLongitude } from "../../stations/stationFormat";
+import { formatUtc } from "../../features/sounding/soundingTime";
 import { displayUnit } from "../../lib/displayUnits";
+import { useMapStore } from "../../stores/mapStore";
 import { useUiStore } from "../../stores/uiStore";
-import { useSelectionAnchor, useSurfacePlots } from "../surfaceQueries";
+import { useSurfaceLayer } from "../surfaceQueries";
 import styles from "./LayerPanel.module.css";
 
 export function SurfacePlotControls(): ReactNode {
   const units = useUiStore((state) => state.units);
+  const live = useMapStore((state) => state.view === "live");
   const validTime = useWeatherTime();
-  const anchor = useSelectionAnchor();
-  const plots = useSurfacePlots(anchor, validTime, true);
+  const plots = useSurfaceLayer(live, validTime, true);
+  const snapshot = plots.data;
   return (
     <div className={styles.extra}>
-      {validTime === null ? (
-        <p className={styles.hint}>
-          Choose a time to view surface observations.
-        </p>
-      ) : anchor === null ? (
-        <p className={styles.hint}>
-          Select a station or a point to see the observations around it.
-        </p>
-      ) : plots.isError ? (
+      {live && validTime === null ? (
+        <p className={styles.hint}>Choose a time to view surface observations.</p>
+      ) : plots.isError && (live || snapshot === undefined) ? (
         <SoundingErrorNotice
           error={plots.error}
-          operation="get_surface_plots"
+          operation={live ? "get_surface_plots" : "get_latest_surface_plots"}
           onRetry={() => {
             void plots.refetch();
           }}
           busy={plots.isFetching}
           testId="surface-error"
         />
-      ) : plots.data === undefined ? (
-        <p className={styles.hint}>Loading surface observations</p>
+      ) : snapshot === undefined ? (
+        <p className={styles.hint} role="status">Loading surface observations…</p>
+      ) : live ? (
+        <div className={styles.extra} data-testid="surface-shown">
+          <p className={styles.hint}>{`NOAA/NWS · ${formatUtc(snapshot.validTime, { includeYear: false })}`}</p>
+          <p className={styles.hint}>{`${String(snapshot.counts.matched)} observations · ${String(snapshot.counts.queried)} of ${String(snapshot.counts.nearby)} stations checked`}</p>
+          {snapshot.counts.stale === 0 ? null : <p className={styles.warning}>{`${String(snapshot.counts.stale)} stale observations · shown with a small dashed ring`}</p>}
+          {snapshot.counts.noObservation + snapshot.counts.failed === 0 ? null : <p className={styles.hint}>{`${String(snapshot.counts.noObservation)} without a report · ${String(snapshot.counts.failed)} could not be checked`}</p>}
+        </div>
       ) : (
         <div className={styles.extra} data-testid="surface-shown">
-          <p className={styles.hint}>{`NOAA/NWS · ${compactUtc(plots.data.validTime)} UTC`}</p>
-          <p className={styles.hint}>{`Near ${formatLatitude(anchor.latitude)}, ${formatLongitude(anchor.longitude)}`}</p>
-          <p className={styles.hint}>{`${String(plots.data.counts.matched)} observations · ${String(plots.data.counts.queried)} of ${String(plots.data.counts.nearby)} stations checked`}</p>
-          {plots.data.counts.stale === 0 ? null : <p className={styles.warning}>{`${String(plots.data.counts.stale)} stale observations · shown with a small dashed ring`}</p>}
-          {plots.data.counts.noObservation + plots.data.counts.failed === 0 ? null : <p className={styles.hint}>{`${String(plots.data.counts.noObservation)} without a report · ${String(plots.data.counts.failed)} could not be checked`}</p>}
+          <dl className={styles.feedRows}>
+            <div><dt>Reporting stations</dt><dd>{snapshot.counts.matched.toLocaleString()}</dd></div>
+            <div><dt>Snapshot (UTC)</dt><dd><time dateTime={snapshot.validTime} title={formatUtc(snapshot.validTime)}>
+              {formatUtc(snapshot.validTime, { includeYear: false })}
+            </time></dd></div>
+          </dl>
+          <p className={styles.hint}>Latest METAR · NOAA Aviation Weather Center</p>
+          {plots.isRefetchError ? <p className={styles.warning} role="status">Refresh failed. Showing the last available snapshot.</p> : null}
         </div>
       )}
       <p className={styles.hint}><span className={styles.obsUpper}>Temperature</span> / <span className={styles.obsLower}>dewpoint</span> in {displayUnit("°C", units)} · wind barbs in kt.</p>
-      <p className={styles.hint}>Hover for station details. Zoom in to reveal more observations; click a plot to select its location.</p>
+      <p className={styles.hint}>{live ? "Hover for station details."
+        : "Hover for a report, click to select a location, or zoom in for station plots."}</p>
     </div>
   );
 }

@@ -40,9 +40,23 @@ it("writes discrete full-canvas lossless frames, their durations and infinite lo
     expect(header.getUint16(6, true)).toBe(639);
     expect(header.getUint16(9, true)).toBe(479);
     expect(header.getUint16(12, true)).toBe(index === 0 ? 750 : 1000);
-    expect(new TextDecoder().decode(chunk.data.slice(16, 20))).toBe("VP8L");
+    expect(chunk.data.subarray(16)).toEqual(native.subarray(12));
   }
   writer.close();
+  expect(() => writer.finish()).toThrow("at least two");
+});
+it("rejects truncated or duplicate lossless chunks", async () => {
+  const client = new BackendClient(createTransport());
+  const encode = vi.spyOn(client, "encodeWebpFrame");
+  const lossless = Uint8Array.of(0x56, 0x50, 0x38, 0x4c, 3, 0, 0, 0, 0x2f, 1, 2, 0);
+  const bytes = new Uint8Array(12 + lossless.length * 2);
+  bytes.set(lossless, 12);
+  bytes.set(lossless, 12 + lossless.length);
+  const writer = new WebpWriter(client, new AbortController().signal, 640, 480);
+  encode.mockResolvedValueOnce({ width: 640, height: 480, bytes: bytes.subarray(0, bytes.length - 1) });
+  await expect(writer.write(new Blob(["png"]), 750)).rejects.toThrow("invalid frame chunk");
+  encode.mockResolvedValueOnce({ width: 640, height: 480, bytes });
+  await expect(writer.write(new Blob(["png"]), 750)).rejects.toThrow("expected one lossless frame");
   expect(() => writer.finish()).toThrow("at least two");
 });
 it("rejects changed dimensions and cancellation before calling the backend", async () => {

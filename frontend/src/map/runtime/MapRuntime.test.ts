@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
 import { useMapStore } from "../../stores/mapStore";
+import { useHoverStore, type HoveredReport } from "../hover/hoverStore";
 import { MapRuntime } from "./MapRuntime";
 
 const calls = vi.hoisted(() => [] as string[]);
@@ -24,9 +25,12 @@ vi.mock("../canvasTokens", () => ({ documentTokenReader: () => () => "monospace"
 vi.mock("./mapOptions", () => ({ mapOptions: () => ({}), panelPixelRatio: () => 1 }));
 vi.mock("./runtimeEvents", () => ({ wireMapEvents: () => undefined, createPanelOverlay: () => ({}), wireOverlayEvents: () => () => undefined }));
 vi.mock("./cameraLink", () => ({ linkCamera: () => () => undefined }));
-vi.mock("../box/boxRuntime", () => ({ wireBoxSelection: () => () => undefined }));
+vi.mock("../forecastDrawing/forecastDrawingRuntime", () => ({ wireMapDrawingTools: () => () => undefined }));
 vi.mock("./runtimeWiring", async (importOriginal) => ({ ...await importOriginal<typeof import("./runtimeWiring")>(), createRuntimeWatch: () => ({ dispose: () => undefined }) }));
-vi.mock("./stationScene", () => ({ StationScene: class { updateLabels() {} render() {} setData() { return true; } } }));
+vi.mock("./stationScene", async (importOriginal) => {
+  const { StationScene } = await importOriginal<typeof import("./stationScene")>();
+  return { StationScene: class extends StationScene { override updateLabels() {} override render() {} } };
+});
 
 const original = useMapStore.getState();
 afterEach(() => { useMapStore.setState(original, true); calls.length = 0; vi.useRealTimers(); });
@@ -101,4 +105,63 @@ it("renders changed radar selection and availability scene data immediately", ()
     runtime.setScene({ selectedRadarSite: null });
     expect(updateLabels).toHaveBeenCalledTimes(2);
   } finally { runtime.dispose(); }
+});
+
+it("updates capture readiness without submitting layers again when the scene stays the same", () => {
+  const runtime = new MapRuntime(document.createElement("div"), 1);
+  try {
+    const { scene } = runtime;
+    if (scene === null) throw new Error("Missing station scene");
+    const radarSites = [{ id: "KTLX", latitude: 35.33, longitude: -97.28 }];
+    runtime.setScene({ radarSites, captureTime: "2026-11-20T09:00:00Z" });
+    const render = vi.spyOn(scene, "render");
+    const updateLabels = vi.spyOn(scene, "updateLabels");
+
+    runtime.setScene({ radarSites, captureTime: "2026-11-20T10:00:00Z", captureReady: true });
+    expect(scene.readyForCapture()).toBe(true);
+    expect(render).not.toHaveBeenCalled();
+
+    runtime.setScene({ radarSites, captureReady: false, reports: [] });
+    expect(scene.readyForCapture()).toBe(false);
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(updateLabels).not.toHaveBeenCalled();
+  } finally { runtime.dispose(); }
+});
+
+it("clears a removed spotter tooltip for its own panel while preserving other inspection state", () => {
+  const runtime = new MapRuntime(document.createElement("div"), 1);
+  const other = new MapRuntime(document.createElement("div"), 2);
+  const position = { longitude: -97, latitude: 35, updatedAt: "2026-11-20T09:10:27Z", chaseCam: false };
+  const remaining = { ...position, longitude: -96 };
+  const report = {
+    label: "Active spotter", description: "Updated 2026-11-20 09:10:27 UTC", caption: "", x: 120, y: 60,
+    source: { kind: "spotter", panel: 1, position },
+  } satisfies HoveredReport;
+  const pointer = { panel: 1, longitude: -97, latitude: 35, x: 100, y: 50 };
+  const pinnedSpotter = { panel: 1, position, x: 120, y: 60 };
+  const stormReport = { label: "Hail", description: "", caption: "", x: 120, y: 60 };
+  const { setReport } = useHoverStore.getState();
+  try {
+    runtime.setScene({ spotterPositions: [position, remaining] });
+    useHoverStore.setState({ report, pointer, pinnedSpotter });
+    other.setScene({ spotterPositions: null });
+    runtime.setScene({ reports: [] });
+    runtime.setScene({ spotterPositions: [remaining, { ...position }] });
+    expect(useHoverStore.getState().report).toBe(report);
+    expect(useHoverStore.getState().pinnedSpotter).toBe(pinnedSpotter);
+
+    runtime.setScene({ spotterPositions: [remaining] });
+    expect(useHoverStore.getState().report).toBeNull();
+    expect(useHoverStore.getState().pinnedSpotter).toBeNull();
+    expect(useHoverStore.getState().pointer).toBe(pointer);
+
+    runtime.setScene({ spotterPositions: [position] });
+    setReport(report);
+    runtime.setScene({ spotterPositions: null });
+    expect(useHoverStore.getState().report).toBeNull();
+
+    setReport(stormReport);
+    runtime.setScene({ spotterPositions: [] });
+    expect(useHoverStore.getState().report).toBe(stormReport);
+  } finally { runtime.dispose(); other.dispose(); }
 });

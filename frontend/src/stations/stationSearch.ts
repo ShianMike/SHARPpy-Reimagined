@@ -53,6 +53,12 @@ function byId(a: Station, b: Station): number {
   return a.id < b.id ? -1 : 1;
 }
 
+const searchableStations = new WeakMap<readonly Station[], {
+  station: Station;
+  id: string;
+  name: string;
+}[]>();
+
 /**
  * An exact, case-sensitive id match returns that station alone; otherwise the
  * folded query is matched against the folded id and name, sorted by id.
@@ -71,8 +77,11 @@ export function searchStations(
     return [exact];
   }
   const needle = fold(trimmed);
-  return stations
-    .filter((station) => fold(station.id).includes(needle) || fold(station.name).includes(needle))
-    .sort(byId)
-    .slice(0, limit);
+  let entries = searchableStations.get(stations);
+  if (entries === undefined) {
+    entries = [...stations].sort(byId).map((station) => ({ station, id: fold(station.id), name: fold(station.name) }));
+    searchableStations.set(stations, entries);
+  }
+  return entries.filter(({ id, name }) => id.includes(needle) || name.includes(needle))
+    .slice(0, limit).map(({ station }) => station);
 }

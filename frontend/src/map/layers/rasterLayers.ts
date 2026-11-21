@@ -18,12 +18,13 @@ export const RADAR_LAYER_ID = "radar";
 const NEAREST = { minFilter: "nearest", magFilter: "nearest", mipmapFilter: "none" } as const;
 const fieldSampling = {
   name: "fieldSampling",
-  uniformTypes: { transform: "vec4<f32>", range: "vec2<f32>" },
+  uniformTypes: { transform: "vec4<f32>", range: "vec2<f32>", wrapLongitude: "f32" },
   fs: `
     uniform sampler2D fieldPalette;
     layout(std140) uniform fieldSamplingUniforms {
       vec4 transform;
       vec2 range;
+      float wrapLongitude;
     } fieldSampling;
 
     vec4 fieldWeights(float t) {
@@ -33,7 +34,11 @@ const fieldSampling = {
     }
 
     vec2 fieldCell(sampler2D grid, ivec2 p) {
-      vec3 packed = texelFetch(grid, clamp(p, ivec2(0), textureSize(grid, 0) - 1), 0).rgb;
+      ivec2 size = textureSize(grid, 0);
+      if (fieldSampling.wrapLongitude > 0.5 && (p.x < 0 || p.x >= size.x)) {
+        p.x = int(mod(float(p.x), float(size.x)));
+      }
+      vec3 packed = texelFetch(grid, clamp(p, ivec2(0), size - 1), 0).rgb;
       return vec2(dot(round(packed.rg * 255.0), vec2(256.0, 1.0)), packed.b);
     }
 
@@ -65,24 +70,37 @@ const fieldSampling = {
       return cell * fieldSampling.transform.x + fieldSampling.transform.y;
     }
 
-    vec4 fieldColor(float value) {
-      if (value < fieldSampling.transform.z || value > fieldSampling.transform.w) return vec4(0.0);
-      int size = textureSize(fieldPalette, 0).x;
-      int slot = int(clamp((value - fieldSampling.range.x) / fieldSampling.range.y, 0.0, 1.0) * float(size - 1));
-      if (textureSize(fieldPalette, 0).y > 1) {
-        int left = 0, right = size - 1;
-        // The validated catalogue has at most 256 class edges.
-        for (int i = 0; i < 8 && left < right; i++) {
-          int middle = (left + right + 1) / 2;
-          uvec3 bits = uvec3(round(texelFetch(fieldPalette, ivec2(middle, 1), 0).rgb * 255.0));
-          uint high = uint(round(texelFetch(fieldPalette, ivec2(middle, 2), 0).r * 255.0));
-          float edge = uintBitsToFloat(bits.r | (bits.g << 8u) | (bits.b << 16u) | (high << 24u));
-          if (edge <= value) left = middle;
-          else right = middle - 1;
-        }
-        slot = left;
+    int fieldSlot(float value, ivec2 size) {
+      // Distinguish the two transparent sides so an interval spanning the palette still blends.
+      if (value < fieldSampling.transform.z) return -1;
+      if (value > fieldSampling.transform.w) return -2;
+      if (size.y == 1) {
+        return int(clamp((value - fieldSampling.range.x) / fieldSampling.range.y, 0.0, 1.0) * float(size.x - 1));
       }
-      return texelFetch(fieldPalette, ivec2(slot, 0), 0);
+      int left = 0, right = size.x - 1;
+      // The validated catalogue has at most 256 class edges.
+      for (int i = 0; i < 8 && left < right; i++) {
+        int middle = (left + right + 1) / 2;
+        uvec3 bits = uvec3(round(texelFetch(fieldPalette, ivec2(middle, 1), 0).rgb * 255.0));
+        uint high = uint(round(texelFetch(fieldPalette, ivec2(middle, 2), 0).r * 255.0));
+        float edge = uintBitsToFloat(bits.r | (bits.g << 8u) | (bits.b << 16u) | (high << 24u));
+        if (edge <= value) left = middle;
+        else right = middle - 1;
+      }
+      return left;
+    }
+
+    vec4 fieldColor(int slot) {
+      return slot < 0 ? vec4(0.0) : texelFetch(fieldPalette, ivec2(slot, 0), 0);
+    }
+
+    vec4 fieldColors(vec4 values) {
+      ivec2 size = textureSize(fieldPalette, 0);
+      int first = fieldSlot(values.x, size);
+      int last = fieldSlot(values.w, size);
+      if (first == last) return fieldColor(first);
+      return (fieldColor(first) + fieldColor(fieldSlot(values.y, size))
+            + fieldColor(fieldSlot(values.z, size)) + fieldColor(last)) * 0.25;
     }
   `,
 } as const;
@@ -93,6 +111,7 @@ class FieldSamplingExtension extends LayerExtension {
     fieldPalette: { type: "image", value: null, async: true },
     fieldTransform: { type: "array", value: [1, 0, 0, 65535], compare: true },
     fieldRange: { type: "array", value: [0, 65535], compare: true },
+    fieldWrapLongitude: { type: "number", value: 0 },
   };
 
   override getShaders() {
@@ -106,8 +125,7 @@ class FieldSamplingExtension extends LayerExtension {
             float width = fwidth(value);
             // Antialias palette boundaries across one screen pixel, not a whole source cell.
             vec4 values = clamp(value + width * vec4(-0.375, -0.125, 0.125, 0.375), limits.x, limits.y);
-            vec4 sampleColor = (fieldColor(values.x) + fieldColor(values.y)
-                             + fieldColor(values.z) + fieldColor(values.w)) * 0.25;
+            vec4 sampleColor = fieldColors(values);
             float valid = fieldCell(bitmapTexture, ivec2(floor(uv * vec2(textureSize(bitmapTexture, 0))))).y;
             if (sampleColor.a > 0.0) sampleColor.rgb /= sampleColor.a;
             sampleColor.a *= valid;
@@ -124,6 +142,7 @@ class FieldSamplingExtension extends LayerExtension {
       fieldPalette: this.props.fieldPalette,
       transform: this.props.fieldTransform,
       range: this.props.fieldRange,
+      wrapLongitude: this.props.fieldWrapLongitude,
     } });
   }
 }

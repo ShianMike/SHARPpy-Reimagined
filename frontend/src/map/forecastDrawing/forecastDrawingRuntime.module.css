@@ -1,0 +1,34 @@
+.drawing:global(.maplibregl-interactive) { cursor: crosshair; }
+.moveMode:global(.maplibregl-interactive) :global(.maplibregl-canvas) { cursor: grab; }
+[data-forecast-moving]:global(.maplibregl-interactive),
+[data-forecast-moving]:global(.maplibregl-interactive) :global(.maplibregl-canvas),
+[data-forecast-moving]:global(.maplibregl-interactive) [data-forecast-handle] {
+  cursor: grabbing;
+}
+
+.vertex, .midpoint {
+  padding: 0;
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-chrome);
+}
+.vertex {
+  width: var(--space-4);
+  height: var(--space-4);
+  z-index: 1;
+  border: var(--map-box-handle-border) solid var(--text-primary);
+  background: var(--accent);
+  cursor: grab;
+}
+.midpoint {
+  width: var(--space-3);
+  height: var(--space-3);
+  border: var(--hairline) solid var(--text-primary);
+  background: var(--surface-1);
+}
+.midpoint:not(:disabled):hover { background: var(--accent); }
+.vertex::after, .midpoint::after { content: ""; position: absolute; inset: calc(-1 * var(--space-2)); border-radius: inherit; }
+.vertex:active { cursor: grabbing; }
+.vertex:focus-visible, .midpoint:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--space-1); }
+.vertex:global(.maplibregl-marker-covered), .midpoint:global(.maplibregl-marker-covered) { visibility: hidden; pointer-events: none; }
+/* MapLibre controls opacity on the marker itself. Clipping keeps the handle keyboard-focusable. */
+.crowded:not(:focus-visible) { clip-path: inset(50%); pointer-events: none; }

@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { useTheme, useUiStore } from "./uiStore";
 import { DEFAULT_FORECAST_EXPORT_SETTINGS } from "./forecastExportSettings";
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); useUiStore.setState({ lastVersion: null, lastUpdateCheckWindow: null, whatsNewOpen: false, theme: "system", speed: 1, loop: true, smoothPlayback: false, collapsed: false, popupPositions: {}, forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS }); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); useUiStore.setState({ lastVersion: null, lastUpdateCheckWindow: null, whatsNewOpen: false, theme: "system", speed: 1, loop: true, smoothPlayback: false, collapsed: false, popupPositions: {}, forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS, forecastOutlinesOnly: false }); });
 
 it("restores valid forecast export choices and defaults missing or invalid fields independently", () => {
   const merge = useUiStore.persist.getOptions().merge;
@@ -38,19 +38,32 @@ it("validates persisted workspace settings and ignores transient navigation stat
   if (merge === undefined) throw new Error("Persistence requires a validating merge");
   expect(merge({ theme: "invalid", speed: -1, loop: "false", collapsed: "yes", navigationOpen: true }, state)).toMatchObject({ theme: "system", speed: 1, loop: true, collapsed: false, navigationOpen: false });
   expect(merge({ theme: "light", speed: 2, loop: false, collapsed: true }, state)).toMatchObject({ theme: "light", speed: 2, loop: false, collapsed: true });
-  expect(merge({ smoothPlayback: "yes" }, state)).toMatchObject({ smoothPlayback: false });
-  expect(merge({ smoothPlayback: true }, state)).toMatchObject({ smoothPlayback: true });
+  expect(merge({ smoothPlayback: "yes", forecastOutlinesOnly: "yes" }, state)).toMatchObject({ smoothPlayback: false, forecastOutlinesOnly: false });
+  expect(merge({ smoothPlayback: true, forecastOutlinesOnly: true }, state)).toMatchObject({ smoothPlayback: true, forecastOutlinesOnly: true });
   expect(merge({ lastVersion: "3.1.0", whatsNewOpen: true }, state)).toMatchObject({ lastVersion: "3.1.0", whatsNewOpen: false });
   expect(merge({ lastVersion: { invalid: true } }, state)).toMatchObject({ lastVersion: null });
   expect(merge({ lastVersion: "corrupted" }, state)).toMatchObject({ lastVersion: null });
   for (const value of [-1, 1.5, "corrupted", Infinity]) expect(merge({ lastUpdateCheckWindow: value }, state)).toMatchObject({ lastUpdateCheckWindow: null });
   expect(merge({ lastUpdateCheckWindow: Date.parse("2026-10-25T12:00:00Z") }, state)).toMatchObject({ lastUpdateCheckWindow: Date.parse("2026-10-25T12:00:00Z") });
   useUiStore.getState().setSmoothPlayback(true);
-  expect(useUiStore.persist.getOptions().partialize?.(useUiStore.getState())).toMatchObject({ smoothPlayback: true });
+  useUiStore.getState().setForecastOutlinesOnly(true);
+  expect(useUiStore.persist.getOptions().partialize?.(useUiStore.getState())).toMatchObject({ smoothPlayback: true, forecastOutlinesOnly: true });
   expect(merge({ popupPositions: { model: { x: 150, y: 230 }, parameter: { x: 80, y: 90 }, run: { x: Infinity, y: "12" }, hour: null } }, state)).toMatchObject({ popupPositions: { model: { x: 150, y: 230 }, parameter: { x: 80, y: 90 } } });
   expect(merge({ popupPosition: { x: 150, y: 230 } }, state)).toMatchObject({ popupPositions: {} });
   useUiStore.getState().setPopupPosition("model", { x: 150, y: 230 });
   expect(useUiStore.persist.getOptions().partialize?.(useUiStore.getState())).toMatchObject({ popupPositions: { model: { x: 150, y: 230 } } });
+});
+
+it("restores optional outlook details across sessions", () => {
+  const state = useUiStore.getInitialState();
+  const { merge, partialize } = useUiStore.persist.getOptions();
+  if (merge === undefined || partialize === undefined) throw new Error("UI preferences require persistence");
+  expect(merge({}, state).forecastDrawingDetails).toEqual({ author: "", day: null });
+  expect(merge({ forecastDrawingDetails: { author: 1, day: 9 } }, state).forecastDrawingDetails)
+    .toEqual({ author: "", day: null });
+  state.setForecastDrawingDetails({ author: "  Casey   Nguyen ", day: 2 });
+  expect(merge(partialize(useUiStore.getState()), state).forecastDrawingDetails).toEqual({ author: "Casey Nguyen", day: 2 });
+  state.setForecastDrawingDetails(state.forecastDrawingDetails);
 });
 
 it.each([3, 4])("restores %s times playback after a fresh UI session", async (speed) => {

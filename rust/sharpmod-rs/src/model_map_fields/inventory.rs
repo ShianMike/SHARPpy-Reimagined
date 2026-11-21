@@ -1,15 +1,49 @@
 //! Cache the inventory with the exact GRIB revision, never with its URL alone.
 use super::*;
+use tokio::runtime::Runtime;
 
 type InventoryKey = (String, ObjectIdentity);
+type ProbeKey = (String, u64);
+type ProbeResult = Result<Option<ObjectIdentity>, Error>;
 
 fn cache() -> &'static Arc<Cache<InventoryKey, Py<PyAny>>> {
     static CACHE: OnceLock<Arc<Cache<InventoryKey, Py<PyAny>>>> = OnceLock::new();
     CACHE.get_or_init(|| Cache::new(16 * 1024 * 1024, 128))
 }
 
+fn probes() -> &'static Arc<Cache<ProbeKey, ProbeResult>> {
+    static PROBES: OnceLock<Arc<Cache<ProbeKey, ProbeResult>>> = OnceLock::new();
+    PROBES.get_or_init(|| Cache::new(0, 128))
+}
+
 pub(super) fn clear() {
     cache().clear();
+    probes().clear();
+}
+
+fn probe(runtime: &Runtime, url: &str, timeout: f64, parent: Option<&Py<PyAny>>) -> ProbeResult {
+    let stopped = || cancelled(parent);
+    if stopped().map_err(Error::Invalid)? {
+        return Err(Error::Cancelled);
+    }
+    let client = ModelClient::shared();
+    let (consumer, producer) = probes().reserve_transient((url.to_owned(), timeout.to_bits()));
+    if let Some(ticket) = producer {
+        let url = url.to_owned();
+        runtime.spawn(async move {
+            let result = client
+                .identity(&url, timeout, || Ok(!ticket.shared()))
+                .await;
+            ticket.complete_transient(result);
+        });
+    }
+
+    match consumer.wait(stopped) {
+        Ok(result) => (*result).clone(),
+        Err(WaitError::Cancelled) => Err(Error::Cancelled),
+        Err(WaitError::Failed(error)) => Err(Error::Invalid(error)),
+        Err(WaitError::Abandoned) => runtime.block_on(client.identity(url, timeout, stopped)),
+    }
 }
 
 pub(super) fn fetch(
@@ -20,9 +54,7 @@ pub(super) fn fetch(
 ) -> PyResult<(Py<PyAny>, Option<ObjectIdentity>)> {
     let runtime = crate::weather::runtime()?;
     let identity = py
-        .detach(|| {
-            runtime.block_on(ModelClient::shared().identity(url, timeout, || cancelled(parent)))
-        })
+        .detach(|| probe(runtime, url, timeout, parent))
         .map_err(|error| field_error(py, error))?;
     let key = identity.clone().map(|identity| (url.to_string(), identity));
     let mut retried = false;

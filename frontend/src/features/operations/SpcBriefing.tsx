@@ -1,11 +1,17 @@
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { CloudHail, ExternalLink, Layers, Percent, RefreshCw, Tornado, Wind, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useLatestSpcOutlook } from "../../map/mapQueries";
 import { OUTLOOK_DAYS, OUTLOOK_KEYS, type OutlookDay, type OutlookProductKey } from "../../types/map";
 import { IconAction } from "../../ui/Controls";
 import styles from "./SpcBriefing.module.css";
 
-const PRODUCTS: Record<OutlookProductKey, string> = { cat: "Categorical", torn: "Tornado", wind: "Wind", hail: "Hail", prob: "Severe probability" };
+const PRODUCTS: Record<OutlookProductKey, { label: string; icon: LucideIcon }> = {
+  cat: { label: "Categorical", icon: Layers },
+  torn: { label: "Tornado", icon: Tornado },
+  wind: { label: "Wind", icon: Wind },
+  hail: { label: "Hail", icon: CloudHail },
+  prob: { label: "Severe probability", icon: Percent },
+};
 const PRODUCTS_BY_DAY: Record<OutlookDay, readonly OutlookProductKey[]> = { 1: OUTLOOK_KEYS, 2: OUTLOOK_KEYS, 3: ["cat", "prob"] };
 const utc = new Intl.DateTimeFormat("en-GB", { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" });
 const EMPTY_AREAS = [] as const;
@@ -52,7 +58,8 @@ export function SpcBriefing(): ReactNode {
           }}>Day {option}</button>)}
         </div>
         <div className={styles.products} role="group" aria-label="SPC outlook product">
-          {PRODUCTS_BY_DAY[day].map((key) => <button key={key} type="button" aria-pressed={product === key} onClick={() => { setProduct(key); }}>{PRODUCTS[key]}</button>)}
+          {PRODUCTS_BY_DAY[day].map((key) => <IconAction key={key} className={styles.product} icon={PRODUCTS[key].icon}
+            label={PRODUCTS[key].label} hintSide="bottom" aria-pressed={product === key} onClick={() => { setProduct(key); }} />)}
         </div>
       </div>
       <div className={styles.currentTime}><time dateTime={new Date(now).toISOString()}>{utc.format(now)} UTC</time><IconAction icon={RefreshCw} label={`Refresh ${dayLabel} outlook`} loading={query.isFetching} disabled={query.isFetching} onClick={() => { setNow(Date.now()); void query.refetch(); }} /></div>

@@ -40,6 +40,12 @@ export function parseViewEdits(value: unknown, path: string): ViewEdit[] {
   });
 }
 
+export function parseMaximumSoundingWind(value: unknown): number {
+  const measurement = expectObject(value, "wind measurement");
+  expectExactKeys(measurement, "wind measurement", ["maximumWindKt"]);
+  return expectFiniteNumber(measurement.maximumWindKt, "maximumWindKt", { min: 0 });
+}
+
 export function parseSoundingView(value: unknown): SoundingView {
   const obj = expectObject(value, "view");
   expectExactKeys(obj, "view", ["image", "width", "height", "points", "edits", "options", "selection", "inspection"], ["locatorBounds"]);

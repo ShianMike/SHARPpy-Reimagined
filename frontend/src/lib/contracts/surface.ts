@@ -35,7 +35,7 @@ function parseStaff(value: unknown, path: string): StaffSpec {
   };
 }
 
-function parsePlot(value: unknown, path: string): SurfacePlot {
+function parsePlot(value: unknown, path: string, offsetLimit: number): SurfacePlot {
   const obj = expectObject(value, path);
   expectExactKeys(obj, path, [
     "id", "longitude", "latitude", "valid", "offsetMin", "stale",
@@ -44,7 +44,7 @@ function parsePlot(value: unknown, path: string): SurfacePlot {
   ]);
   const valid = expectNullable(obj.valid, at(path, "valid"), expectTimestamp);
   const offsetMin = expectNullable(obj.offsetMin, at(path, "offsetMin"), (v, p) =>
-    expectFiniteNumber(v, p, { min: -60, max: 60 }),
+    expectFiniteNumber(v, p, { min: -offsetLimit, max: offsetLimit }),
   );
   if ((valid === null) !== (offsetMin === null)) {
     throw new ContractError(at(path, "offsetMin"), "must belong to a plot with a time");
@@ -77,7 +77,7 @@ function parsePlot(value: unknown, path: string): SurfacePlot {
   };
 }
 
-export function parseSurfacePlots(value: unknown, path = ""): SurfacePlots {
+function parsePlots(value: unknown, path: string, plotLimit: number, offsetLimit: number): SurfacePlots {
   const obj = expectObject(value, path);
   expectExactKeys(obj, path, ["validTime", "counts", "plots"]);
   const counts = expectObject(obj.counts, at(path, "counts"));
@@ -95,19 +95,21 @@ export function parseSurfacePlots(value: unknown, path = ""): SurfacePlots {
   if (unqueried + queried !== nearby) {
     throw new ContractError(at(path, "counts"), "do not add up to the nearby stations");
   }
-  const plots = expectArray(obj.plots, at(path, "plots"), parsePlot);
-  if (plots.length > 64) {
-    throw new ContractError(at(path, "plots"), "has more station plots than the map draws");
+  const plotPath = at(path, "plots");
+  if (Array.isArray(obj.plots) && obj.plots.length > plotLimit) {
+    throw new ContractError(plotPath, "has too many station records");
   }
-  if (new Set(plots.map((plot) => plot.id)).size !== plots.length) {
-    throw new ContractError(at(path, "plots"), "names one station twice");
+  const plots = expectArray(obj.plots, plotPath, (item, itemPath) => parsePlot(item, itemPath, offsetLimit));
+  const ids = new Set<string>();
+  const tally = { matched: 0, stale: 0, noObservation: 0, failed: 0 };
+  for (const plot of plots) {
+    if (ids.has(plot.id)) throw new ContractError(plotPath, "names one station twice");
+    ids.add(plot.id);
+    if (plot.stale) tally.stale++;
+    if (plot.availability === "available") tally.matched++;
+    else if (plot.availability === "unavailable") tally.noObservation++;
+    else tally.failed++;
   }
-  const tally = {
-    matched: plots.filter((plot) => plot.availability === "available").length,
-    stale: plots.filter((plot) => plot.stale).length,
-    noObservation: plots.filter((plot) => plot.availability === "unavailable").length,
-    failed: plots.filter((plot) => plot.availability === "unknown").length,
-  };
   if (
     tally.matched !== matched ||
     tally.stale !== stale ||
@@ -121,4 +123,12 @@ export function parseSurfacePlots(value: unknown, path = ""): SurfacePlots {
     counts: { matched, stale, noObservation, failed, nearby, queried, unqueried },
     plots,
   };
+}
+
+export function parseSurfacePlots(value: unknown, path = ""): SurfacePlots {
+  return parsePlots(value, path, 64, 60);
+}
+
+export function parseLatestSurfacePlots(value: unknown, path = ""): SurfacePlots {
+  return parsePlots(value, path, 20_000, 24 * 60);
 }

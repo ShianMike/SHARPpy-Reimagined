@@ -73,3 +73,26 @@ export function labelPoint(rings: readonly Ring[], fraction = 0.5): LonLat {
     best === null || span[1] - span[0] > best[1] - best[0] ? span : best, null);
   return widest === null ? (outer[0] ?? [0, 0]) : [(widest[0] + widest[1]) / 2, lat];
 }
+
+/** Keep a lower risk's label inside its visible band when higher risks overlap it. */
+export function bandLabelPoints(rings: readonly Ring[], higher: readonly (readonly Ring[])[], fractions: readonly number[]): LonLat[] {
+  const outer = rings[0];
+  if (outer === undefined || outer.length < 3) return [];
+  if (higher.length === 0) return fractions.map((fraction) => labelPoint(rings, fraction));
+  const { south, north } = boxOf(outer);
+  return fractions.flatMap((fraction) => {
+    const lat = south + (north - south) * fraction;
+    const spansAtLatitude = (polygon: readonly Ring[]) => insideSpans(crossings(polygon, (point) => point[1] - lat, (point) => point[0]));
+    let spans = spansAtLatitude(rings);
+    for (const [from, to] of higher.flatMap(spansAtLatitude)) {
+      spans = spans.flatMap(([left, right]): [number, number][] => {
+        if (from >= right || to <= left) return [[left, right]];
+        const visible: [number, number][] = [];
+        if (left < from) visible.push([left, from]);
+        if (right > to) visible.push([to, right]);
+        return visible;
+      });
+    }
+    return spans.sort(([a, b], [c, d]) => (d - c) - (b - a)).map(([a, b]): LonLat => [(a + b) / 2, lat]);
+  });
+}

@@ -65,7 +65,7 @@ def _scan():
     from sharpmod.providers import spc_outlook
 
     disk = ModelDiskCache()
-    entries = disk.entries()
+    entries = disk.entries(_storage=True)
     session = cache()
     completed = set(session.completed_downloads())
     downloads = [path for path in session.root.iterdir()

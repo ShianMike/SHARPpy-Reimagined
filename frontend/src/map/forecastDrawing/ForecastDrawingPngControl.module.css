@@ -1,0 +1,10 @@
+.dialog { width: min(22rem, calc(100vw - 2 * var(--chrome-gap))); }
+.header { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+.header h2 { flex: 1; font-size: var(--font-size-subhead); font-weight: var(--font-weight-semibold); }
+.form { display: grid; gap: var(--space-3); padding: 0 var(--space-4) var(--space-3); }
+.footer { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.footer > button { margin-inline-start: auto; }
+.status, .error { font-size: var(--font-size-small); overflow-wrap: anywhere; }
+.status { color: var(--text-secondary); }
+.status:empty { display: none; }
+.error { color: var(--danger); }

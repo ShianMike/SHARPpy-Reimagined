@@ -22,12 +22,12 @@ export interface ForecastControlsProps { className?: string | undefined; }
 
 export function ForecastControls({ className }: ForecastControlsProps): ReactNode {
   const forecast = useForecast();
-  const download = useFrameDownload();
   const context = forecast.status === "ready" ? forecast.context : null;
   const panel = useMapStore((state) => state.activePanel);
   const field = usePanelField(panel);
   const [picker, setPicker] = useState<ForecastStep | "parameter">("model");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const download = useFrameDownload(pickerOpen && picker === "hour");
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const [parameterAnchor, setParameterAnchor] = useState<HTMLButtonElement | null>(null);
   const [dismissedError, setDismissedError] = useState<Error | null>(null);

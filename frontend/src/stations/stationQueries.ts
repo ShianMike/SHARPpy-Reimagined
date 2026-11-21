@@ -16,9 +16,9 @@ import { withAvailability } from "./availability";
  * Loaded once and kept (staleTime Infinity): it refetches only on Retry,
  * Restart backend, or the bridge returning to up after a failed load.
  */
-export function useStationCatalog(): UseQueryResult<StationCatalog> {
+export function useStationCatalog(enabled = true): UseQueryResult<StationCatalog> {
   const client = useBackendClient();
-  const report = useStationAvailability(useMapStore((state) => state.availabilityTime)).data;
+  const report = useStationAvailability(useMapStore((state) => enabled ? state.availabilityTime : null), enabled).data;
   const select = useMemo(
     () => (report === undefined ? undefined : (catalog: StationCatalog) => withAvailability(catalog, report)),
     [report],
@@ -27,6 +27,7 @@ export function useStationCatalog(): UseQueryResult<StationCatalog> {
     ...BASE_QUERY_OPTIONS,
     queryKey: QUERY_KEYS.catalog,
     queryFn: () => client.getStationCatalog(),
+    enabled,
     staleTime: Number.POSITIVE_INFINITY,
     // A failed load is not repeated just because another component (the lazy
     // map) mounts an observer; only Retry, Restart backend, or the bridge

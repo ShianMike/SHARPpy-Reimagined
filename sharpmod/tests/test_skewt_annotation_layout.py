@@ -339,7 +339,10 @@ def test_the_colour_still_follows_the_rate(skewt, qt_app, rate, tier):
         skewt.prof.max_lapse_rate_2_6 = original
 
     assert colors, "a pen colour should be set"
-    assert colors[-1].name() == skewt.alert_colors[tier].name()
+    expected = skewt.alert_colors[tier].name()
+    if skewt.bg_color.lightness() <= 127:
+        expected = {0: "#d2a261", 1: "#ffc46b"}.get(tier, expected)
+    assert colors[-1].name() == expected
 
 
 def test_a_layer_below_the_threshold_is_not_drawn(skewt, qt_app):

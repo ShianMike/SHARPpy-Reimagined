@@ -2,11 +2,12 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Reac
 import { GripHorizontal, Layers, LoaderCircle, Map, MapPin, Maximize, Minimize, X } from "lucide-react";
 import { Popover } from "../components/Popover";
 import { VisuallyHidden } from "../components/VisuallyHidden";
-import { useBackendHealth } from "../lib/backend/BackendProvider";
+import { useBackendClient, useBackendHealth } from "../lib/backend/BackendProvider";
 import { ReducedRenderingView } from "../features/fallback/ReducedRenderingView";
 import { Inspector } from "../features/inspector/Inspector";
 import { BoxInspector } from "../features/inspector/BoxInspector";
 import { useBoxSoundingStore } from "../stores/boxSoundingStore";
+import { useForecastDrawingStore } from "../stores/forecastDrawingStore";
 import { NavigationRail } from "../features/rail/NavigationRail";
 import { UpdateNotice } from "../features/settings/UpdateNotice";
 import { WhatsNew } from "../features/settings/WhatsNew";
@@ -80,10 +81,17 @@ export function Shell(): ReactNode {
     detailTools.current?.querySelector<HTMLButtonElement>(`[aria-label="${sideTab === "layers" || isLive ? "Layers" : "Point details"}"]`)?.focus();
     setDetailsOpen(false);
   };
-  const { slots, attachLeft, attachCentre, attachRightEnd } = useSlotElements();
+  const { slots, attachLeft, attachCentre, attachTimelineFeedback, attachRightEnd } = useSlotElements();
   const liveText = useCatalogueEffects();
   const isLive = workspace.id === "live";
   const isMap = workspace.id === "map" || isLive;
+  const drawing = useForecastDrawingStore((state) => state.enabled) && workspace.id === "map";
+  const drawingProduct = useForecastDrawingStore((state) => state.product);
+  const backend = useBackendClient();
+  const pointDetailsOpen = detailsOpen && sideTab === "point" && !drawing;
+  useEffect(() => {
+    if (drawing) void useForecastDrawingStore.getState().restore(backend);
+  }, [drawing, drawingProduct, backend]);
   const [panelWorkspace, setPanelWorkspace] = useState<WorkspaceDefinition | null>(isMap ? null : workspace);
   const workspacePanel = useRef<HTMLElement>(null);
   if (!isMap && panelWorkspace?.id !== workspace.id) setPanelWorkspace(workspace);
@@ -112,13 +120,13 @@ export function Shell(): ReactNode {
           <div ref={detailTools} className={styles.detailTools} role="group" aria-label="Map detail views" hidden={!isMap}>
             <IconAction ref={setLayersAnchor} icon={Layers} label="Layers" hintSide="bottom-end" aria-haspopup="dialog" aria-expanded={detailsOpen && sideTab === "layers"} aria-controls="map-layers-popup"
               onClick={() => { toggleDetails("layers"); }} />
-            {isLive ? null : <IconAction icon={MapPin} label="Point details" hintSide="bottom-end" aria-expanded={detailsOpen && sideTab === "point"} aria-controls="map-details"
+            {isLive || drawing ? null : <IconAction icon={MapPin} label="Point details" hintSide="bottom-end" aria-expanded={pointDetailsOpen} aria-controls="map-details"
               onClick={() => { toggleDetails("point"); }} />}
             <IconAction icon={fullscreen ? Minimize : Maximize} label={fullscreenError || (fullscreen ? "Exit fullscreen" : "Enter fullscreen")} hintSide="bottom-end"
               aria-pressed={fullscreen} aria-keyshortcuts="F11" disabled={fullscreenBusy} onClick={() => { void toggleFullscreen(); }} />
           </div>
         </Toolbar>
-        <div className={styles.leftDock} data-point-open={isMap && detailsOpen && sideTab === "point"}>
+        <div className={styles.leftDock} data-point-open={isMap && pointDetailsOpen}>
           <NavigationRail className={styles.rail} />
           <div ref={attachLeft} className={styles.mapTools} data-motion="fade" inert={!isMap} hidden={!isMap} />
         </div>
@@ -137,7 +145,7 @@ export function Shell(): ReactNode {
             <div className={styles.overlay} data-testid="map-overlay">
               <div ref={attachCentre} className={styles.centre} />
             </div>
-            <Surface as="aside" id="map-details" className={styles.sidePanel} data-motion="panel" data-view="point" aria-label="Map details" inert={!detailsOpen || sideTab !== "point"} hidden={!detailsOpen || sideTab !== "point"}
+            <Surface as="aside" id="map-details" className={styles.sidePanel} data-motion="panel" data-view="point" aria-label="Map details" inert={!pointDetailsOpen} hidden={!pointDetailsOpen}
               onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeDetails(); } }}>
               <div className={styles.sideHeader} role="group" aria-label="Detail panel">
                 <h2>{boxMode && !isLive ? "Region" : "Point"}</h2>
@@ -156,7 +164,10 @@ export function Shell(): ReactNode {
               </header>
               <div ref={attachRightEnd} className={styles.rightEnd} />
             </Popover>
-            {isLive ? <LiveTimeline className={styles.timeline} scanTarget={radarScanTarget} /> : <TimelineRegion className={styles.timeline} />}
+            <div className={styles.timelineDock} data-live={isLive}>
+              <div ref={attachTimelineFeedback} className={styles.timelineFeedback} />
+              {isLive ? <LiveTimeline className={styles.timeline} scanTarget={radarScanTarget} /> : <TimelineRegion className={styles.timeline} />}
+            </div>
           </div>
           {panelWorkspace === null ? null : <Surface key={panelWorkspace.id} ref={workspacePanel} as="section" className={styles.workspace} data-motion="panel" data-workspace={panelWorkspace.id} data-testid="workspace-panel" aria-label={panelWorkspace.label} inert={isMap} aria-hidden={isMap} hidden={isMap}>
             <Suspense fallback={<p role="status">Loading {panelWorkspace.label}…</p>}>

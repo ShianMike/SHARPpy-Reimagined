@@ -29,7 +29,7 @@ export async function resolved(page: Page, token: string, property: "color" | "w
 
 /** The layer panel's row for one layer id, with its settings exposed. */
 export async function layerRow(page: Page, id: string) {
-  if (["radar", "satellite", "surface-plots", "warnings", "watches"].includes(id)) {
+  if (["radar", "satellite", "warnings", "watches"].includes(id)) {
     await page.clock.setFixedTime(new Date("2026-10-04T21:00:00Z"));
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Live Tracking", exact: true }).click();
   }

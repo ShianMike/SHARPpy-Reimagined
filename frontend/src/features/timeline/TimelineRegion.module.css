@@ -49,3 +49,12 @@
   .valid { display: none; }
 }
 @media (max-width: 800px) { .downloadLabel, .model { display: none; } .option { padding-inline: var(--space-2); } .mode { padding: 0; } }
+@media (max-width: 560px) {
+  .timeline:has(.drawForecast) {
+    padding-inline: var(--space-2);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+  .timeline:has(.drawForecast) .interaction { justify-self: start; }
+  .timeline:has(.drawForecast) .scrubber { grid-column: 1; }
+  .timeline:has(.drawForecast) .options { grid-column: 2 / -1; grid-row: 2; justify-self: end; }
+}

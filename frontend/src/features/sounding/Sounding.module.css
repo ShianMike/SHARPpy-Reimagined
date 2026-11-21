@@ -57,7 +57,7 @@
 .coordinateRanges dd { color: var(--text-primary); font-weight: var(--font-weight-medium); font-variant-numeric: tabular-nums; }
 .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2); }
 .runDateRow { display: grid; grid-template-columns: var(--control-h-sm) minmax(0, 1fr) var(--control-h-sm); align-items: center; gap: var(--space-1); }
-.hint, .busy, .itemMeta, .empty { color: var(--text-secondary); font-size: var(--font-size-small); }
+.hint, .busy, .empty { color: var(--text-secondary); font-size: var(--font-size-small); }
 .busy { display: flex; flex-direction: column; gap: var(--space-2); overflow-wrap: anywhere; }
 .busyPhase { display: grid; gap: var(--space-2); }
 .busy strong { color: var(--text-primary); font-weight: var(--font-weight-medium); }
@@ -74,13 +74,23 @@
 .fileField > svg { box-sizing: content-box; width: var(--space-6); height: var(--space-6); margin-bottom: var(--space-2); padding: var(--space-3); border-radius: var(--radius-md); background: var(--accent-subtle); color: var(--accent-bright); }
 .fileField strong { max-width: 100%; font-size: var(--font-size-body); overflow-wrap: anywhere; }
 .fileField button { margin-top: var(--space-2); }
-.list { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; list-style: none; }
-.item { display: grid; flex: none; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden; }
-.item[data-active="true"] { border-color: var(--accent); background: var(--accent-subtle); }
-.itemButton { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); min-width: 0; padding: var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-primary); text-align: left; }
-.itemButton:hover { background: var(--fill-hover); color: var(--accent-bright); }
-.itemTitle { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); overflow-wrap: anywhere; }
-.itemMeta { line-height: var(--line-height-body); }
+.list { display: flex; flex: 1; min-height: 0; flex-direction: column; margin: 0; padding: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; list-style: none; }
+.item { display: grid; flex: none; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-block-end: var(--hairline) solid var(--border-subtle); border-inline-start: var(--focus-ring-width) solid transparent; }
+.item:last-child { border-block-end-color: transparent; }
+.item[data-active="true"] { border-inline-start-color: var(--accent-bright); background: var(--accent-subtle); }
+.item[data-active="true"] .itemTitle { color: var(--accent-bright); }
+.itemButton { display: flex; flex-direction: column; justify-content: center; gap: var(--space-1); min-width: 0; min-height: var(--control-h-lg); padding: var(--space-2); border: 0; background: transparent; color: var(--text-primary); text-align: start; line-height: var(--line-height-tight); }
+.itemButton:hover { background: var(--fill-hover); }
+.itemButton:focus-visible, .item .itemClose:focus-visible { outline-offset: calc(-1 * var(--focus-ring-width)); }
+.itemLine { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.itemTitle, .itemPlace { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.itemTitle { font-size: var(--font-size-small); font-weight: var(--font-weight-semibold); }
+.itemPlace, .itemNumber { color: var(--text-secondary); font-size: var(--font-size-caption); }
+.itemNumber { flex: none; margin-inline-start: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.itemClose svg { width: var(--icon-size-sm); height: var(--icon-size-sm); }
+@media (forced-colors: active) {
+  .item[data-active="true"] { border-inline-start-color: Highlight; }
+}
 .fieldButton { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: var(--control-h-md); padding: var(--space-2) var(--space-3); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--control-fill); color: var(--text-primary); font-size: var(--font-size-body); text-align: left; }
 .fieldButton span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fieldButton svg { flex: none; color: var(--text-secondary); }

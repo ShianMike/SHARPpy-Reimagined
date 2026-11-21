@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.8.6
+# SHARPpy Reimagined · v3.9.0 candidate
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,23 +10,25 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v386---2026-11-19)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#unreleased)
 
 If SHARPpy Reimagined helps your weather analysis, select **Star** at the top of this GitHub page to support the project.
 
 </div>
 
-## What's new in 3.8.6
+## What's new in 3.9.0 (Unreleased)
 
-- **Model soundings.** HRRR and other models that use NOMADS can open point
-  soundings again. Standard ECMWF IFS uses the combined 0.25° feed, and
-  Canadian GeoMet soundings keep pressure levels above the verified terrain.
-- **Readable CAPE units.** Severe sounding images use J/kg for HGZ CAPE
-  and ECAPE, and J/kg/m for NCAPE.
-- **Linux desktop package.** Install the desktop app and its bundled
-  scientific backend on Ubuntu 24.04 x64.
-- **Mac desktop builds.** Apple Silicon and Intel builds run on macOS 15
-  or later. Public Mac downloads require Apple notarization.
+- **Draw Forecast.** Draw, move, and reshape connected risk contours. Reuse
+  categorical outlines for tornado, hail, or wind and export PNGs with the
+  outlook day, author, and unofficial-forecast notice.
+- **Model Viewer and Live Tracking.** Model fields shade more smoothly,
+  worldwide METAR markers stay visible through zoom changes, and active
+  Spotter Network markers show public details in the local app.
+- **Soundings.** Recover saved sessions, read clearer Skew-T annotations, and
+  animate more models from the selected forecast run with a shared wind axis.
+- **Faster exports and storage checks.** Lossless WebP exports take less
+  browser processing, and Storage can count cached files without reading
+  their weather data.
 
 ## Sounding and forecast tools
 

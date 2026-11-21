@@ -1,5 +1,6 @@
-// Camera constants and helpers (DESIGN-frontend F4). No maplibre-gl import.
+// Camera constants and helpers (DESIGN-frontend F4).
 
+import type { Map as MapLibreMap } from "maplibre-gl";
 import type { CanvasLayout } from "../canvasTokens";
 
 /** The initial view when no valid camera was saved: [[west, south], [east, north]]. */
@@ -44,6 +45,16 @@ export interface Padding {
   bottom: number;
   left: number;
   right: number;
+}
+
+/** Flat, terrain-free map.project inputs at the time a layer is drawn. */
+export function flatProjectionKey(map: MapLibreMap): string | undefined {
+  if (!map.isStyleLoaded() || map.getProjection().type !== "mercator" || map.getTerrain() !== null) return undefined;
+  const { lng, lat } = map.getCenter();
+  const { top, right, bottom, left } = map.getPadding();
+  const { clientWidth, clientHeight } = map.getCanvas();
+  return [lng, lat, map.getZoom(), map.getBearing(), map.getPitch(), map.getRoll(), map.getVerticalFieldOfView(),
+    top, right, bottom, left, clientWidth, clientHeight].join(",");
 }
 
 /**

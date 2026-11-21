@@ -1,6 +1,6 @@
 // The map overlay's slots (DESIGN-frontend F8 layout frame). Shell renders the
-// overlay grid and three empty slot elements; WeatherMap portals the map
-// toolbar, the notices, and the layer panel into them, so they keep their React
+// overlay grid and slot elements; WeatherMap portals the map toolbar, notices,
+// drawing feedback, and the layer panel into them, so they keep their React
 // context while their boxes follow the frame.
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
@@ -10,11 +10,13 @@ export interface MapOverlaySlots {
   left: HTMLElement | null;
   /** Centre column: the map notices. */
   centre: HTMLElement | null;
+  /** Immediately above the playback timeline. */
+  timelineFeedback: HTMLElement | null;
   /** The movable Layers popup's content. */
   rightEnd: HTMLElement | null;
 }
 
-const NO_SLOTS: MapOverlaySlots = { left: null, centre: null, rightEnd: null };
+const NO_SLOTS: MapOverlaySlots = { left: null, centre: null, timelineFeedback: null, rightEnd: null };
 const SlotsContext = createContext<MapOverlaySlots>(NO_SLOTS);
 
 export type SlotRef = (element: HTMLElement | null) => void;
@@ -24,6 +26,7 @@ export interface SlotElements {
   slots: MapOverlaySlots;
   attachLeft: SlotRef;
   attachCentre: SlotRef;
+  attachTimelineFeedback: SlotRef;
   attachRightEnd: SlotRef;
 }
 
@@ -38,8 +41,9 @@ export function useSlotElements(): SlotElements {
   );
   const attachLeft = useMemo(() => setter("left"), [setter]);
   const attachCentre = useMemo(() => setter("centre"), [setter]);
+  const attachTimelineFeedback = useMemo(() => setter("timelineFeedback"), [setter]);
   const attachRightEnd = useMemo(() => setter("rightEnd"), [setter]);
-  return { slots, attachLeft, attachCentre, attachRightEnd };
+  return { slots, attachLeft, attachCentre, attachTimelineFeedback, attachRightEnd };
 }
 
 export function MapOverlaySlotsProvider({ slots, children }: { slots: MapOverlaySlots; children: ReactNode }): ReactNode {

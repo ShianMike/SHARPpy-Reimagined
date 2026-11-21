@@ -4,6 +4,7 @@ use crate::radar_sites::RadarSite;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use geographiclib_rs::{DirectGeodesic, Geodesic, InverseGeodesic};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -65,6 +66,8 @@ pub(crate) struct IndexedPalette<'a> {
     pub lower_bounds: &'a [usize],
 }
 
+const MAX_PIXELS: usize = 4096;
+
 #[cfg(not(test))]
 const PIXELS: usize = 1024;
 #[cfg(test)]
@@ -104,17 +107,64 @@ struct Projection {
     ranges: Vec<f32>,
 }
 
-type CachedProjection = Mutex<Option<(ProjectionKey, Arc<Projection>)>>;
+// Retain two reusable geometries within the previous maximum of one square frame.
+const PROJECTION_CACHE_BYTES: usize = MAX_PIXELS * MAX_PIXELS * 2 * std::mem::size_of::<f32>();
+const PROJECTION_CACHE_ENTRIES: usize = 2;
 
-fn projection_cache() -> &'static CachedProjection {
-    static CACHE: OnceLock<CachedProjection> = OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(None))
+impl Projection {
+    fn bytes(&self) -> usize {
+        (self.bearings.capacity() + self.ranges.capacity()) * std::mem::size_of::<f32>()
+    }
+}
+
+#[derive(Default)]
+struct ProjectionCache {
+    entries: VecDeque<(ProjectionKey, Arc<Projection>)>,
+}
+
+impl ProjectionCache {
+    fn get(&mut self, key: ProjectionKey) -> Option<Arc<Projection>> {
+        let index = self.entries.iter().position(|(cached, _)| *cached == key)?;
+        let entry = self.entries.remove(index).expect("projection in cache");
+        let projection = Arc::clone(&entry.1);
+        self.entries.push_back(entry);
+        Some(projection)
+    }
+
+    fn insert(&mut self, key: ProjectionKey, projection: Arc<Projection>) {
+        let bytes = projection.bytes();
+        if bytes > PROJECTION_CACHE_BYTES {
+            return;
+        }
+        self.entries.retain(|(cached, _)| *cached != key);
+        while self.entries.len() >= PROJECTION_CACHE_ENTRIES
+            || self
+                .entries
+                .iter()
+                .map(|(_, cached)| cached.bytes())
+                .sum::<usize>()
+                > PROJECTION_CACHE_BYTES - bytes
+        {
+            self.entries.pop_front();
+        }
+        self.entries.push_back((key, projection));
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
+}
+
+fn projection_cache() -> &'static Mutex<ProjectionCache> {
+    static CACHE: OnceLock<Mutex<ProjectionCache>> = OnceLock::new();
+    CACHE.get_or_init(Mutex::default)
 }
 
 pub(crate) fn clear_cache() {
-    *projection_cache()
+    projection_cache()
         .lock()
-        .unwrap_or_else(PoisonError::into_inner) = None;
+        .unwrap_or_else(PoisonError::into_inner)
+        .clear();
 }
 
 fn projection(site: &RadarSite, bounds: Bounds, width: usize, height: usize) -> Arc<Projection> {
@@ -128,14 +178,12 @@ fn projection(site: &RadarSite, bounds: Bounds, width: usize, height: usize) -> 
         width,
         height,
     };
-    if let Some((cached_key, cached)) = projection_cache()
+    if let Some(cached) = projection_cache()
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .as_ref()
+        .get(key)
     {
-        if *cached_key == key {
-            return Arc::clone(cached);
-        }
+        return cached;
     }
     let total = width * height;
     let mut bearings = vec![0_f32; total];
@@ -175,9 +223,10 @@ fn projection(site: &RadarSite, bounds: Bounds, width: usize, height: usize) -> 
         }
     });
     let built = Arc::new(Projection { bearings, ranges });
-    *projection_cache()
+    projection_cache()
         .lock()
-        .unwrap_or_else(PoisonError::into_inner) = Some((key, Arc::clone(&built)));
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(key, Arc::clone(&built));
     built
 }
 
@@ -203,7 +252,7 @@ pub(crate) fn render_with_options(
     palette: &Palette,
     options: RenderOptions,
 ) -> Result<(Bounds, Vec<u8>), String> {
-    if options.pixels == 0 || options.pixels > 4096 {
+    if options.pixels == 0 || options.pixels > MAX_PIXELS {
         return Err("Unsupported radar output resolution.".into());
     }
     let mut values = sweep
@@ -477,7 +526,7 @@ pub(crate) fn render_indexed_256(
     pixels: usize,
     palette: IndexedPalette<'_>,
 ) -> Result<(Bounds, Vec<u8>), String> {
-    if pixels == 0 || pixels > 4096 {
+    if pixels == 0 || pixels > MAX_PIXELS {
         return Err("Unsupported radar output resolution.".into());
     }
     if !bounds.west.is_finite()
@@ -610,4 +659,76 @@ pub(crate) fn colour(value: f64, palette: &Palette) -> Result<[u8; 3], String> {
         *output = (f64::from(a) + fraction * (f64::from(b) - f64::from(a))) as u8;
     }
     Ok(colour)
+}
+
+#[cfg(test)]
+mod projection_cache_tests {
+    use super::*;
+
+    fn key(pixels: usize) -> ProjectionKey {
+        ProjectionKey {
+            site_lat: 35.0_f64.to_bits(),
+            site_lon: (-97.0_f64).to_bits(),
+            west: (-102.0_f64).to_bits(),
+            east: (-92.0_f64).to_bits(),
+            south: 30.0_f64.to_bits(),
+            north: 40.0_f64.to_bits(),
+            width: pixels,
+            height: pixels,
+        }
+    }
+
+    fn buffers(pixels: usize) -> Arc<Projection> {
+        Arc::new(Projection {
+            bearings: Vec::with_capacity(pixels * pixels),
+            ranges: Vec::with_capacity(pixels * pixels),
+        })
+    }
+
+    #[test]
+    fn retains_exact_geometries_and_evicts_the_least_recent() {
+        let mut cache = ProjectionCache::default();
+        let a = key(32);
+        let b = key(64);
+        let c = ProjectionKey {
+            site_lat: a.site_lat + 1,
+            ..a
+        };
+        let existing_a = buffers(a.width);
+        cache.insert(a, Arc::clone(&existing_a));
+        cache.insert(b, buffers(b.width));
+
+        assert!(cache.get(c).is_none());
+        assert!(Arc::ptr_eq(&cache.get(a).unwrap(), &existing_a));
+
+        cache.insert(c, buffers(c.width));
+        assert!(cache.get(b).is_none());
+        assert!(Arc::ptr_eq(&cache.get(a).unwrap(), &existing_a));
+
+        let new_c = buffers(c.width);
+        cache.insert(c, Arc::clone(&new_c));
+        assert!(Arc::ptr_eq(&cache.get(c).unwrap(), &new_c));
+        assert!(cache.get(a).is_some());
+        assert_eq!(cache.entries.len(), 2);
+    }
+
+    #[test]
+    fn enforces_the_previous_maximum_and_releases_entries_on_clear() {
+        let mut cache = ProjectionCache::default();
+        let small = key(32);
+        let large = key(MAX_PIXELS);
+        let largest = buffers(MAX_PIXELS);
+        assert_eq!(largest.bytes(), PROJECTION_CACHE_BYTES);
+
+        cache.insert(small, buffers(small.width));
+        cache.insert(large, Arc::clone(&largest));
+        assert!(cache.get(small).is_none());
+        assert_eq!(cache.entries.len(), 1);
+
+        cache.insert(small, buffers(small.width));
+        assert!(cache.get(large).is_none());
+        assert_eq!(Arc::strong_count(&largest), 1);
+        cache.clear();
+        assert!(cache.entries.is_empty());
+    }
 }

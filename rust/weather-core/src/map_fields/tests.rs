@@ -350,20 +350,33 @@ async fn batches_are_concurrent_bounded_and_return_input_order() {
 
 #[tokio::test]
 async fn first_failure_aborts_slow_siblings_and_leaves_queued_jobs_unstarted() {
-    let server = Server::new(|request| {
+    let (release_slow, wait_for_release) = std::sync::mpsc::channel::<()>();
+    let wait_for_release = Mutex::new(wait_for_release);
+    let server = Server::new(move |request| {
         let mut reply = Reply::range(b"GRIB");
         if request.path == "/missing" {
             reply.status = 404;
-        } else {
-            reply.pause = Duration::from_millis(500);
+        } else if request.path == "/slow" {
+            // Hold the response until the batch has returned its first error.
+            let _ = wait_for_release
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(10));
         }
         reply
     });
     let jobs = server.jobs(&["/slow", "/missing", "/queued", "/queued"]);
-    let started = Instant::now();
-    let result = fetch_model_fields(&ModelClient::default(), jobs, 2., 2, || Ok(false)).await;
-    assert_eq!(result, Err(Error::Unavailable(404)));
-    assert!(started.elapsed() < Duration::from_millis(400));
+    let client = ModelClient::default();
+    let result = tokio::time::timeout(
+        Duration::from_secs(5),
+        fetch_model_fields(&client, jobs, 30., 2, || Ok(false)),
+    )
+    .await;
+    drop(release_slow);
+    assert_eq!(
+        result.expect("batch waited for the slow sibling"),
+        Err(Error::Unavailable(404))
+    );
     assert!(server
         .requests
         .lock()

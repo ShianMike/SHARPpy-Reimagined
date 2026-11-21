@@ -3,6 +3,8 @@
 use crate::numeric_grid::Buffer;
 use rayon::prelude::*;
 
+pub(crate) mod reproject;
+
 pub(crate) struct Palette {
     stops: Vec<(f64, [u8; 3])>,
     stepped: bool,

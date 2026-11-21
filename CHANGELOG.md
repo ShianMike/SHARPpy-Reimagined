@@ -7,7 +7,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Target version: **3.9.0** (not published).
+## [v3.9.0] - 2026-11-21
 
 ### Added
 
@@ -125,6 +125,9 @@ Target version: **3.9.0** (not published).
 - Account for tiny grayscale raster differences seen in repeated uncached Qt
   renders when checking sounding PNG parity. Keep exact checks for colored
   pixels, transparency, dimensions, and sounding metadata.
+- Publish tested Apple Silicon and Intel preview DMGs when Apple notarization
+  is disabled. Include both packages in the release checksums and GitHub
+  build attestations.
 
 ## [v3.8.6] - 2026-11-19
 

@@ -329,6 +329,12 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
 
     publish_steps = workflow["jobs"]["publish"]["steps"]
     publish_by_name = {step.get("name"): step for step in publish_steps}
+    mac_packages = attestation_by_name["Download the tested macOS packages"]
+    assert mac_packages["if"] == "needs.resolve-release.outputs.unix_desktop == 'true'"
+    assert mac_packages["with"]["pattern"] == "unix-package-macos-*"
+    assert publish_by_name["Download the tested macOS packages"] == mac_packages
+    assembly = "Assemble and checksum the desktop downloads"
+    assert publish_by_name[assembly] == attestation_by_name[assembly]
     publish = publish_by_name["Publish GitHub Release"]["with"]
     assert "Recommended Windows download" in publish["body"]
     assert "windows-x64-setup.exe" in publish["body"]

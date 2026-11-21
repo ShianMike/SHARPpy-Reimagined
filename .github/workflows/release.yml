@@ -754,8 +754,8 @@ jobs:
           path: release-artifacts
 
       - &download_macos
-        name: Download the tested notarized macOS packages
-        if: inputs.notarize_macos == true
+        name: Download the tested macOS packages
+        if: needs.resolve-release.outputs.unix_desktop == 'true'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: unix-package-macos-*
@@ -776,10 +776,13 @@ jobs:
           sums="$prefix-SHA256SUMS.txt"
           sha256sum --check "$sums"
           test -s "$prefix-linux-x64.deb"
-          if [[ "$NOTARIZE_MACOS" == true ]]; then
-            test -s "$prefix-macos-arm64.dmg"
-            test -s "$prefix-macos-x64.dmg"
-          fi
+          for arch in arm64 x64; do
+            dmg="$prefix-macos-$arch"
+            test -s "$dmg.dmg"
+            if [[ "$NOTARIZE_MACOS" != true ]]; then
+              mv -- "$dmg.dmg" "$dmg-preview.dmg"
+            fi
+          done
           files=()
           for file in *; do
             [[ "$file" == "$sums" ]] || files+=("$file")
@@ -848,7 +851,7 @@ jobs:
             Use the `setup.exe` to install the new desktop interface, or extract the ZIP and run `SHARPpy-Reimagined.exe`. Keep its `backend` folder beside it; Python and the scientific engine are included.
 
             **Linux:** Install the `linux-x64.deb` with your package manager on Ubuntu 24.04 x64.
-            **macOS:** If this release includes DMGs, choose `macos-arm64.dmg` for Apple Silicon or `macos-x64.dmg` for Intel. Open the disk image and drag the app to Applications. macOS 15 or later is required.
+            **macOS:** Choose the `macos-arm64` disk image for Apple Silicon or `macos-x64` for Intel. Open the disk image and drag the app to Applications. macOS 15 or later is required. Packages labeled `preview` use ad-hoc signatures.
 
             The v3 downloads use the React/Tauri interface. The final old GUI remains available as v2.0.0 Legacy below.
 
@@ -891,15 +894,17 @@ jobs:
             fi
           done
 
-          # A prior draft can contain Mac assets from a notarized attempt.
-          if [[ "$NOTARIZE_MACOS" != true ]]; then
-            for arch in arm64 x64; do
-              stale="SHARPpy-Reimagined-$RELEASE_TAG-macos-$arch.dmg"
-              if printf '%s\n' "$assets" | grep -Fxq -- "$stale"; then
-                gh release delete-asset "$RELEASE_TAG" "$stale" --yes
-              fi
-            done
-          fi
+          # A prior draft may have used the other macOS signing mode.
+          for arch in arm64 x64; do
+            stale="SHARPpy-Reimagined-$RELEASE_TAG-macos-$arch"
+            if [[ "$NOTARIZE_MACOS" == true ]]; then
+              stale="$stale-preview"
+            fi
+            stale="$stale.dmg"
+            if printf '%s\n' "$assets" | grep -Fxq -- "$stale"; then
+              gh release delete-asset "$RELEASE_TAG" "$stale" --yes
+            fi
+          done
 
       - name: Publish completed new release as latest stable release
         shell: bash

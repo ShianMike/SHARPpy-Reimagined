@@ -3,8 +3,8 @@
 | Platform | Package | System |
 | --- | --- | --- |
 | Linux x64 | `*-linux-x64.deb` | Ubuntu 24.04 x64 |
-| Mac with Apple Silicon | `*-macos-arm64.dmg` | macOS 15 Sequoia or later |
-| Intel Mac | `*-macos-x64.dmg` | macOS 15 Sequoia or later |
+| Mac with Apple Silicon | `*-macos-arm64.dmg` or `*-macos-arm64-preview.dmg` | macOS 15 Sequoia or later |
+| Intel Mac | `*-macos-x64.dmg` or `*-macos-x64-preview.dmg` | macOS 15 Sequoia or later |
 
 Each installer includes Python, the Rust scientific extension, Qt rendering,
 and the model and WRF libraries. Match the download to your computer. On
@@ -17,10 +17,10 @@ available on Windows. The Save GIF action works on Linux and macOS.
 
 Find published installers on the
 [releases page](https://github.com/ShianMike/SHARPpy-Reimagined/releases).
-Ubuntu and Mac candidates are also available from GitHub Actions. Mac
-candidates have ad-hoc signatures.
-macOS may prompt for approval when opening it. Verify the origin before using
-**Privacy & Security → Open Anyway**. Public Mac releases use Apple notarization.
+Ubuntu and Mac candidates are also available from GitHub Actions. Mac packages
+labeled `preview` use ad-hoc signatures. macOS may prompt for approval when
+opening a preview build. Verify the origin before using
+**Privacy & Security → Open Anyway**.
 [Apple's guidance on opening apps](https://support.apple.com/en-us/102445)
 
 ## Develop on Linux or Mac
@@ -58,9 +58,8 @@ Actions caches Ubuntu package downloads by the current APT install plan and
 macOS Cargo dependencies by architecture, Rust compiler, Xcode SDK, Python
 version and the lockfiles. Every run still resolves the APT packages,
 rebuilds the first-party code, freezes the backend and checks the installed
-app. The unsigned-for-distribution Mac candidates keep the ad-hoc signatures
-applied by PyInstaller. The public workflow signs the bundled code with
-Developer ID and notarizes the finished package.
+app. The preview Mac packages use ad-hoc signatures. Enabling notarization
+signs the bundled code with Developer ID and notarizes the finished package.
 
 To build the equivalent artifacts locally, use CPython 3.13.16 and start with
 a clean virtual environment. Use Rust 1.99.1 and your native target. Build the
@@ -103,9 +102,10 @@ npm --prefix frontend run tauri -- build --target "$target" \
   --config src-tauri/tauri.macos.release.conf.json -- --locked
 ```
 
-The Release workflow includes Linux in the new release's checksums and
-GitHub build attestations. To include both Mac packages, enable
-`notarize_macos` when dispatching Release. The repository needs
+The Release workflow includes the tested Linux package and both Mac packages
+in the release, checksums, and GitHub build attestations. Enable
+`notarize_macos` when dispatching Release to publish Developer ID packages.
+The repository needs
 `APPLE_CERTIFICATE` (a base64 Developer ID Application `.p12`),
 `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_PASSWORD` (an app-specific
 password), and `APPLE_TEAM_ID`. The workflow signs, notarizes, and verifies

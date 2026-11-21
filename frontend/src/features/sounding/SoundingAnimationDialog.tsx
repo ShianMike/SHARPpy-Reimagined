@@ -12,7 +12,7 @@ import { encodeAnimation, type AnimationFormat } from "../animation/encodeAnimat
 import { copyForecastGif, useCanCopyGif } from "../forecastExport/forecastClipboard";
 import { useModelCatalog, useObjectUrl } from "./soundingQueries";
 import { SourceSelect } from "./SourceFields";
-import { prepareSoundingAnimation, SOUNDING_ANIMATION_FRAME_LIMIT, soundingFrameChoices, type PreparedSoundings, type SoundingAnimationProgress } from "./prepareSoundingAnimation";
+import { prepareSoundingAnimation, resolveSoundingAnimationModel, SOUNDING_ANIMATION_FRAME_LIMIT, soundingFrameChoices, type PreparedSoundings, type SoundingAnimationProgress } from "./prepareSoundingAnimation";
 import styles from "../forecastExport/ForecastExportDialog.module.css";
 import local from "./SoundingAnimationDialog.module.css";
 
@@ -24,12 +24,22 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
   const client = useBackendClient();
   const canCopyGif = useCanCopyGif();
   const colorStyle = useUiStore((state) => state.soundingColorStyle);
-  const models = useModelCatalog();
-  const model = models.data?.models.find((item) => [item.key, item.label].some((name) => name.toLowerCase() === summary.model?.toLowerCase()));
+  const isModel = summary.kind === "model";
+  const models = useModelCatalog({ includeAll: true, enabled: isModel });
+  const model = isModel ? resolveSoundingAnimationModel(summary, models.data?.models ?? []) : undefined;
   const choices = soundingFrameChoices(summary, model);
   const [selected, setSelected] = useState<number[] | null>(null);
-  const startIndex = Math.max(0, choices.findIndex((item) => item.value === (summary.forecastHour ?? 0)));
-  const chosen = selected ?? choices.slice(startIndex, startIndex + SOUNDING_ANIMATION_FRAME_LIMIT).map((item) => item.value);
+  const currentIndex = Math.max(0, choices.findIndex((item) => item.value === (summary.forecastHour ?? 0)));
+  const startIndex = Math.min(currentIndex, Math.max(0, choices.length - 2));
+  const chosen = (selected === null ? choices.slice(startIndex, startIndex + SOUNDING_ANIMATION_FRAME_LIMIT)
+    : choices.filter((item) => selected.includes(item.value))).map((item) => item.value);
+  const valid = chosen.length >= 2 && chosen.length <= SOUNDING_ANIMATION_FRAME_LIMIT;
+  const loadingHours = isModel && models.isPending;
+  const hasFrames = choices.length >= 2;
+  const catalogError = isModel && !hasFrames && models.isError ? models.error : null;
+  const unavailable = !isModel ? "This sounding has fewer than two profiles available."
+    : model === undefined ? "The sounding’s model isn’t in the forecast catalog."
+      : "This run has fewer than two forecast hours available for animation.";
   const maxFrames = Math.min(choices.length, SOUNDING_ANIMATION_FRAME_LIMIT);
   const selectAll = maxFrames === choices.length;
   const atLimit = !selectAll && chosen.length >= maxFrames;
@@ -56,7 +66,7 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
   const close = (): void => { controller.current?.abort(); onClose(); anchor.focus(); };
   const reset = (): void => { setPrepared(null); setResult(null); setProgress(null); setError(""); setCopied(false); setPlaying(false); setIndex(0); };
   const start = (format?: AnimationFormat): void => {
-    if (busy || preview.current === null) return;
+    if (busy || !valid || preview.current === null) return;
     const canvas = preview.current, job = new AbortController();
     controller.current = job; setBusy(true); setError(""); setResult(null); setCopied(false); setPlaying(false);
     const run = async (): Promise<void> => {
@@ -85,13 +95,12 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
     void copyForecastGif(result.blob).then(() => { setCopied(true); }, () => { setError("This device could not copy the GIF. Save the GIF instead."); })
       .finally(() => { setCopying(false); });
   };
-  const valid = chosen.length >= 2 && chosen.length <= SOUNDING_ANIMATION_FRAME_LIMIT;
   const exportReady = !busy && result !== null && url !== null;
   const formatLabel = result?.format === "webp" ? "WebP" : "GIF";
   const status = busy ? progress === null ? "Preparing…" : `${STAGES[progress.phase]} · ${String(progress.done)} / ${String(progress.total)}`
     : prepared !== null ? `${String(prepared.frames.length)} frames ready · ${String(prepared.width)} × ${String(prepared.height)}`
     : atLimit ? `${frameLimit} selected. Deselect a frame to choose another.`
-    : `Choose 2–${frameLimit} frames to preview or export.`;
+    : hasFrames ? `Choose 2–${frameLimit} frames to preview or export.` : "";
   return <Popover id="sounding-animation" open anchor={anchor} onClose={close} role="dialog" label="Animate sounding" initialFocus="container" movable backdrop className={styles.dialog}>
     <header className={styles.header} data-popover-drag>
       <IconAction icon={GripHorizontal} size="sm" label="Move sounding animation screen" data-popover-move />
@@ -103,11 +112,14 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
         <section className={styles.identity}><span>One location · One run</span><strong>{summary.title}</strong><p>Every selected profile loads before the images are rendered. Plot axes stay fixed throughout playback.</p></section>
         <hr className={local.separator} />
         <fieldset disabled={busy} className={local.framePicker}>
-          <legend>{summary.kind === "model" ? "Forecast hours" : "File profiles"}</legend>
-          <div className={local.framePanel}>
+          <legend>{isModel ? "Forecast hours" : "File profiles"}</legend>
+          {loadingHours ? <p className={styles.help} role="status">Loading forecast hours…</p> :
+            catalogError !== null ? <Notice tone="danger" title="Forecast hours unavailable" message={catalogError.message}
+              actions={<Action onClick={() => { void models.refetch(); }}>Retry</Action>} /> :
+            !hasFrames ? <p className={styles.help} role="status">{unavailable}</p> : <div className={local.framePanel}>
             <div className={local.frameToolbar}>
               <div className={local.frameActions}>
-                <Action disabled={choices.length === 0} aria-label={selectAll ? "Select all frames" : `Select first ${frameLimit} frames`}
+                <Action aria-label={selectAll ? "Select all frames" : `Select first ${frameLimit} frames`}
                   onClick={() => { reset(); setSelected(choices.slice(0, SOUNDING_ANIMATION_FRAME_LIMIT).map((item) => item.value)); }}>
                   <ListChecks className="icon-sm" aria-hidden="true" />{selectAll ? "Select all" : `First ${frameLimit}`}
                 </Action>
@@ -117,7 +129,7 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
               </div>
               <span className={local.frameCount} role="status">{chosen.length} / {maxFrames} selected</span>
             </div>
-            {choices.length === 0 ? null : <div className={local.frameGrid} data-model={summary.kind === "model"} role="group" aria-label="Sounding frames to animate">
+            <div className={local.frameGrid} data-model={isModel} role="group" aria-label="Sounding frames to animate">
               {choices.map((item) => {
                 const checked = chosen.includes(item.value);
                 return <label className={local.frameOption} key={item.value}>
@@ -131,11 +143,9 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
                   </span>
                 </label>;
               })}
-            </div>}
-          </div>
+            </div>
+          </div>}
         </fieldset>
-        {summary.kind === "model" && models.isPending ? <p className={styles.help}>Loading available forecast hours…</p> : null}
-        {models.isError && summary.kind === "model" ? <Notice tone="danger" title="Forecast hours unavailable" message={models.error.message} /> : null}
         <hr className={local.separator} />
         <SourceSelect label="Time per sounding" value={delay} disabled={busy} options={[{ value: 250, label: "0.25 seconds" }, { value: 500, label: "0.5 seconds" }, { value: 750, label: "0.75 seconds" }, { value: 1000, label: "1 second" }]}
           onChange={(value) => { setResult(null); setCopied(false); setDelay(value); }} />
@@ -143,7 +153,9 @@ export function SoundingAnimationDialog({ anchor, summary, choice, quality, view
       </div>
       <section className={styles.previewSection} aria-label="Sounding animation preview">
         <div className={cx(styles.preview, local.preview)} style={{ "--animation-aspect": prepared === null ? "16 / 9" : `${String(prepared.width)} / ${String(prepared.height)}` } as CSSProperties}>
-          {url === null ? <div className={styles.placeholder}><Film aria-hidden="true" /><strong>Your sounding animation</strong><p>Prepare frames to play every selected hour.</p></div> : <img src={url} alt="Selected sounding animation frame" />}
+          {url === null ? <div className={styles.placeholder}><Film aria-hidden="true" /><strong>Your sounding animation</strong>
+            {hasFrames ? <p>Prepare frames to play every selected hour.</p> : null}
+          </div> : <img src={url} alt="Selected sounding animation frame" />}
           <canvas ref={preview} hidden aria-label="Sounding encoding preview" />
         </div>
         {prepared === null || result !== null ? null : <div className={local.playback}>

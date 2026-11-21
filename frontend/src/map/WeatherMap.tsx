@@ -16,6 +16,7 @@ import { VisuallyHidden } from "../components/VisuallyHidden";
 import { CatalogueStatusNotice } from "../features/errors/CatalogueStatusNotice";
 import { profileSettings } from "../lib/graphics/profileSettings";
 import { useGraphicsStore } from "../stores/graphicsStore";
+import { useForecastDrawingStore } from "../stores/forecastDrawingStore";
 import { useMapStore, type PanelLayout } from "../stores/mapStore";
 import { useStationCatalog } from "../stations/stationQueries";
 import type { Station, StationAvailability } from "../types/contracts";
@@ -37,6 +38,7 @@ function MapView(): ReactNode {
   const slots = useMapOverlaySlots();
   const layout = useMapStore((state) => state.panelLayout);
   const live = useMapStore((state) => state.view === "live");
+  const drawing = useForecastDrawingStore((state) => state.enabled);
   const grid = useRef<HTMLDivElement & { startViewTransition?: Document["startViewTransition"] }>(null);
   const requestedLayout = useRef<PanelLayout | null>(null);
   const catalog = useStationCatalog();
@@ -82,7 +84,9 @@ function MapView(): ReactNode {
       <VisuallyHidden id={MAP_HINT_ID}>
         Arrow keys pan the map and plus and minus zoom. Select stations with the station search.
         {" Inspect shows map hover readouts; Navigate hides them."}
-        {live ? null : " Click to pick a forecast point, or pan with the arrow keys and press Enter to inspect the point at the centre of the map."}
+        {live ? null : drawing
+          ? " While drawing, click to place a vertex or press Enter to add one at the map center. Use Control+Z and Control+Y to undo and redo. Press Escape to cancel."
+          : " Click to pick a forecast point, or pan with the arrow keys and press Enter to inspect the point at the centre of the map."}
       </VisuallyHidden>
       <StationTooltip />
       <OutlookTooltip />
@@ -91,6 +95,7 @@ function MapView(): ReactNode {
         ? null
         : createPortal(
             <MapToolbar
+              feedbackTarget={slots.timelineFeedback}
               onLayoutChange={changeLayout}
               onZoomIn={() => {
                 runtime.zoomBy(1);

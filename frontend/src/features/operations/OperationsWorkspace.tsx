@@ -41,7 +41,16 @@ export function OperationsWorkspace(): ReactNode {
   const errors = entries.filter((entry) => entry.level === "error").length;
   const navigate = (id: WorkspaceId): void => { useAppStore.getState().setActiveWorkspace(id); };
   return <div className={styles.page}>
-    <header className={styles.heading}><div className={styles.identity}><BrandMark className={styles.brandMark} /><div><div className={styles.title}><h1>SHARPpy Reimagined</h1><span className={styles.version} title="Current app version">v{version}</span></div><p>Your weather briefing. Current outlooks, your next analysis.</p></div></div><HealthIndicator /></header>
+    <header className={styles.heading}>
+      <div className={styles.identity}>
+        <BrandMark className={styles.brandMark} />
+        <div className={styles.title}>
+          <h1>SHARPpy Reimagined</h1>
+          <span className={styles.version} title="Current app version">v{version}</span>
+        </div>
+      </div>
+      <HealthIndicator />
+    </header>
     <SpcBriefing />
     <div className={styles.workflows}>
       <section className={styles.workflow} aria-labelledby="continue-title">

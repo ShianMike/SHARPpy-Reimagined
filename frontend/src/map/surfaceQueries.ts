@@ -1,7 +1,5 @@
-// Surface station-plot queries (DESIGN-frontend F3), split out of mapQueries to
-// keep each module within the size rule. The plots answer "what did the nearby
-// stations report" around one anchor at one valid time, so they are keyed by
-// all three and disabled without them.
+// Model Viewer shares the latest worldwide snapshot. Live Tracking can also
+// request nearby observations at a specific playback time.
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
@@ -15,6 +13,7 @@ import { useUiStore } from "../stores/uiStore";
 import { surfaceDisplay } from "./surfaceDisplay";
 
 const PLOTS_STALE_MS = 10 * 60_000;
+const SNAPSHOT_REFRESH_MS = 2 * 60_000;
 
 export interface SurfaceAnchor {
   latitude: number;
@@ -22,38 +21,47 @@ export interface SurfaceAnchor {
 }
 
 /** The map's own selection as a point: a station's spot or the picked point. */
-export function useSelectionAnchor(): SurfaceAnchor | null {
-  const point = useAppStore((state) => state.selectedPoint);
-  const stationId = useAppStore((state) => state.selectedStationId);
-  const stations = useStationCatalog().data?.stations;
-  const camera = useMapStore((state) => state.cameraSnapshot);
+export function useSelectionAnchor(enabled = true): SurfaceAnchor | null {
+  const point = useAppStore((state) => enabled ? state.selectedPoint : null);
+  const stationId = useAppStore((state) => enabled ? state.selectedStationId : null);
+  const stations = useStationCatalog(enabled).data?.stations;
+  const camera = useMapStore((state) => enabled ? state.cameraSnapshot : null);
   const live = useMapStore((state) => state.view === "live");
   return useMemo(() => {
+    if (!enabled) return null;
     if (point !== null && !live) return point;
     const station = stationId === null ? undefined : stations?.find((item) => item.id === stationId);
     return station === undefined
       ? live ? { latitude: camera?.center[1] ?? 39.8, longitude: camera?.center[0] ?? -98.6 } : null
       : { latitude: station.latitude, longitude: station.longitude };
-  }, [point, stationId, stations, camera, live]);
+  }, [enabled, point, stationId, stations, camera, live]);
 }
 
-/** The station plots around an anchor at a valid time. */
+export function useSurfaceLayer(live: boolean, validTime: string | null, enabled: boolean): UseQueryResult<SurfacePlots> {
+  const anchor = useSelectionAnchor(live && enabled);
+  return useSurfacePlots(anchor, live && enabled ? validTime : null, enabled, live ? "nearby" : "latest");
+}
+
+/** The current global snapshot or historical observations near an anchor. */
 export function useSurfacePlots(
   anchor: SurfaceAnchor | null,
   validTime: string | null,
   enabled: boolean,
+  scope: "nearby" | "latest" = "nearby",
 ): UseQueryResult<SurfacePlots> {
   const client = useBackendClient();
   const temperature = useUiStore((state) => state.units.temperature);
   const select = useCallback((data: SurfacePlots) => surfaceDisplay(data, temperature), [temperature]);
+  const latest = scope === "latest";
   return useQuery({
     ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.surface(anchor?.latitude ?? 0, anchor?.longitude ?? 0, validTime ?? ""),
-    queryFn: () =>
-      client.getSurfacePlots(anchor?.latitude ?? 0, anchor?.longitude ?? 0, validTime ?? ""),
-    enabled: enabled && anchor !== null && validTime !== null,
-    staleTime: PLOTS_STALE_MS,
-    gcTime: Number.POSITIVE_INFINITY,
+    queryKey: latest ? mapKeys.latestSurface : mapKeys.surface(anchor?.latitude ?? 0, anchor?.longitude ?? 0, validTime ?? ""),
+    queryFn: () => latest ? client.getLatestSurfacePlots() : client.getSurfacePlots(anchor?.latitude ?? 0, anchor?.longitude ?? 0, validTime ?? ""),
+    enabled: enabled && (latest || anchor !== null && validTime !== null),
+    staleTime: latest ? SNAPSHOT_REFRESH_MS : PLOTS_STALE_MS,
+    gcTime: latest ? 10 * 60_000 : Number.POSITIVE_INFINITY,
+    refetchInterval: latest ? SNAPSHOT_REFRESH_MS : false,
+    retry: latest ? false : BASE_QUERY_OPTIONS.retry,
     select,
   });
 }

@@ -137,7 +137,15 @@ def _acquire(model, product, run, hour):
             def stopped():
                 with _FLIGHT_LOCK:
                     return all(event is not None and event.is_set() for event in consumers)
-            cached, lines = _produce(model, product, run, hour, target, stopped)
+            try:
+                cached, lines = _produce(model, product, run, hour, target, stopped)
+            except BridgeError as error:
+                legacy = frame_cache.path("grid", model, product.key, run, hour, FRAME, legacy=True)
+                cached = cached or frame_cache.read(legacy)
+                if cached is None:
+                    raise
+                if lines is None:
+                    lines = error
         result = (cached, lines)
         flight.set_result(result)
         return result
@@ -154,11 +162,12 @@ def _acquire(model, product, run, hour):
 
 def _produce(model, product, run, hour, target, stopped):
     import numpy as np
+    import sharpmod_rs
     from sharpmod.providers import hrrr_field
     from sharpmod.bridge import contours, frame_cache
     bounds = hrrr_field.field_bounds(model)
     what = f"{model.upper()} {product.label}, {run:%Y-%m-%d %H}Z run, F{hour:03d}"
-    cache_key = product.key if model == "hrrr" else f"{model}:{product.key}"
+    cache_key = f"{model}:{product.key}"
     values = hrrr_field.cached_derived(cache_key, run, hour, FRAME)
     needs_auxiliary = product.contour is not None or product.wind
     lines = None
@@ -183,8 +192,12 @@ def _produce(model, product, run, hour, target, stopped):
             field = np.asarray(product.derive(decoded), dtype=np.float32)
             if field.shape != hrrr_field.field_grid(model).shape:
                 raise hrrr_field.HrrrFieldError(f"derived a {field.shape} grid")
-            mapping = hrrr_field.index_map(FRAME, bounds, model=model)
-            values = hrrr_field.reproject(field, mapping)
+            interpolate = product.palette.units != "flag"
+            if interpolate and model in hrrr_field.GLOBAL_MODELS:
+                values = sharpmod_rs.reproject_global_map_field(field, FRAME, bounds)
+            else:
+                mapping = hrrr_field.index_map(FRAME, bounds, model=model, interpolate=interpolate)
+                values = hrrr_field.reproject(field, mapping)
         except DownloadCancelled:
             raise cancellation.Cancelled() from None
         except hrrr_field.HrrrFieldUnavailable as exc:

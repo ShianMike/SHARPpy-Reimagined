@@ -21,10 +21,12 @@ def _palette(palette: Any) -> dict[str, Any]:
 
 
 def _saved_product(model, product, run, hour):
-    """A decodable current-version raster proves this exact product was produced."""
+    """A decodable saved raster proves this exact product was produced."""
     from sharpmod.bridge import fields, frame_cache
 
     saved = frame_cache.read(frame_cache.path("grid", model, product.key, run, hour, fields.FRAME))
+    if saved is None:
+        saved = frame_cache.read(frame_cache.path("grid", model, product.key, run, hour, fields.FRAME, legacy=True))
     if saved is None:
         return False
     try:

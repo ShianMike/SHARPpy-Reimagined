@@ -1,6 +1,6 @@
 // Validate replies, normalize failures and log once for all transports (F2, C6).
 import type { BackendHealth, BridgeStatus, StationCatalog } from "../../types/contracts";
-import { ContractError, expectBoolean, expectExactKeys, expectObject } from "../contracts/guards";
+import { ContractError } from "../contracts/guards";
 import { parseBackendHealth, parseBridgeStatus } from "../contracts/health";
 import { parseModelStatus } from "../contracts/modelStatus";
 import {
@@ -12,16 +12,19 @@ import {
   parseWrfFile,
 } from "../contracts/soundings";
 import { parseContourLines } from "../contracts/contours";
+import { parseForecastDrawing } from "../contracts/forecastDrawing";
 import { parseFieldFrame, parseRadarFrame, parseRadarSiteFrame, parseSatelliteFrame } from "../contracts/frames";
 import { parseAvailabilityReport, parseMapCatalog, parsePlaceLabels, parseRadarSiteCatalog, parseRadarTilts, parseSpcOutlook } from "../contracts/map";
 import { parseReportOptions, parseStormReports } from "../contracts/reports";
-import { parseSurfacePlots } from "../contracts/surface";
+import { parseLatestSurfacePlots, parseSurfacePlots } from "../contracts/surface";
+import { parseSpotterPositions } from "../contracts/spotters";
 import { parseWeatherAlerts } from "../contracts/weatherAlerts";
 import type { WeatherAlerts } from "../../types/weatherAlerts";
 import { parseStationCatalog } from "../contracts/stations";
 import { parseThresholdEvaluation, thresholdArgs } from "../contracts/thresholds";
 import { parseThresholdCsv, parseThresholdMetrics } from "../contracts/thresholdCatalog";
 import type { AvailabilityReport, ContourLines, FieldFrame, MapCatalog, OutlookDay, OutlookProductKey, PlaceLabels, RadarFrame, RadarSiteCatalog, RadarSiteFrame, RadarTilts, ReportOptions, SatelliteFrame, SatelliteChannel, SpcOutlook, StormReports } from "../../types/map";
+import type { ForecastDrawingResult, ForecastPolygon, ForecastProduct } from "../../types/forecastDrawing";
 import type { SurfacePlots } from "../../types/surface";
 import type {
   ThresholdCsv,
@@ -39,11 +42,11 @@ import { BackendFailure, contractViolation } from "./errors";
 import { BRIDGE_STATUS_CHANGED } from "./events";
 import { callWithSignal, type CommandName, type Transport } from "./transport";
 import { recordLog } from "../../stores/logStore";
-import { parseSoundingView } from "../contracts/soundingView";
+import { parseMaximumSoundingWind, parseSoundingView } from "../contracts/soundingView";
 import { parseWebpFrame, type WebpFrame } from "../contracts/webp";
 import type { SoundingView, ViewRequest } from "../../types/soundingView";
 import { failureFromRejection, warnFailure } from "./requestFailures";
-import { parseSoundingSnapshot, type SoundingSnapshot } from "../contracts/soundingRecovery";
+import { parseSoundingRetention, parseSoundingSnapshot, type SoundingSnapshot } from "../contracts/soundingRecovery";
 export { failureFromRejection } from "./requestFailures";
 export class BackendClient {
   private lastBridgeStatus = "";
@@ -99,13 +102,7 @@ export class BackendClient {
     return this.request("get_sounding_snapshot", parseSoundingSnapshot, { soundingId });
   }
   retainSoundings(soundingIds: readonly string[]): Promise<boolean> {
-    return this.request("retain_soundings", value => {
-      const object = expectObject(value, "");
-      expectExactKeys(object, "", ["retained"]);
-      const retained = expectBoolean(object.retained, "retained");
-      if (!retained) throw new ContractError("retained", "expected a successful retention acknowledgement");
-      return retained;
-    }, { soundingIds });
+    return this.request("retain_soundings", parseSoundingRetention, { soundingIds });
   }
   restoreSoundingSnapshot(payload: string): Promise<SoundingSummary> {
     return this.request("restore_sounding_snapshot", parseSoundingSummary, { payload });
@@ -133,6 +130,11 @@ export class BackendClient {
     return this.request("render_sounding_view", parseSoundingView, { soundingId, ascent, imageMode, view, colorStyle }, signal);
   }
 
+  measureSoundingViewWind(soundingId: string, ascent: RenderChoice, view: ViewRequest, colorStyle: SoundingColorStyle, signal: AbortSignal): Promise<number> {
+    return this.request("render_sounding_view", parseMaximumSoundingWind,
+      { soundingId, ascent, imageMode: "hd", view: { ...view, measureWind: true }, colorStyle }, signal);
+  }
+
   encodeWebpFrame(png: string, signal?: AbortSignal): Promise<WebpFrame> {
     return this.request("encode_webp_frame", parseWebpFrame, { png }, signal);
   }
@@ -147,6 +149,10 @@ export class BackendClient {
 
   getSpcOutlook(product: OutlookProductKey, validTime: string, signal?: AbortSignal, day?: OutlookDay): Promise<SpcOutlook> {
     return this.request("get_spc_outlook", parseSpcOutlook, { product, validTime, ...(day === undefined ? {} : { day }) }, signal);
+  }
+
+  buildForecastDrawing(product: ForecastProduct, polygons: readonly ForecastPolygon[], signal?: AbortSignal): Promise<ForecastDrawingResult> {
+    return this.request("build_forecast_drawing", (value) => parseForecastDrawing(value, product), { product, polygons }, signal);
   }
 
   getWeatherAlerts(validTime: string): Promise<WeatherAlerts> {
@@ -211,21 +217,23 @@ export class BackendClient {
     return this.request("get_storm_reports", parseStormReports, args, signal);
   }
 
-  /** The provider's own window and filter labels for the reports controls. */
   getReportOptions(): Promise<ReportOptions> {
     return this.request("get_report_options", parseReportOptions);
   }
 
-  /** The isolines of one product's contour field, as lon/lat segments. */
   getFieldContours(product: string, runTime: string, forecastHour: number, model = "hrrr", signal?: AbortSignal): Promise<ContourLines> {
     return this.request("get_field_contours", parseContourLines, { product, runTime, forecastHour, model }, signal);
   }
 
-  /** The station models near one point at one valid time. */
   getSurfacePlots(latitude: number, longitude: number, validTime: string): Promise<SurfacePlots> {
     return this.request("get_surface_plots", parseSurfacePlots, { latitude, longitude, validTime });
   }
-
+  getLatestSurfacePlots(): Promise<SurfacePlots> {
+    return this.request("get_latest_surface_plots", parseLatestSurfacePlots);
+  }
+  getSpotterPositions() {
+    return this.request("get_spotter_positions", parseSpotterPositions);
+  }
   getPlaceLabels(): Promise<PlaceLabels> {
     return this.request("get_place_labels", parsePlaceLabels);
   }
@@ -234,7 +242,6 @@ export class BackendClient {
     return this.request("get_station_availability", parseAvailabilityReport, { observationTime });
   }
 
-  /** Validates status events before delivering them to subscribers. */
   async onBridgeStatus(handler: (status: BridgeStatus) => void): Promise<() => void> {
     const operation = BRIDGE_STATUS_CHANGED;
     try {

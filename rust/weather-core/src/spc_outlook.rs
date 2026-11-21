@@ -1,6 +1,7 @@
 //! Time-aware SPC convective outlook resolution, GeoJSON decoding, and caching.
 
 mod affected_areas;
+pub mod forecast;
 
 use crate::format_rfc3339_utc;
 use reqwest::{Client, StatusCode};

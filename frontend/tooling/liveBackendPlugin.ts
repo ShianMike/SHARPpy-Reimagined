@@ -23,9 +23,14 @@ async function connectBackend(server: ViteDevServer | PreviewServer, options: Se
     throw new Error("Set SHARPPY_PYTHON to the absolute path of the project's Python interpreter.");
   }
   const cacheDir = mkdtempSync(resolve(tmpdir(), "sharppy-browser-"));
+  const localPreview = ["127.0.0.1", "localhost", "::1"].includes(String(options.host));
   const child = spawn(python, ["-u", "-m", "sharpmod.bridge.browser", "--origin",
     `http://127.0.0.1:${String(options.port)}`],
-  { cwd: repo, env: { ...process.env, SHARPMOD_BRIDGE_CACHE: cacheDir }, windowsHide: true, stdio: ["ignore", "pipe", "inherit"] });
+  { cwd: repo, env: {
+    ...process.env,
+    ...(localPreview ? { SHARPPY_LOCAL_SPOTTER_NETWORK: "1" } : {}),
+    SHARPMOD_BRIDGE_CACHE: cacheDir,
+  }, windowsHide: true, stdio: ["ignore", "pipe", "inherit"] });
   const clearSession = (): void => {
     try { rmSync(cacheDir, { recursive: true, force: true, maxRetries: 3 }); }
     catch (error) { server.config.logger.warn(`The browser session cache could not be removed: ${String(error)}`); }

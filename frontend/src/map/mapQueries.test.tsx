@@ -22,7 +22,7 @@ import { parseMapCatalog } from "../lib/contracts/map";
 import { parseModelCatalog } from "../lib/contracts/soundings";
 import type { Transport } from "../lib/backend/transport";
 import { useFieldFrame, usePanelRadar, useRadarFrame, useRadarSiteFrame, useSatelliteFrame, useSpcOutlooks, useStormReports } from "./mapQueries";
-import { useSurfacePlots } from "./surfaceQueries";
+import { useSurfaceLayer, useSurfacePlots } from "./surfaceQueries";
 import { useFieldContours } from "./contourQueries";
 import { defaultLayerStates } from "./layers/registry";
 import { defaultProductFor } from "./panelField";
@@ -136,6 +136,32 @@ it.each(Object.keys(payloads) as Kind[])("clears %s data when its selection chan
     expect(hook.result.current?.data).toBeUndefined();
     expect(hook.result.current?.isPlaceholderData).toBe(false);
     await waitFor(() => { expect(calls).toBe(2); });
+  } finally {
+    hook.unmount();
+    queryClient.clear();
+  }
+});
+
+it("shares the latest station snapshot across panels and keeps it through camera and time changes", async () => {
+  const call = vi.fn<Transport["call"]>(() => Promise.resolve(surface));
+  const client = new BackendClient({ call, listen: () => Promise.resolve(() => undefined) });
+  const queryClient = createQueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
+  );
+  const hook = renderHook(({ time, visible }) => [
+    useSurfaceLayer(false, time, visible),
+    useSurfaceLayer(false, time, visible),
+  ], { wrapper, initialProps: { time: "2026-10-04T21:00:00Z", visible: false } });
+  try {
+    expect(call).not.toHaveBeenCalled();
+    hook.rerender({ time: "2026-10-04T21:00:00Z", visible: true });
+    await waitFor(() => { expect(hook.result.current.every((query) => query.isSuccess)).toBe(true); });
+    const snapshot = hook.result.current[0]?.data;
+    act(() => { useMapStore.getState().setCameraSnapshot({ center: [151.2, -33.9], zoom: 7 }); });
+    hook.rerender({ time: "2026-10-05T03:00:00Z", visible: true });
+    expect(hook.result.current.every((query) => query.data === snapshot)).toBe(true);
+    expect(call.mock.calls).toEqual([["get_latest_surface_plots", undefined]]);
   } finally {
     hook.unmount();
     queryClient.clear();

@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 import type { SoundingProgress } from "../../types/soundings";
 import styles from "./Sounding.module.css";
 
-const STAGES: Record<SoundingProgress["stage"], readonly [string, string]> = {
-  waiting: ["Waiting for data", "Locating the requested run and forecast hour. Cached model data is reused when available."],
-  downloading: ["Downloading model data", "Receiving weather data from the provider. Downloads can take a minute or more."],
+const STAGES: Record<SoundingProgress["stage"], readonly [phase: string, detail?: string]> = {
+  waiting: ["Waiting for data"],
+  downloading: ["Downloading model data"],
   decoding: ["Decoding model data", "Reading the downloaded or cached data and extracting the vertical profile."],
   calculating: ["Calculating sounding", "Computing parcels, winds and derived sounding parameters."],
   processing: ["Preparing sounding", "Preparing the extracted profile for calculation."],
@@ -24,7 +24,7 @@ export function DownloadStatus({ label, progress }: { label: string; progress: S
     <div className={styles.busy} role="status">
       <div key={progress?.stage ?? "waiting"} className={styles.busyPhase} data-motion="fade">
         <strong>{phase} · {label}</strong>
-        <span>{detail}</span>
+        {detail === undefined ? null : <span>{detail}</span>}
       </div>
       {received > 0 ? <span className={styles.transfer} aria-live="off">
         <span>{transferSize(received)} received</span>

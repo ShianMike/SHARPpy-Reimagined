@@ -111,6 +111,7 @@ pub(crate) fn validate_sounding_view<'py>(
             "timeIndex",
             "mode",
             "animationRange",
+            "measureWind",
         ],
     )?;
     let view = PyDict::new(py);
@@ -142,6 +143,25 @@ pub(crate) fn validate_sounding_view<'py>(
             None => 0,
         },
     )?;
+    let measure_wind = if let Some(value) = input.get_item("measureWind")? {
+        value
+            .cast::<PyBool>()
+            .map_err(|_| invalid(py, "measureWind must be a boolean"))?
+            .is_true()
+    } else {
+        false
+    };
+    if measure_wind {
+        if input.contains("animationRange")?
+            || input.get_item("drag")?.is_some_and(|drag| !drag.is_none())
+        {
+            return Err(invalid(
+                py,
+                "measureWind cannot be combined with drag or animationRange",
+            ));
+        }
+        view.set_item("measureWind", true)?;
+    }
     if let Some(value) = input.get_item("animationRange")? {
         number(&value, "animationRange", 40.0, 500.0)?;
         view.set_item("animationRange", value)?;

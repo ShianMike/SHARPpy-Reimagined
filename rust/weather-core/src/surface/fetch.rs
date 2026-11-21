@@ -4,7 +4,7 @@ use super::{
 };
 use reqwest::{Client, Url};
 use serde_json::Value;
-use std::{collections::HashSet, future::Future, time::Duration};
+use std::{collections::HashSet, future::Future, sync::OnceLock, time::Duration};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tokio::task::JoinSet;
 
@@ -51,12 +51,21 @@ impl Default for SurfaceClient {
     }
 }
 
+impl SurfaceClient {
+    pub(super) fn shared() -> &'static Self {
+        static CLIENT: OnceLock<SurfaceClient> = OnceLock::new();
+        CLIENT.get_or_init(Self::default)
+    }
+
+    pub(super) fn http(&self) -> Result<&Client, String> {
+        self.client.as_ref().map_err(Clone::clone)
+    }
+}
+
 impl JsonSource for SurfaceClient {
     async fn get_json(&self, url: &str, timeout: Duration) -> Result<Value, String> {
         let response = self
-            .client
-            .as_ref()
-            .map_err(Clone::clone)?
+            .http()?
             .get(url)
             .header(reqwest::header::ACCEPT, "application/geo+json")
             .timeout(timeout)

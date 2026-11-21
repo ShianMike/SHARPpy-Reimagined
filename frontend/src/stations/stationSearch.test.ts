@@ -49,6 +49,17 @@ describe("searchStations edge cases", () => {
     expect(ids("a", 3)).toHaveLength(3);
   });
 
+  it("returns the current station records when the catalogue refreshes", () => {
+    const station = stations[0];
+    if (station === undefined) throw new Error("Missing station");
+    const prior = { ...station, name: "Old station name" };
+    const current = { ...prior, name: "Straße", availability: "listed" as const };
+    expect(searchStations([prior], "Old")).toEqual([prior]);
+    const refreshed = [current];
+    expect(searchStations(refreshed, "Old")).toEqual([]);
+    expect(searchStations(refreshed, "STRASSE")[0]).toBe(current);
+  });
+
   it("trims with Python's whitespace set, not trim()", () => {
     expect(pythonStrip("\u001c72357\u001f")).toBe("72357");
     expect(pythonStrip("\u008572357")).toBe("72357");

@@ -100,7 +100,7 @@ class _RectSuppressingPainter:
 
 
 def _install_skewt_lapse_rate_label_placement():
-    """Use the Rust painter's fixed minus-30-degree display anchor."""
+    """Use the Rust painter's fixed lapse-rate display anchor."""
     import sharppy.viz.skew as _skew
     from sharpmod_rs import draw_fixed_lapse_layer
 

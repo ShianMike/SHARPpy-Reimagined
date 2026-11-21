@@ -151,7 +151,7 @@ function lonLat(value: unknown, path: string): readonly [number, number] {
   ];
 }
 
-function parseArea(value: unknown, path: string): OutlookArea {
+export function parseOutlookArea(value: unknown, path: string): OutlookArea {
   const obj = expectObject(value, path);
   expectExactKeys(obj, path, ["label", "description", "fill", "stroke", "rank", "hatch", "hatchLevel", "rings"]);
   return {
@@ -185,7 +185,7 @@ function parseOutlook(value: unknown, path: string): Outlook {
       affectedStates: expectArray(obj.affectedStates, at(path, "affectedStates"), (state, p) =>
         expectString(state, p, { minLength: 1, maxLength: 32 })),
     }),
-    areas: expectArray(obj.areas, at(path, "areas"), parseArea),
+    areas: expectArray(obj.areas, at(path, "areas"), parseOutlookArea),
   };
 }
 

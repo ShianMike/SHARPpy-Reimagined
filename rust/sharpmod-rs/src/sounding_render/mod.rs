@@ -1,11 +1,12 @@
-//! Sounding PNG cache transactions through the existing cache and Qt worker.
+//! Sounding views and PNG cache transactions through the existing Qt worker.
 mod files;
 use files::{Image, ReadError, Staged};
 use pyo3::{
     prelude::*,
-    types::{PyDict, PyTuple},
+    types::{PyDict, PyList, PyTuple},
 };
 use std::{
+    collections::HashSet,
     fs, io,
     path::{Path, PathBuf},
 };
@@ -128,13 +129,13 @@ impl<'py> Request<'py> {
         })
     }
 
-    fn render(
+    fn render_in_worker(
         &self,
         py: Python<'py>,
         staged: &Staged,
         view: Option<&Bound<'py, PyDict>>,
-        limit: usize,
-    ) -> PyResult<(Image, Bound<'py, PyAny>)> {
+        mode: &str,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let kwargs = PyDict::new(py);
         kwargs.set_item("color_style", &self.style)?;
         if let Some(view) = view {
@@ -142,11 +143,21 @@ impl<'py> Request<'py> {
         }
         let client =
             PyModule::import(py, "sharpmod.bridge.render_client")?.call_method0("client")?;
-        let metadata = client.call_method(
+        client.call_method(
             "render",
-            (&self.source, &staged.image, &self.parcel, &self.mode),
+            (&self.source, &staged.image, &self.parcel, mode),
             Some(&kwargs),
-        )?;
+        )
+    }
+
+    fn render(
+        &self,
+        py: Python<'py>,
+        staged: &Staged,
+        view: Option<&Bound<'py, PyDict>>,
+        limit: usize,
+    ) -> PyResult<(Image, Bound<'py, PyAny>)> {
+        let metadata = self.render_in_worker(py, staged, view, &self.mode)?;
         Ok((
             py.detach(|| Image::read(&staged.image, limit))
                 .map_err(|error| read_error(py, error))?,
@@ -220,7 +231,7 @@ fn render_sounding_png<'py>(
     Ok(result)
 }
 
-fn forget_aliases(renders: &Bound<'_, PyAny>, path: &Path) -> PyResult<()> {
+fn image_keys<'py>(renders: &Bound<'py, PyAny>, path: &Path) -> PyResult<Vec<Bound<'py, PyAny>>> {
     let mut keys = Vec::new();
     for item in renders.call_method0("items")?.try_iter()? {
         let item = item?;
@@ -228,41 +239,70 @@ fn forget_aliases(renders: &Bound<'_, PyAny>, path: &Path) -> PyResult<()> {
             keys.push(item.get_item(0)?);
         }
     }
-    for key in keys {
+    Ok(keys)
+}
+
+fn prune(renders: &Bound<'_, PyAny>, max_images: usize) -> PyResult<()> {
+    let py = renders.py();
+    let mut kept = HashSet::new();
+    let mut evicted = HashSet::new();
+    let mut expired = Vec::new();
+    let mut aliases_left = max_images - 1;
+    // The newest key for each file is its resolved view. Extra request keys
+    // have their own budget so they can never displace a resolved view.
+    let items = renders
+        .call_method0("items")?
+        .call_method0("__reversed__")?;
+    for item in items.try_iter()? {
+        let item = item?;
+        let path: PathBuf = item.get_item(1)?.get_item(0)?.extract()?;
+        if kept.contains(&path) {
+            if aliases_left > 0 {
+                aliases_left -= 1;
+                continue;
+            }
+        } else if kept.len() < max_images {
+            kept.insert(path);
+            continue;
+        } else {
+            evicted.insert(path);
+        }
+        expired.push(item.get_item(0)?);
+    }
+    for key in expired {
         renders.del_item(key)?;
+    }
+    for path in evicted {
+        if let Err(error) = remove_file(py, &path) {
+            PyModule::import(py, "logging")?
+                .call_method1("getLogger", ("sharpmod.bridge",))?
+                .call_method1(
+                    "warning",
+                    (
+                        "could not remove cached sounding image %s",
+                        error.to_string(),
+                    ),
+                )?;
+        }
     }
     Ok(())
 }
 
-fn prune(renders: &Bound<'_, PyAny>, max_cached: usize) -> PyResult<()> {
-    let py = renders.py();
-    let kwargs = PyDict::new(py);
-    kwargs.set_item("last", false)?;
-    while renders.len()? > max_cached {
-        let popped = renders.call_method("popitem", (), Some(&kwargs))?;
-        let path = popped.get_item(1)?.get_item(0)?.extract::<PathBuf>()?;
-        let mut referenced = false;
-        for cached in renders.call_method0("values")?.try_iter()? {
-            if cached?.get_item(0)?.extract::<PathBuf>()? == path {
-                referenced = true;
-                break;
-            }
+fn maximum_visible_wind(metadata: &Bound<'_, PyAny>) -> PyResult<f64> {
+    let levels = metadata
+        .get_item("inspection")?
+        .get_item("levels")?
+        .cast_into::<PyList>()?;
+    let mut maximum: f64 = 0.0;
+    for level in levels {
+        if level.get_item("hodograph")?.is_none() {
+            continue;
         }
-        if !referenced {
-            if let Err(error) = remove_file(py, &path) {
-                PyModule::import(py, "logging")?
-                    .call_method1("getLogger", ("sharpmod.bridge",))?
-                    .call_method1(
-                        "warning",
-                        (
-                            "could not remove cached sounding image %s",
-                            error.to_string(),
-                        ),
-                    )?;
-            }
+        if let Some(speed) = level.get_item("windSpeed")?.extract::<Option<f64>>()? {
+            maximum = maximum.max(speed);
         }
     }
-    Ok(())
+    Ok(maximum)
 }
 
 #[pyfunction]
@@ -288,6 +328,16 @@ fn render_sounding_view<'py>(
                 .call_method1("invalid", ("timeIndex is outside this sounding's times",))?,
         ));
     }
+    if view.contains("measureWind")? {
+        return locked(&request.entry, || {
+            // Use the same fresh configuration directory as an HD image render.
+            let staged = py.detach(|| Staged::new(&request.root))?;
+            let metadata = request.render_in_worker(py, &staged, Some(&view), "hd")?;
+            let result = PyDict::new(py);
+            result.set_item("maximumWindKt", maximum_visible_wind(&metadata)?)?;
+            Ok(result)
+        });
+    }
     let limit = max_bytes.min(MAX_IMAGE_BYTES);
     let api = PyModule::import(py, "sharpmod.bridge.sounding_view")?;
     let key: String = api
@@ -302,10 +352,17 @@ fn render_sounding_view<'py>(
         if !cached.is_none() {
             let output: PathBuf = cached.get_item(0)?.extract()?;
             if let Some(image) = cached_image(py, &output, limit)? {
+                let keys = image_keys(&renders, &output)?;
+                let resolved = keys.last().expect("cache hit is indexed");
                 renders.call_method1("move_to_end", (&key,))?;
+                if !resolved.eq(&key)? {
+                    renders.call_method1("move_to_end", (resolved,))?;
+                }
                 return Ok((image, cached.get_item(1)?));
             }
-            forget_aliases(&renders, &output)?;
+            for key in image_keys(&renders, &output)? {
+                renders.del_item(key)?;
+            }
         }
         let staged = py.detach(|| Staged::new(&request.root))?;
         let (image, metadata) = request.render(py, &staged, Some(&view), limit)?;
@@ -322,8 +379,10 @@ fn render_sounding_view<'py>(
             .extract()?;
         let output = request.output(&format!("{}-{resolved_key}", request.parcel))?;
         publish(py, &staged, &output)?;
-        renders.set_item(&key, (&output, &metadata))?;
-        renders.call_method1("move_to_end", (&key,))?;
+        if key != resolved_key {
+            renders.set_item(&key, (&output, &metadata))?;
+            renders.call_method1("move_to_end", (&key,))?;
+        }
         renders.set_item(&resolved_key, (&output, &metadata))?;
         renders.call_method1("move_to_end", (&resolved_key,))?;
         prune(&renders, max_cached.max(1))?;

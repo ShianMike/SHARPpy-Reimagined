@@ -27,19 +27,22 @@ function FieldValue({ panel, point, active }: { panel: number; point: MapPoint; 
   if (field.blocked !== null || field.product === null) {
     return null;
   }
+  const panelNumber = panel + 1;
+  const valueId = `point-value-${String(panelNumber)}`;
   const value = frame === undefined || field.frame.isError ? null : sampleAt(frame, point.longitude, point.latitude);
   const note = value === null ? "" : drawnRangeNote(value, field.product.palette);
   const unit = displayUnit(frame?.units ?? "", units, field.product.palette.display);
   return (
     <li>
-      <button type="button" className={styles.reading} aria-label={`Inspect panel ${String(panel + 1)}: ${field.product.label}`} aria-describedby={`point-value-${String(panel + 1)}`} aria-pressed={active}
-        aria-busy={frame === undefined && !field.frame.isError} onClick={() => { useMapStore.getState().setActivePanel(panel); }} title={`Use panel ${String(panel + 1)}`}>
-        <span className={cx(styles.panelNumber, "tabular")} aria-hidden="true">{panel + 1}</span>
-        <span className={styles.fieldName}><strong>{field.product.shortLabel}</strong><span>{field.product.label}</span></span>
-        <span id={`point-value-${String(panel + 1)}`} className={cx(styles.readingValue, "tabular")} data-state={field.frame.isError || frame === undefined || value === null ? "unavailable" : "ready"} data-testid={`point-value-${String(panel + 1)}`}>
+      <button type="button" className={styles.reading} aria-label={`Inspect panel ${String(panelNumber)}: ${field.product.label}`} aria-describedby={valueId} aria-pressed={active}
+        aria-busy={frame === undefined && !field.frame.isError} onClick={() => { useMapStore.getState().setActivePanel(panel); }} title={`Use panel ${String(panelNumber)}`}>
+        <span className={cx(styles.panelNumber, "tabular")} aria-hidden="true">{panelNumber}</span>
+        <strong className={styles.fieldName}>{field.product.shortLabel}</strong>
+        <span id={valueId} className={cx(styles.readingValue, "tabular")} data-state={value === null ? "unavailable" : "ready"} data-testid={valueId}>
           {field.frame.isError ? "Unavailable" : frame === undefined ? "Loading…" : value === null ? "No data" : formatValue(convertUnit(value, frame.units, unit, field.product.palette.display))}
-          {value === null ? null : <span className={styles.units}> {unit}</span>}
+          {value === null || unit === "" ? null : <span className={styles.units}> {unit}</span>}
         </span>
+        <span className={styles.fieldDescription}>{field.product.label}</span>
         {note === "" ? null : <span className={styles.rangeNote}>{note}</span>}
       </button>
     </li>
@@ -98,7 +101,7 @@ export function PointDetails({ point }: { point: MapPoint }): ReactNode {
   return (
     <>
       {emptyMessage !== null ? <p className={styles.readingsEmpty} role="status">{emptyMessage}</p> : <>
-        <div className={styles.readingsHeading}><h3>Panel readings</h3><span>Panel {String(activePanel + 1)} active</span></div>
+        <h3 className={styles.readingsHeading}>Panel readings</h3>
         <ul className={styles.readings} aria-label="Forecast panel readings">
           {Array.from({ length: layout }, (_, panel) => (
             <FieldValue key={panel} panel={panel} point={point} active={activePanel === panel} />

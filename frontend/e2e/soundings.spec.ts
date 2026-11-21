@@ -42,10 +42,22 @@ async function expectImageDrawn(stage: Locator): Promise<void> {
 
 /** The Observed form's Open sounding, then the viewer's image for the new sounding. */
 async function openObserved(page: Page): Promise<void> {
-  const button = page.getByTestId("open-observed");
+  const form = page.getByRole("form", { name: "Observed sounding", exact: true });
+  const button = form.getByTestId("open-observed");
   await expect(button).toBeEnabled();
+  await form.evaluate((element) => {
+    // The fixture can finish before the Playwright click returns.
+    const observer = new MutationObserver(() => {
+      const fetching = Array.from(element.querySelectorAll('[role="status"]'))
+        .find((status) => status.textContent.startsWith("Fetching "));
+      if (fetching === undefined) return;
+      element.setAttribute("data-observed-fetch-status", fetching.textContent);
+      observer.disconnect();
+    });
+    observer.observe(element, { subtree: true, childList: true, characterData: true });
+  });
   await button.click();
-  await expect(page.getByText(/^Fetching 72357 \d{4}-\d\d-\d\d (00|12)Z$/u)).toBeVisible();
+  await expect(form).toHaveAttribute("data-observed-fetch-status", /^Fetching 72357 \d{4}-\d\d-\d\d (00|12)Z$/u);
   await expectImageDrawn(page.getByTestId("sounding-viewer").getByTestId("sounding-stage"));
 }
 

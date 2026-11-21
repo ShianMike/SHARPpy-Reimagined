@@ -8,8 +8,8 @@ import { releaseTime, utcDate } from "./soundingTime";
 import styles from "./Sounding.module.css";
 import toolbar from "../toolbar/ForecastControls.module.css";
 
-export function SourceSelect<T extends string | number>({ label, value, options: inputOptions, onChange, disabled = false, compact = false, toolbarIcon: ToolbarIcon, popup, searchLabel }: {
-  label: string; value: T; options: readonly { value: T; label: string; shortLabel?: string; detail?: string | undefined; group?: string }[]; onChange: (value: T) => void; disabled?: boolean; compact?: boolean;
+export function SourceSelect<T extends string | number>({ label, value, options: inputOptions, onChange, disabled = false, compact = false, toolbarIcon: ToolbarIcon, popup, searchLabel, placeholder }: {
+  label: string; value: T; options: readonly { value: T; label: string; shortLabel?: string; detail?: string | undefined; group?: string }[]; onChange: (value: T) => void; disabled?: boolean; compact?: boolean; placeholder?: string;
   toolbarIcon?: LucideIcon; popup?: "list" | "grid"; searchLabel?: string;
 }): ReactNode {
   const id = useId();
@@ -25,7 +25,7 @@ export function SourceSelect<T extends string | number>({ label, value, options:
   const groups = [...new Set(offered.map((option) => option.group))];
   const options = groups.flatMap((group) => offered.filter((option) => option.group === group));
   const selected = Math.max(0, options.findIndex((option) => option.value === value));
-  const selectedLabel = inputOptions.find((option) => option.value === value)?.label ?? inputOptions[0]?.label ?? "Choose…";
+  const selectedLabel = inputOptions.find((option) => option.value === value)?.label ?? placeholder ?? inputOptions[0]?.label ?? "Choose…";
   const show = (): void => { setQuery(""); setFocused(selected); search.current.text = ""; setOpen(true); };
   const choose = (next: T): void => { onChange(next); setOpen(false); anchor?.focus(); };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {

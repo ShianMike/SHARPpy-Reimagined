@@ -1,5 +1,6 @@
 //! Cache retention decisions, with filesystem mutation kept by its cache owner.
 
+use crate::cache_entries::maintenance_rows;
 use pyo3::{
     exceptions::PyKeyError,
     prelude::*,
@@ -64,7 +65,7 @@ fn prune_model_cache<'py>(
     cache: &Bound<'py, PyAny>,
     cutoff: f64,
 ) -> PyResult<Bound<'py, PyList>> {
-    let raw = cache.call_method0("_entries")?.cast_into::<PyList>()?;
+    let raw = maintenance_rows(cache)?;
     let mut entries = Vec::with_capacity(raw.len());
     let mut paths = Vec::with_capacity(raw.len());
     for item in raw.iter() {

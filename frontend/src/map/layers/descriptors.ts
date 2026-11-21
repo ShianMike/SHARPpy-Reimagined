@@ -2,7 +2,7 @@
 // a descriptor here and its module; WeatherMap.tsx does not change. The weather
 // layers stack in the user's order (mapStore.layerOrder).
 
-import { applyBasemapState, applyRoadNetworkState } from "../basemap/basemapLayers";
+import { applyBasemapState, applyRiverState, applyRoadNetworkState } from "../basemap/basemapLayers";
 import { buildBoundaryLayers, buildDomainLayers, buildPlaceLabels } from "./geographyLayers";
 import { buildFieldLayers, buildRadarLayers, buildSatelliteLayers } from "./rasterLayers";
 import { LAYER_DEFAULTS, type LayerDescriptor } from "./registry";
@@ -11,6 +11,7 @@ import { buildOutlookLayers } from "./SPCOutlookLayer";
 import { buildReportLayers } from "./StormReportLayer";
 import { buildAlertLayers } from "./WeatherAlertLayer";
 import { buildSurfacePlotLayers } from "./SurfacePlotLayer";
+import { buildSpotterLayers } from "./SpotterLayer";
 import { buildRadarSiteLabels, buildStationLabels, buildStationMarkers } from "./StationLayer";
 import { buildIsobarLayers } from "./IsobarLayer";
 import { OUTLOOK_NAMES, type OutlookKey } from "../../types/map";
@@ -49,6 +50,16 @@ export const LAYER_REGISTRY: readonly LayerDescriptor[] = [
     opacityControl: false,
     defaults: LAYER_DEFAULTS.roads,
     apply: applyRoadNetworkState,
+  },
+  {
+    id: "rivers",
+    label: "Rivers",
+    kind: "maplibre-style",
+    zOrder: 2,
+    userControllable: true,
+    opacityControl: false,
+    defaults: LAYER_DEFAULTS.rivers,
+    apply: applyRiverState,
   },
   {
     id: "model-field",
@@ -119,6 +130,16 @@ export const LAYER_REGISTRY: readonly LayerDescriptor[] = [
     opacityControl: true,
     defaults: LAYER_DEFAULTS["surface-plots"],
     build: buildSurfacePlotLayers,
+  },
+  {
+    id: "spotter-network",
+    label: "Spotter Network",
+    kind: "deck",
+    zOrder: 22,
+    userControllable: true,
+    opacityControl: true,
+    defaults: LAYER_DEFAULTS["spotter-network"],
+    build: buildSpotterLayers,
   },
   {
     id: "boundaries",

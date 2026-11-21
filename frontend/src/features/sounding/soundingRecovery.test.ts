@@ -126,7 +126,7 @@ it("does not revive explicitly closed soundings", async () => {
   fresh.stop();
 });
 
-it("discards a previous session without closing current open work", async () => {
+it("keeps the previous session available until discarding it is saved", async () => {
   const disk = storage(), client = backend();
   const saved = captureRecoverySession({ ...useSoundingStore.getState(), open: [summary], activeId: summary.soundingId });
   await disk.repository.save(saved, [await client.getSoundingSnapshot(summary.soundingId)]);
@@ -134,8 +134,12 @@ it("discards a previous session without closing current open work", async () => 
   await service.start();
   useSoundingStore.getState().add({ ...summary, soundingId: "current" });
   await service.flush();
+  vi.mocked(disk.repository.save).mockRejectedValueOnce(new Error("Storage unavailable"));
   await useSoundingRecoveryStore.getState().discard();
-  await service.flush();
+  expect(useSoundingRecoveryStore.getState()).toMatchObject({ status: "error", prompt: true, previous: saved });
+  expect(disk.previous()).toEqual(saved);
+  await useSoundingRecoveryStore.getState().discard();
+  expect(useSoundingRecoveryStore.getState()).toMatchObject({ prompt: false, previous: null });
   expect(disk.previous()).toBeNull();
   expect(disk.current()?.open.map(item => item.soundingId)).toEqual(["current"]);
   expect(useSoundingStore.getState().activeId).toBe("current");

@@ -57,10 +57,7 @@ beforeEach(() => {
   useAppStore.setState(appInitial, true);
   useSoundingStore.setState(soundingInitial, true);
 });
-
-afterEach(() => {
-  cleanup();
-});
+afterEach(cleanup);
 
 describe("SoundingWorkspace", () => {
   it("selects the last of all 49 file times using the keyboard and requests that profile", async () => {
@@ -78,6 +75,9 @@ describe("SoundingWorkspace", () => {
     await userEvent.keyboard("{End}{Enter}");
     await waitFor(() => { expect(transport.calls.some((call) => call.command === "render_sounding_view" && (call.args as { view?: ViewRequest }).view?.timeIndex === 48)).toBe(true); });
     expect(screen.getByTestId("sounding-viewer").getAttribute("aria-description")).toContain("time 49 of 49");
+    await userEvent.click(screen.getByRole("button", { name: "Show sounding sources" }));
+    const list = within(screen.getByTestId("open-soundings"));
+    expect(list.getByText("06-27 06Z").getAttribute("datetime")).toBe("2026-06-27T06:00:00Z");
   });
 
   it("edits a level, undoes and redoes it, and retains it across navigation", async () => {

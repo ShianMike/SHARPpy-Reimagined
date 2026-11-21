@@ -7,6 +7,125 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Target version: **3.9.0** (not published).
+
+### Added
+
+- Add a Spotter Network layer to local Live Tracking. Show positions updated
+  in the last 10 minutes and distinguish chase-cam affiliates. Share one
+  refresh across panels and pause it while viewing past radar frames.
+  Show the public display name, last position time, and reported movement
+  when inspecting a marker. Click or tap a marker to hold its card open.
+- Restore Surface observations in Model Viewer. Load a shared, cached worldwide
+  METAR snapshot, keep a marker for every reporting station during pan and zoom,
+  and show station plots at closer scales. Show the reporting station count and
+  the observation snapshot time in Layers.
+- Draw, edit, and remove custom categorical, tornado, hail, and wind outlook
+  areas on the forecast map. Use the Move area tool to drag an entire contour,
+  or add and move vertices to reshape it. Round corners through edits and exports.
+  Keep the draft stroke connected through the last vertex and prevent stray
+  triangles as the outline updates.
+  Generate surrounding lower-risk contours that can be selected and adjusted
+  directly on the map or from the risk picker, with fewer edit handles and
+  less overlap at wider zooms. Pick an outlook type and risk level, then start
+  drawing directly from the picker. Match risk swatches to their map colors,
+  preview conditional-intensity hatch patterns, and highlight the selected
+  risk. Drag the picker by its header and keep it open while using the map.
+  Switch to Outlines only to view and export risk boundaries without obscuring
+  the map. Open Areas to manage existing contours. Open Copy outline to choose
+  any saved Marginal through High contour, then select tornado, hail, or wind
+  and click a probability to apply it. Reuse the copied outline from any
+  hazard tab during the same session.
+  Use about two miles between automatic risk contours. Adjusted lower
+  contours bend where needed to keep that clearance around higher risks.
+  Keep conditional-intensity hatching inside the matching probability area.
+  Undo and redo draft edits with Ctrl+Z, Ctrl+Y, or the controls beside the
+  drawing progress above playback. Save authored areas on the device. Hide
+  station markers, station labels, and the previous map selection while
+  drawing and exporting. Export any visible outlook to PNG from its risk tab.
+  Add the author or team and outlook day before exporting. Use consistent
+  typography for outlook details, the unofficial forecast notice, and map credits.
+- Add a Rivers switch under Layers → Map → Map details. Toggle river lines,
+  waterway labels, and wide river fills independently of lakes and oceans.
+  Save the setting per map panel.
+
+### Changed
+
+- Use compact frosted-glass rows in the forecast point inspector with values
+  and units together, more space for descriptions, and a clear active panel.
+- Combine the Layers categories and panel selector into a compact toolbar
+  that wraps when the popup is narrow.
+- Use compact icon buttons with hover and keyboard labels for outlook products
+  in the SPC briefing. Remove the tagline from the Overview header.
+- Simplify the sounding recovery dialog with aligned UTC times, a quieter
+  last-viewed marker, and clearer restore and discard actions. Close it after
+  a discard is saved so a quick refresh cannot bring back the discarded copy.
+  Show the autosave state on one line in the sounding sidebar.
+- Use compact rows in Open soundings with aligned forecast hours and valid
+  times, a slim active marker, and consistent close targets.
+- Shorten the waiting and download messages for model soundings to the current
+  stage and model, with transfer figures when available.
+- Set the Skew-T lapse-rate bracket to −25 °C and the effective inflow
+  bracket to −15 °C, with the height and helicity tags centered above it.
+  Lift the brown lapse-rate tiers to readable amber on dark plots and add
+  a bolder value and bracket for clearer reading over the grid.
+  Use 70% of the original opacity for the focused sounding's temperature
+  and dewpoint strokes.
+
+### Fixed
+
+- Share concurrent revision probes for the same model GRIB file across fields.
+  Keep revision checks for later loads and preserve independent cancellation.
+- Reuse palette lookups for model shading samples in the same color band and
+  wrap texture coordinates only across the date line.
+- Keep in-flight forecast preloads when playback advances and the same hours
+  are still in the look-ahead window. Release loads that fall outside it or
+  belong to a previous model, run, or panel configuration.
+- Update only the affected forecast-hour cache row, and skip the cache
+  watcher when the picker is closed and there is no download status to report.
+- Keep the displayed map layers when only the forecast capture time or
+  readiness changes. Refresh label layout when its inputs change.
+- Reuse storm-report captions during playback while the flat map view stays
+  still. Reposition captions as the camera moves, and reduce work when
+  checking nearby map labels for overlap.
+- Remove selected forecast frames directly when the memory cache fills.
+  Keep the existing cache budget and retain frames still in use.
+- Keep recently edited sounding images in the render cache. Reopening a
+  view after a few edits can reuse its saved PNG.
+- Use wind measurements to choose the shared animation axis and reserve PNG
+  encoding for the playback frames. Keep the same clipping and edited winds.
+- Keep the previous sounding session in place when recovery is deferred.
+  Saving the current session updates its checkpoint and retains the deferred copy.
+- Reuse radar projection grids when switching between sites or scan geometries
+  that fit within the existing memory limit. Decode high-precision radar readings
+  directly into the gate grid.
+- Reuse normalized station names and IDs while searching the same catalog.
+- Decode WebP animation frames directly into byte buffers and assemble the
+  lossless export without intermediate frame copies.
+- Skip model payload reads when calculating Storage totals and pruning cached
+  files. Validate payloads when opening them or reporting forecast readiness.
+- Keep generated benchmark and verification artifacts out of the frontend lint scan.
+- Keep the map runtime and backend client within the frontend file size limit.
+  Move forecast download fixtures into test support and make browser checks
+  for sounding fetch and station catalog loading deterministic.
+- Resample global and regional model fields from their native values before
+  map shading to reduce repeated grid blocks. Wrap global grids at the
+  antimeridian and preserve the model coverage and missing cells.
+  Keep previously cached frames available when their source data cannot be reloaded.
+- Load sounding animation hours by the original model ID and run, including
+  GDPS, RDPS, and models with different names in the picker. Preselect the last
+  two hours when opening animation from the final forecast hour.
+- Blend overlapping drawn risk fills in severity order so the globe shows the
+  full area inside each outline.
+- Keep valid Spotter Network positions visible when the provider sends
+  malformed text. Omit names that cannot be decoded.
+- Keep native model-field cache reservations compatible with Rust 1.88 and
+  stable Clippy. Update the native forecast tests to avoid a needless clone
+  and verify cancellation with a held response.
+- Account for tiny grayscale raster differences seen in repeated uncached Qt
+  renders when checking sounding PNG parity. Keep exact checks for colored
+  pixels, transparency, dimensions, and sounding metadata.
+
 ## [v3.8.6] - 2026-11-19
 
 ### Fixed

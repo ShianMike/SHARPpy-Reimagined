@@ -83,7 +83,7 @@ export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, tar
           hoverFromPick(info, target.panel, target.container.getBoundingClientRect());
         }
       }),
-      onClick: live((info) => { clickFromPick(info, target.panel); }),
+      onClick: live((info) => { clickFromPick(info, target.panel, target.container.getBoundingClientRect()); }),
       onAfterRender: live(() => {
         target.overlayReady = true;
         target.watch.afterRender();
@@ -102,7 +102,7 @@ export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, tar
     const onOverlayRender = (listener: () => void): (() => void) => { captures.add(listener); return () => { captures.delete(listener); }; };
     registerMapCapture(target.panel, map, overlay,
       (request) => target.scene?.matchesField(request) === true,
-      onOverlayRender);
+      onOverlayRender, () => target.overlayReady && map.isStyleLoaded() === true);
     registerSoundingLocatorMap(target.panel, map, (signal, resolution) => captureMapFrame(map, overlay,
       () => target.overlayReady && target.scene?.readyForCapture() === true
         && !panelLayers(useMapStore.getState(), target.panel)["model-field"].visible,
@@ -121,12 +121,14 @@ export function wireOverlayEvents(map: MapLibreMap, overlay: MapLibreOverlay, ta
     x: event.point.x, y: event.point.y,
     coordinate: [event.lngLat.lng, event.lngLat.lat],
   }) as PickingInfo;
-  const clear = (): void => {
+  const clear = (keepPinnedSpotter = false): void => {
     if (frame !== null) cancelAnimationFrame(frame);
     frame = null;
     pending = null;
-    useHoverStore.getState().clear();
+    useHoverStore.getState().clear(keepPinnedSpotter);
   };
+  const leave = (): void => { clear(true); };
+  const moveStart = (): void => { clear(); };
   const move = target.live((event: MapMouseEvent) => {
     if (target.dragging || map.isMoving() || !useHoverStore.getState().inspecting
       || (useMapStore.getState().view === "map" && useBoxSoundingStore.getState().mode === "box")) return;
@@ -140,16 +142,18 @@ export function wireOverlayEvents(map: MapLibreMap, overlay: MapLibreOverlay, ta
       hoverFromPick(pick(latest), target.panel, target.container.getBoundingClientRect());
     }));
   });
-  const click = target.live((event: MapMouseEvent) => { clickFromPick(pick(event), target.panel); });
+  const click = target.live((event: MapMouseEvent) => {
+    clickFromPick(pick(event), target.panel, target.container.getBoundingClientRect());
+  });
   map.on("mousemove", move);
-  map.on("mouseout", clear);
-  map.on("movestart", clear);
+  map.on("mouseout", leave);
+  map.on("movestart", moveStart);
   map.on("click", click);
   return () => {
     clear();
     map.off("mousemove", move);
-    map.off("mouseout", clear);
-    map.off("movestart", clear);
+    map.off("mouseout", leave);
+    map.off("movestart", moveStart);
     map.off("click", click);
   };
 }

@@ -1,6 +1,6 @@
 // Forecast fields are immutable; timed live frames use their own session cache keys.
 
-import { useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { notifyManager, useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useBackendClient } from "../lib/backend/BackendProvider";
 import type { RadarTilt } from "../types/map";
 import type { BackendClient } from "../lib/backend/client";
@@ -41,8 +41,8 @@ export function trimFieldCache(queryClient: QueryClient, budgetBytes: number, in
   const bytes = (frame: FieldFrame | ContourLines) => "cells" in frame ? 5 * frame.cells.byteLength
     : (frame.wind?.data.byteLength ?? 0) + frame.segments.length * 192 + (frame.labels?.length ?? 0) * 128
       + (frame.paths?.reduce((sum, path) => sum + 64 + path.length * 64, 0) ?? 0);
-  const queries = queryClient
-    .getQueryCache()
+  const cache = queryClient.getQueryCache();
+  const queries = cache
     .findAll()
     .filter((query) => (query.queryKey[0] === "fields" || query.queryKey[0] === "contours") && query.state.data !== undefined)
     .sort((a, b) => a.state.dataUpdatedAt - b.state.dataUpdatedAt);
@@ -55,7 +55,7 @@ export function trimFieldCache(queryClient: QueryClient, budgetBytes: number, in
     }
     if (query.getObserversCount() === 0) {
       total -= bytes(query.state.data as FieldFrame | ContourLines);
-      queryClient.removeQueries({ queryKey: query.queryKey, exact: true });
+      notifyManager.batch(() => { cache.remove(query); });
     }
   }
 }
@@ -263,11 +263,11 @@ export function usePlaceLabels(enabled: boolean): UseQueryResult<PlaceLabels> {
   });
 }
 
-export function useStationAvailability(observationTime: string | null): UseQueryResult<AvailabilityReport> {
+export function useStationAvailability(observationTime: string | null, enabled = true): UseQueryResult<AvailabilityReport> {
   const client = useBackendClient();
   const date = useSoundingStore((state) => state.observed.date);
   const hour = useSoundingStore((state) => state.observed.hour);
-  const time = observationTime ?? releaseTime(date, hour);
+  const time = enabled ? observationTime ?? releaseTime(date, hour) : null;
   return useQuery({
     ...BASE_QUERY_OPTIONS,
     queryKey: mapKeys.availability(time ?? ""),

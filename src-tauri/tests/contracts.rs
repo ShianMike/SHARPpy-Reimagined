@@ -700,6 +700,55 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
 }
 
 #[test]
+fn latest_surface_plots_allow_bulk_counts_and_actual_offsets() {
+    use sharppy_reimagined_lib::dto::surface::{SurfacePlots, MAX_LATEST_PLOTS, MAX_PLOTS};
+    let mut data: SurfacePlots = typed("bridge/map/surface.result.json");
+    let mut plot = data.plots.remove(0);
+    plot.offset_min = Some(-92.1);
+    plot.stale = true;
+    data.plots = vec![plot.clone()];
+    data.counts.matched = 1;
+    data.counts.stale = 1;
+    data.counts.failed = 0;
+    data.counts.no_observation = 0;
+    data.counts.nearby = 1;
+    data.counts.queried = 1;
+    assert!(data.validate().is_err());
+    data.validate_latest().unwrap();
+    data.plots[0].offset_min = Some(f64::INFINITY);
+    assert!(data.validate_latest().is_err());
+    data.plots[0].offset_min = Some(-1440.0);
+    data.validate_latest().unwrap();
+    data.plots[0].offset_min = Some(-1440.1);
+    assert!(data.validate_latest().is_err());
+    data.plots[0].offset_min = None;
+    assert!(data.validate_latest().is_err());
+
+    plot.offset_min = Some(-45.0);
+    data.plots = (0..MAX_LATEST_PLOTS)
+        .map(|index| {
+            let mut plot = plot.clone();
+            plot.id = format!("TEST{index}");
+            plot
+        })
+        .collect();
+    data.counts.matched = MAX_LATEST_PLOTS as u32;
+    data.counts.stale = data.counts.matched;
+    data.counts.nearby = data.counts.matched;
+    data.counts.queried = data.counts.matched;
+    data.validate_latest().unwrap();
+    assert_eq!(data.validate(), Err("too many station plots".into()));
+    data.plots.push(plot);
+    assert_eq!(data.validate_latest(), Err("too many station plots".into()));
+    data.plots.truncate(MAX_PLOTS);
+    data.counts.matched = MAX_PLOTS as u32;
+    data.counts.stale = data.counts.matched;
+    data.counts.nearby = data.counts.matched;
+    data.counts.queried = data.counts.matched;
+    data.validate().unwrap();
+}
+
+#[test]
 fn every_public_fixture_round_trips_into_its_type() {
     let mut checked = 0;
     for name in files("public") {

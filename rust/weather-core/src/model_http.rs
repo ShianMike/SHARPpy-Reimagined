@@ -15,7 +15,7 @@ pub struct ModelResponse {
     pub identity: Option<ObjectIdentity>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     Cancelled,
     Offline(String),

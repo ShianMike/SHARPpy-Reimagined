@@ -1,5 +1,28 @@
-//! Fixed display anchors; science values remain owned by the profile.
+//! Skew-T drawing helpers. Science values remain owned by the profile.
 use pyo3::{prelude::*, types::PyModule};
+
+#[pyfunction]
+fn set_skewt_trace_opacity(
+    widget: &Bound<'_, PyAny>,
+    data: &Bound<'_, PyAny>,
+    pressure: &Bound<'_, PyAny>,
+    painter: &Bound<'_, PyAny>,
+) -> PyResult<()> {
+    // Comparison traces supply their own pressure array.
+    if pressure.is_none()
+        && ["tmpc", "dwpc"]
+            .into_iter()
+            .any(|field| widget.getattr(field).is_ok_and(|trace| trace.is(data)))
+    {
+        let pen = painter.call_method0("pen")?;
+        let color = pen.call_method0("color")?;
+        let alpha: f64 = color.call_method0("alphaF")?.extract()?;
+        color.call_method1("setAlphaF", (alpha * 0.70,))?;
+        pen.call_method1("setColor", (color,))?;
+        painter.call_method1("setPen", (pen,))?;
+    }
+    Ok(())
+}
 
 pub(crate) fn temperature_column(
     widget: &Bound<'_, PyAny>,
@@ -11,6 +34,21 @@ pub(crate) fn temperature_column(
         .call_method1("tmpc_to_pix", (temperature, widget.getattr("pmax")?))?
         .extract()?;
     Ok(origin + offset / scale)
+}
+
+#[pyfunction]
+fn effective_inflow_tag_columns(
+    bracket_x: f64,
+    height_width: f64,
+    helicity_width: f64,
+    gap: f64,
+    left_limit: f64,
+    right_limit: f64,
+) -> (f64, f64) {
+    let row_width = height_width + gap + helicity_width;
+    let left =
+        (bracket_x - row_width / 2.0).clamp(left_limit, (right_limit - row_width).max(left_limit));
+    (left, left + height_width + gap)
 }
 
 #[pyfunction]
@@ -34,7 +72,7 @@ fn draw_fixed_lapse_layer(
     }
     let scale: f64 = widget.getattr("scale")?.extract()?;
     let origin_y: f64 = widget.getattr("originy")?.extract()?;
-    let x = temperature_column(widget, -30.0, scale)?;
+    let x = temperature_column(widget, -25.0, scale)?;
     let bottom = origin_y
         + widget
             .call_method1("pres_to_pix", (layer.get_item(1)?,))?
@@ -54,15 +92,31 @@ fn draw_fixed_lapse_layer(
     } else {
         0
     };
-    let color = widget.getattr("alert_colors")?.get_item(tier)?;
-    draw_layer_bracket(
+    let background = widget.getattr("bg_color")?;
+    let lightness: u8 = background.call_method0("lightness")?.extract()?;
+    let color = if tier <= 1 && lightness <= 127 {
+        let rgb = if tier == 1 {
+            (255, 196, 107)
+        } else {
+            (210, 162, 97)
+        };
+        PyModule::import(py, "qtpy.QtGui")?
+            .getattr("QColor")?
+            .call1(rgb)?
+    } else {
+        widget.getattr("alert_colors")?.get_item(tier)?
+    };
+    painter.call_method0("save")?;
+    let result = draw_layer_bracket(
         widget,
         painter,
         (x, top, bottom),
         &format!("{rate:.1} °C/km"),
         &color,
         true,
-    )
+    );
+    painter.call_method0("restore")?;
+    result
 }
 
 #[pyfunction]
@@ -120,31 +174,36 @@ pub(crate) fn draw_layer_bracket(
     (x, top, bottom): (f64, f64, f64),
     text: &str,
     color: &Bound<'_, PyAny>,
-    allow_label_outside_plot: bool,
+    emphasize_label: bool,
 ) -> PyResult<()> {
     let py = widget.py();
     let core = PyModule::import(py, "qtpy.QtCore")?;
     let gui = PyModule::import(py, "qtpy.QtGui")?;
     let qt = core.getattr("Qt")?;
-    let font = widget.getattr("esrh_font")?;
+    let mut font = widget.getattr("esrh_font")?;
+    if emphasize_label {
+        font = gui.getattr("QFont")?.call1((&font,))?;
+        font.call_method1("setBold", (true,))?;
+    }
     let metrics = gui.getattr("QFontMetrics")?.call1((&font,))?;
-    let width = metrics
+    let advance = metrics
         .call_method1("horizontalAdvance", (text,))?
-        .extract::<f64>()?
-        + 4.0;
+        .extract::<f64>()?;
+    let width = advance + 4.0;
+    let font_height: f64 = metrics.call_method0("height")?.extract()?;
     let height = widget
         .getattr("esrh_height")?
         .extract::<f64>()?
-        .max(metrics.call_method0("height")?.extract::<f64>()? + 2.0);
+        .max(font_height + 2.0);
     let rect = core
         .getattr("QRectF")?
         .call1((x - width / 2., top - height, width, height))?;
-    let pen = gui
-        .getattr("QPen")?
-        .call1((color, 1.5, qt.getattr("SolidLine")?))?;
+    let pen_type = gui.getattr("QPen")?;
+    let line = qt.getattr("SolidLine")?;
+    let pen = pen_type.call1((color, if emphasize_label { 2.0 } else { 1.5 }, &line))?;
     painter.call_method1("setClipping", (true,))?;
     painter.call_method1("setPen", (pen,))?;
-    painter.call_method1("setFont", (font,))?;
+    painter.call_method1("setFont", (&font,))?;
     for coords in [
         (x - 10., bottom, x + 10., bottom),
         (x - 10., top, x + 10., top),
@@ -158,17 +217,34 @@ pub(crate) fn draw_layer_bracket(
         .collect::<PyResult<Vec<_>>>()?
         .into_iter()
         .fold(0, |flags, item| flags | item);
-    if allow_label_outside_plot {
+    if emphasize_label {
         painter.call_method1("setClipping", (false,))?;
+        // Clear the grid around the glyphs while leaving the plot visible between them.
+        let ascent: f64 = metrics.call_method0("ascent")?.extract()?;
+        let glyphs = gui.getattr("QPainterPath")?.call0()?;
+        glyphs.call_method1(
+            "addText",
+            (
+                x - advance / 2.0,
+                top - (height + font_height) / 2.0 + ascent,
+                &font,
+                text,
+            ),
+        )?;
+        let halo = pen_type.call1((widget.getattr("bg_color")?, 2.5, line))?;
+        halo.call_method1("setJoinStyle", (qt.getattr("RoundJoin")?,))?;
+        painter.call_method1("strokePath", (glyphs, halo))?;
     }
     painter.call_method1("drawText", (rect, flags, text))?;
-    if allow_label_outside_plot {
+    if emphasize_label {
         painter.call_method1("setClipping", (true,))?;
     }
     Ok(())
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(set_skewt_trace_opacity, module)?)?;
+    module.add_function(wrap_pyfunction!(effective_inflow_tag_columns, module)?)?;
     module.add_function(wrap_pyfunction!(draw_fixed_lapse_layer, module)?)?;
     module.add_function(wrap_pyfunction!(draw_fixed_hgz_layer, module)?)
 }

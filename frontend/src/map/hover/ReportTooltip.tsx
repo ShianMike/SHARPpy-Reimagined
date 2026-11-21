@@ -1,26 +1,76 @@
 import { Fragment, useLayoutEffect, useRef, type ReactNode } from "react";
+import { X } from "lucide-react";
 import { Surface } from "../../ui/Surface";
+import { IconAction } from "../../ui/Controls";
+import { cx } from "../../lib/cx";
 import { convertUnit, displayReading, displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
+import { SPOTTER_MARKER_LABELS, spotterMarkerKind } from "../layers/SpotterLayer";
 import { useHoverStore } from "./hoverStore";
 import styles from "./StationTooltip.module.css";
 
+const COMPASS_POINTS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"] as const;
+
 export function ReportTooltip(): ReactNode {
   const units = useUiStore((state) => state.units);
-  const report = useHoverStore((state) => state.report);
+  const pinned = useHoverStore((state) => state.pinnedSpotter);
+  const report = useHoverStore((state) => state.pinnedSpotter === null ? state.report : null);
   const ref = useRef<HTMLElement | null>(null);
+  const closeButton = useRef<HTMLButtonElement | null>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const anchor = pinned ?? report;
 
   useLayoutEffect(() => {
     const element = ref.current;
-    if (element === null || report === null) {
+    if (element === null || anchor === null) {
       return;
     }
     const box = element.getBoundingClientRect();
-    element.style.setProperty("--tooltip-x", `${String(report.x)}px`);
-    element.style.setProperty("--tooltip-y", `${String(report.y)}px`);
+    element.style.setProperty("--tooltip-x", `${String(anchor.x)}px`);
+    element.style.setProperty("--tooltip-y", `${String(anchor.y)}px`);
     element.style.setProperty("--tooltip-w", `${String(box.width)}px`);
     element.style.setProperty("--tooltip-h", `${String(box.height)}px`);
   });
+
+  useLayoutEffect(() => {
+    if (pinned === null || closeButton.current === null) return;
+    const previous = document.activeElement;
+    if (previous instanceof HTMLElement && previous !== closeButton.current) returnFocus.current = previous;
+    closeButton.current.focus({ preventScroll: true });
+  }, [pinned]);
+
+  const spotter = pinned?.position ?? report?.source?.position;
+  if (spotter !== undefined) {
+    const kind = SPOTTER_MARKER_LABELS[spotterMarkerKind(spotter)];
+    const title = spotter.displayName ?? kind;
+    const motion = spotter.motion;
+    const heading = motion?.kind === "heading" ? COMPASS_POINTS[Math.round(motion.degrees / 22.5) % COMPASS_POINTS.length] : undefined;
+    const close = (): void => {
+      useHoverStore.setState({ pinnedSpotter: null, report: null });
+      returnFocus.current?.focus({ preventScroll: true });
+    };
+    return <Surface ref={ref} elevation="popover" role={pinned === null ? "tooltip" : "dialog"} aria-label={pinned === null ? undefined : `Spotter details for ${title}`}
+      className={cx(styles.tooltip, styles.report, styles.spotterCard, pinned === null ? undefined : styles.pinnedSpotterCard)}
+      data-testid={pinned === null ? "report-tooltip" : "spotter-details"}
+      onKeyDown={(event) => {
+        if (pinned !== null && event.key === "Escape") { event.stopPropagation(); close(); }
+      }}>
+      <header className={styles.spotterHeading}>
+        <div className={styles.reportHeading}>
+          <p className={styles.reportTitle} dir="auto">{title}</p>
+          <p className={styles.meta}>{spotter.displayName === undefined ? "Spotter Network" : `${kind} · Spotter Network`}</p>
+        </div>
+        {pinned === null ? null : <IconAction ref={closeButton} icon={X} size="sm" label="Close spotter details" onClick={close} />}
+      </header>
+      <dl className={styles.reportFacts}>
+        <dt>Last position</dt><dd><time dateTime={spotter.updatedAt} title={spotter.updatedAt.replace("T", " ").replace(/Z$/u, " UTC")}>
+          {spotter.updatedAt.slice(11, 19)} UTC
+        </time></dd>
+        {motion === undefined ? null : <><dt>{motion.kind === "stationary" ? "Movement" : "Heading"}</dt>
+          <dd>{motion.kind === "stationary" ? "Stationary" : `${heading ?? ""} ${String(motion.degrees)}°`}</dd></>}
+      </dl>
+    </Surface>;
+  }
 
   if (report === null) {
     return null;
@@ -66,7 +116,7 @@ export function ReportTooltip(): ReactNode {
     else if (name !== "Magnitude" || !report.label.includes(value)) facts.push({ name, value: name === "Magnitude" ? displayReading(value, units) : value });
   }
   return (
-    <Surface ref={ref} elevation="popover" role="tooltip" className={[styles.tooltip, styles.report].join(" ")} data-testid="report-tooltip">
+    <Surface ref={ref} elevation="popover" role="tooltip" className={cx(styles.tooltip, styles.report)} data-testid="report-tooltip">
       <header className={styles.reportHeading}>
         <p className={styles.reportTitle}>{title}</p>
         {location === "" ? null : <p className={styles.meta}>{location}</p>}

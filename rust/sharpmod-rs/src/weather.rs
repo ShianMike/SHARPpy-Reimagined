@@ -275,6 +275,18 @@ fn weather_alerts(py: Python<'_>, valid_time: &str) -> PyResult<String> {
 }
 
 #[pyfunction]
+fn spotter_positions(py: Python<'_>) -> PyResult<String> {
+    let runtime = runtime()?;
+    py.detach(|| {
+        let positions = runtime
+            .block_on(sharpmod_weather::spotter_network::fetch_positions())
+            .map_err(PyRuntimeError::new_err)?;
+        serde_json::to_string(&positions)
+            .map_err(|_| PyRuntimeError::new_err("Could not encode Spotter Network positions."))
+    })
+}
+
+#[pyfunction]
 fn place_labels_json() -> PyResult<String> {
     sharpmod_weather::place_names::place_labels_json().map_err(PyRuntimeError::new_err)
 }
@@ -536,6 +548,9 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(radar_level3_scans, module)?)?;
     module.add_function(wrap_pyfunction!(clear_weather_cache, module)?)?;
     module.add_function(wrap_pyfunction!(weather_alerts, module)?)?;
+    if std::env::var("SHARPPY_LOCAL_SPOTTER_NETWORK").as_deref() == Ok("1") {
+        module.add_function(wrap_pyfunction!(spotter_positions, module)?)?;
+    }
     module.add_function(wrap_pyfunction!(place_labels_json, module)?)?;
     module.add_function(wrap_pyfunction!(is_conus_point, module)?)?;
     module.add_function(wrap_pyfunction!(offline_conus_town_name, module)?)?;

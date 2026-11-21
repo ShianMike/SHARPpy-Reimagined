@@ -2,13 +2,30 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { MapLibreOverlay } from "@deck.gl/maplibre";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { useAppStore } from "../../stores/appStore";
+import { useForecastDrawingStore } from "../../stores/forecastDrawingStore";
+import { useForecastStore } from "../../stores/forecastStore";
+import { useMapStore } from "../../stores/mapStore";
+import { useUiStore } from "../../stores/uiStore";
+import { UNOFFICIAL_FORECAST_TITLE } from "../../types/forecastDrawing";
+import { FORECAST_EXPORT_DISCLAIMER } from "../forecastDrawing/forecastDrawingExportFooter";
+import { exportForecastDrawingPng } from "../forecastDrawing/exportForecastDrawing";
 import { captureMapFrame, mapCaptureSources, registerMapCapture } from "./mapCapture";
 
 beforeEach(() => {
   vi.stubGlobal("requestAnimationFrame", () => 1); vi.stubGlobal("cancelAnimationFrame", vi.fn());
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage: vi.fn(), clearRect: vi.fn() } as unknown as CanvasRenderingContext2D);
 });
-afterEach(() => { mapCaptureSources.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  mapCaptureSources.clear();
+  useAppStore.setState(useAppStore.getInitialState(), true);
+  useForecastDrawingStore.setState(useForecastDrawingStore.getInitialState(), true);
+  useForecastStore.setState(useForecastStore.getInitialState(), true);
+  useMapStore.setState(useMapStore.getInitialState(), true);
+  useUiStore.getState().setForecastOutlinesOnly(false);
+  useUiStore.getState().setForecastDrawingDetails(useUiStore.getInitialState().forecastDrawingDetails);
+  vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals();
+});
 
 function setup(interleaved = false) {
   const canvas = document.createElement("canvas"), weather = interleaved ? canvas : document.createElement("canvas");
@@ -17,6 +34,7 @@ function setup(interleaved = false) {
   const handlers = new Map<string, () => void>();
   const map = { getCanvas: () => canvas, getPixelRatio: () => 1, triggerRepaint: vi.fn(), isMoving: vi.fn(() => false),
     areTilesLoaded: vi.fn(() => true),
+    getStyle: () => ({ sources: { basemap: {} } }), getSource: () => ({ attribution: "<a>OpenStreetMap</a>" }),
     setPixelRatio: vi.fn((ratio: number) => { canvas.width = 500 * ratio; canvas.height = 400 * ratio; }),
     on: (name: string, callback: () => void) => { handlers.set(name, callback); }, off: (name: string) => { handlers.delete(name); } };
   const overlay = { getCanvas: () => weather, setProps: vi.fn((props: { useDevicePixels?: number }) => {
@@ -133,4 +151,81 @@ it("does not let removal of an old map unregister its replacement", () => {
   const source = mapCaptureSources.get(0);
   old.handlers.get("remove")?.(); expect(mapCaptureSources.get(0)).toBe(source);
   current.handlers.get("remove")?.(); expect(mapCaptureSources.has(0)).toBe(false);
+});
+
+function showForecastArea(): void {
+  useAppStore.getState().setActiveWorkspace("map");
+  useForecastDrawingStore.setState({ enabled: true, results: { cat: {
+    areas: [{ label: "Marginal", description: "", fill: null, stroke: "green", rank: 1,
+      hatch: false, hatchLevel: 0, rings: [[[-98, 34], [-95, 35], [-96, 37]]] }],
+    clippedHatches: [], hiddenHatches: [], generatedContours: [],
+  } } });
+}
+
+it("cancels a drawing export if the display style changes during capture", async () => {
+  showForecastArea();
+  const { map, overlay, handlers } = setup();
+  const unsubscribe = vi.fn();
+  registerMapCapture(0, map, overlay, () => false, () => unsubscribe, () => false);
+  const job = exportForecastDrawingPng(0, new AbortController().signal);
+  useUiStore.getState().setForecastOutlinesOnly(true);
+  await expect(job).rejects.toThrow("The forecast display changed during export.");
+  expect(unsubscribe).toHaveBeenCalledOnce();
+  expect(handlers.has("render")).toBe(false);
+  expect(useForecastStore.getState().exporting).toBe(false);
+});
+
+it("captures the visible drawing with the model field off and downloads a PNG with the outlook details and notice", async () => {
+  vi.useFakeTimers();
+  showForecastArea();
+  useUiStore.getState().setForecastDrawingDetails({ author: "Casey Nguyen", day: 2 });
+  useMapStore.getState().setLayerVisible("model-field", false);
+  const { map, overlay, handlers } = setup();
+  const fieldReady = vi.fn(() => false), currentReady = vi.fn(() => false);
+  let overlayRendered = (): void => undefined;
+  registerMapCapture(0, map, overlay, fieldReady, (listener) => { overlayRendered = listener; return () => undefined; }, currentReady);
+  const render = { save: vi.fn(), restore: vi.fn(), drawImage: vi.fn(), fillRect: vi.fn(),
+    fillText: vi.fn<CanvasRenderingContext2D["fillText"]>(), measureText: (line: string) => ({ width: line.length * 8 }) };
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(render as unknown as CanvasRenderingContext2D);
+  const png = new Blob(["png"], { type: "image/png" });
+  const encode = vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((done) => { done(png); });
+  const link = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+  const createObjectURL = vi.fn(() => "blob:forecast-drawing"), revokeObjectURL = vi.fn();
+  vi.stubGlobal("URL", Object.assign(class extends URL {}, { createObjectURL, revokeObjectURL }));
+
+  const job = exportForecastDrawingPng(0, new AbortController().signal);
+  handlers.get("render")?.(); overlayRendered();
+  expect(encode).not.toHaveBeenCalled();
+  currentReady.mockReturnValue(true);
+  handlers.get("render")?.(); overlayRendered();
+  await job;
+
+  expect(fieldReady).not.toHaveBeenCalled();
+  expect(render.drawImage.mock.calls[0]?.[0]).toBe(map.getCanvas());
+  expect(render.drawImage.mock.calls[1]?.[0]).toBe(overlay.getCanvas());
+  const labels = render.fillText.mock.calls.map(([label]) => label);
+  expect(labels[0]).toBe(UNOFFICIAL_FORECAST_TITLE);
+  expect(labels.slice(1, -1).join(" ")).toBe(`Categorical Risk · Day 2 · By Casey Nguyen ${FORECAST_EXPORT_DISCLAIMER}`);
+  expect(labels.at(-1)).toBe("OpenStreetMap");
+  expect(render.fillText.mock.invocationCallOrder[0]).toBeGreaterThan(render.drawImage.mock.invocationCallOrder.at(-1) ?? 0);
+  expect(encode).toHaveBeenCalledWith(expect.any(Function), "image/png");
+  expect(createObjectURL).toHaveBeenCalledWith(png);
+  const downloaded = link.mock.instances[0] as HTMLAnchorElement | undefined;
+  expect(downloaded?.download).toMatch(/^sharppy-unofficial-forecast-cat-.*\.png$/);
+  expect(useForecastStore.getState().exporting).toBe(false);
+  vi.runOnlyPendingTimers();
+  expect(revokeObjectURL).toHaveBeenCalledWith("blob:forecast-drawing");
+});
+
+it("discards a plain map capture if a sketch starts between its base and Deck renders", async () => {
+  useAppStore.getState().setActiveWorkspace("map");
+  const { map, overlay, handlers } = setup();
+  let overlayRendered = (): void => undefined;
+  const job = captureMapFrame(map, overlay, () => true, (listener) => { overlayRendered = listener; return () => undefined; },
+    new AbortController().signal, { width: 400, height: 320 });
+  handlers.get("render")?.();
+  useForecastDrawingStore.setState({ enabled: true, mode: "draw" });
+  overlayRendered();
+  await expect(job).rejects.toThrow("Turn off Draw Forecast");
+  expect(handlers.has("render")).toBe(false);
 });

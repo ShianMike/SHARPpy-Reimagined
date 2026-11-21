@@ -20,9 +20,9 @@
   const result = document.querySelector("#result");
   const lines = [];
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
-  function scene(values, palette, scale = 1, offset = 0) {
+  function scene(values, palette, scale = 1, offset = 0, bounds = { west: -4, south: -4, east: 4, north: 4 }) {
     const frame = { width: 8, height: 8, cells: Uint16Array.from(values), nodata: 65535, scale, offset,
-      bounds: { west: -4, south: -4, east: 4, north: 4 } };
+      bounds };
     return { field: { frame, palette, bounds: frame.bounds,
       image: new ImageData(colourize(frame, palette), 8, 8) }, contours: null, contourSpec: null };
   }
@@ -100,6 +100,16 @@
       if (maskSmooth[i + 3] === 255) assert(Math.abs(maskSmooth[i] - 153) <= 1, "No-data sentinel contaminated neighboring values");
     }
     lines.push("PASS: missing data stays empty and cannot contaminate valid neighbors.");
+
+    const world = scene(Array.from({ length: 64 }, (_, i) => i % 8 < 4 ? 200 : 800),
+      grayscale, 1, 0, { west: -180, south: -4, east: 180, north: 4 });
+    const east = await render(world, "smooth", 5, [180, 0, 0]);
+    const west = await render(world, "smooth", 5, [-180, 0, 0]);
+    const eastEdge = east[(128 * 256 + 127) * 4];
+    const westEdge = west[(128 * 256 + 128) * 4];
+    assert(Math.abs(eastEdge - westEdge) <= 2 && Math.abs(eastEdge - 128) <= 2,
+      `Global field has a seam at the antimeridian (${eastEdge} vs ${westEdge})`);
+    lines.push("PASS: a global field interpolates across the antimeridian.");
 
     const limits = { ...grayscale, stops: [[-10, "#000000"], [10, "#ffffff"]], floor: -2, ceiling: 2 };
     const clipped = scene(Array.from({ length: 64 }, (_, i) => (i % 8) * 100), limits, 0.02, -7);

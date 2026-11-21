@@ -36,6 +36,8 @@ export const mapKeys = {
     ["contours", product, runTime, forecastHour, model] as const,
   surface: (latitude: number, longitude: number, validTime: string) =>
     ["surface", latitude, longitude, validTime] as const,
+  latestSurface: ["surface", "latest"] as const,
+  spotters: ["spotter-network", "latest"] as const,
   availability: (observationTime: string) => ["stations", "availability", observationTime] as const,
 };
 

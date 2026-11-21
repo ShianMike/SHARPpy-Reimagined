@@ -11,29 +11,30 @@ import type { LabelTier } from "../../stations/stationFormat";
 import type { Station } from "../../types/contracts";
 import type { ContourLines, FieldFrame, Outlook, OutlookKey, Palette, Place, ProductContour, RadarSite, ReportPoint } from "../../types/map";
 import type { Bounds } from "../../types/soundings";
+import type { SpotterPosition } from "../../types/spotters";
 import type { SurfacePlot } from "../../types/surface";
 import type { WeatherAlert } from "../../types/weatherAlerts";
 import type { WindBarb } from "./WindBarbLayer";
 import type { ScreenPoint, Viewport } from "../labels/declutter";
 
 export const LAYER_IDS = [
-  "basemap", "roads", "stations", "station-labels", "selection", "model-field", "satellite", "radar",
+  "basemap", "roads", "rivers", "stations", "station-labels", "selection", "model-field", "satellite", "radar",
   "storm-reports", "surface-plots", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "boundaries",
-  "model-domain", "place-labels", "watches", "warnings", "radar-site-labels", "isobars",
+  "model-domain", "place-labels", "watches", "warnings", "radar-site-labels", "isobars", "spotter-network",
 ] as const;
 export type LayerId = (typeof LAYER_IDS)[number];
 
 /** The weather layers, which the user may stack in any order; bottom first by default. */
 export const ORDERABLE_LAYER_IDS = [
   "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail",
-  "isobars", "surface-plots", "watches", "warnings",
+  "isobars", "surface-plots", "watches", "warnings", "spotter-network",
 ] as const;
 export type OrderableLayerId = (typeof ORDERABLE_LAYER_IDS)[number];
 
 /** Keep controls and rendering consistent, including previously saved layers. */
 export function layerInView(id: LayerId, view: "map" | "live"): boolean {
   if (id === "model-field" || id === "isobars" || id.startsWith("spc-")) return view === "map";
-  if (["radar", "satellite", "surface-plots", "warnings", "watches", "radar-site-labels"].includes(id)) return view === "live";
+  if (["radar", "satellite", "warnings", "watches", "radar-site-labels", "spotter-network"].includes(id)) return view === "live";
   return true;
 }
 /** The zOrder of the lowest weather layer; the rest follow at one step each. */
@@ -51,6 +52,7 @@ export interface LayerState {
 export const LAYER_DEFAULTS: Readonly<Record<LayerId, LayerState>> = {
   basemap: { visible: true, opacity: 1 },
   roads: { visible: true, opacity: 1 },
+  rivers: { visible: true, opacity: 1 },
   stations: { visible: true, opacity: 1 },
   "station-labels": { visible: false, opacity: 1 },
   "radar-site-labels": { visible: true, opacity: 1 },
@@ -63,6 +65,7 @@ export const LAYER_DEFAULTS: Readonly<Record<LayerId, LayerState>> = {
   warnings: { visible: false, opacity: 1 },
   "storm-reports": { visible: false, opacity: 1 },
   "surface-plots": { visible: false, opacity: 1 },
+  "spotter-network": { visible: false, opacity: 1 },
   "spc-cat": { visible: false, opacity: 1 },
   "spc-torn": { visible: false, opacity: 1 },
   "spc-wind": { visible: false, opacity: 1 },
@@ -101,9 +104,9 @@ export interface SceneData {
   /** The GOES frame, rendered by the backend over the map's extent. */
   satellite: RasterImage | null;
   radar: RasterImage | null;
-  /** The storm reports to mark, after the provider's own hazard filter. */
   reports: readonly ReportPoint[] | null;
   alerts: readonly WeatherAlert[] | null;
+  spotterPositions: readonly SpotterPosition[] | null;
   /** The station models to mark, each carrying its own display slots. */
   surfacePlots: readonly SurfacePlot[] | null;
   /** The product's contour lines and the spec that draws them; both or neither. */
@@ -134,6 +137,7 @@ export const NO_SCENE_DATA: SceneData = {
   reports: null,
   alerts: null,
   surfacePlots: null,
+  spotterPositions: null,
   contours: null,
   contourSpec: null,
   isobars: null,
@@ -148,6 +152,8 @@ export const NO_SCENE_DATA: SceneData = {
 
 export interface LayerBuildContext extends SceneData {
   windBarbs?: readonly WindBarb[];
+  /** The camera-dependent detail subset and whether to draw every surface station center. */
+  surfacePresentation?: { details: readonly SurfacePlot[]; markers: boolean };
   /** The catalogue's array, kept as a stable reference so deck.gl keeps its buffers. */
   stations: readonly Station[];
   labels: LabelSelection | null;
@@ -169,6 +175,8 @@ export interface LayerBuildContext extends SceneData {
   outlookLabelLayout?: (Viewport & {
     project: (position: readonly [number, number]) => ScreenPoint;
     occupied: (ScreenPoint & Viewport)[];
+    /** Current projection state when report captions can be reused. */
+    reportCaptionView?: () => string | undefined;
   }) | undefined;
 }
 
@@ -237,7 +245,7 @@ export function buildDeckLayers<Id extends string>(
       const layers = descriptor.build(context, stateFor(descriptor, states));
       for (const layer of layers) {
         // Keep readings above every weather fill, even when the user reorders overlays.
-        if (descriptor.id === "surface-plots" || descriptor.id === "storm-reports" || ((layer.id.startsWith("spc-") || descriptor.id === "isobars") && layer.id.endsWith("-labels"))) {
+        if (descriptor.id === "spotter-network" || descriptor.id === "surface-plots" || descriptor.id === "storm-reports" || ((layer.id.startsWith("spc-") || descriptor.id === "isobars") && layer.id.endsWith("-labels"))) {
           labels.push(layer);
           continue;
         }
@@ -273,11 +281,9 @@ export function controllableLayers<Id extends string>(
 
 /** A fresh copy of the defaults, for the map store. */
 export function defaultLayerStates(): Record<LayerId, LayerState> {
-  const out = {} as Record<LayerId, LayerState>;
-  for (const id of LAYER_IDS) {
-    out[id] = { ...LAYER_DEFAULTS[id] };
-  }
-  return out;
+  return Object.fromEntries(
+    LAYER_IDS.map((id) => [id, { ...LAYER_DEFAULTS[id] }]),
+  ) as Record<LayerId, LayerState>;
 }
 
 /** `order` with `id` moved one step up (1, towards the top) or down (-1). */

@@ -62,11 +62,13 @@ export function createRecoveryRepository(): RecoveryRepository {
       if (source.soundingId !== id) throw new Error("The saved sounding source does not match this session.");
       return source;
     }),
-    save: async (session, added, nextPrevious = previous) => {
+    save: async (session, added, previousOverride) => {
       if (session !== null && JSON.stringify(session).length > 16 * 1024 * 1024) throw new Error("This edit history exceeds the recovery storage limit.");
+      const nextPrevious = previousOverride === undefined ? previous : previousOverride;
       await transact(async (sessions, sources) => {
         if (session === null) sessions.delete("current"); else sessions.put(session, "current");
-        if (nextPrevious === null) sessions.delete("previous"); else sessions.put(nextPrevious, "previous");
+        if (previousOverride === null) sessions.delete("previous");
+        else if (previousOverride !== undefined) sessions.put(previousOverride, "previous");
         for (const source of added) sources.put(source, source.soundingId);
         const keep = new Set([...(session?.open ?? []), ...(nextPrevious?.open ?? [])].map(item => item.soundingId));
         const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
@@ -75,7 +77,7 @@ export function createRecoveryRepository(): RecoveryRepository {
         });
         for (const key of keys) if (typeof key !== "string" || !keep.has(key)) sources.delete(key);
       });
-      previous = nextPrevious;
+      if (previousOverride !== undefined) previous = previousOverride;
     },
     close: () => { void database.then(db => { db.close(); }, () => undefined); },
   };

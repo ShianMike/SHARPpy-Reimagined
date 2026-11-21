@@ -383,7 +383,7 @@ class ModelDiskCache:
             return not directory.exists()
         return not directory.exists()
 
-    def _entries(self):
+    def _entries(self, *, validate_payloads=True):
         if not self.root.exists():
             return []
         pending = [self.root]
@@ -431,7 +431,7 @@ class ModelDiskCache:
             files = self._entry_files(directory)
             payload_files = self._payload_files(directory, files)
             try:
-                current_contract = (
+                current_contract = validate_payloads and (
                     int(payload.get("contract_version", 0) or 0)
                     == MODEL_CACHE_CONTRACT_VERSION
                 )
@@ -454,7 +454,10 @@ class ModelDiskCache:
             })
         return result
 
-    def entries(self) -> list[CacheEntry]:
+    # The native maintenance path can opt in when _entries is this built-in scan.
+    _entries_with_payload_option = _entries
+
+    def entries(self, *, _storage=False) -> list[CacheEntry]:
         """Return newest-first cache metadata without exposing partial files."""
         with self._lock:
             from sharpmod import backends
@@ -464,6 +467,10 @@ class ModelDiskCache:
                 use_rust = False
             if use_rust:
                 import sharpmod_rs
+                if _storage:
+                    native = getattr(sharpmod_rs, "model_cache_storage_entries", None)
+                    if native is not None:
+                        return native(self)
                 native = getattr(sharpmod_rs, "model_cache_entries", None)
                 if native is not None:
                     return native(self._entries())

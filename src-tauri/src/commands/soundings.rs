@@ -119,7 +119,7 @@ pub async fn render_sounding(
     Ok(tauri::ipc::Response::new(bytes))
 }
 
-/// Render a reversible view of a sounding; validation and calculations stay in Python.
+/// Render a reversible view of a sounding or measure its visible wind for animation.
 #[tauri::command]
 pub async fn render_sounding_view(
     state: tauri::State<'_, AppState>,

@@ -577,6 +577,58 @@ fn weather_alerts_validate_requests_and_return_the_public_snapshot() {
 }
 
 #[test]
+fn forecast_drawing_uses_the_public_contract_without_python() {
+    let (_app, webview) = window(Arc::new(NotConfigured));
+    let polygon = serde_json::json!({
+        "id": "risk", "level": 1, "hatch": false,
+        "points": [[-101.0, 35.0], [-99.0, 35.0], [-100.0, 37.0]]
+    });
+    let result = invoke_args(
+        &webview,
+        "build_forecast_drawing",
+        serde_json::json!({"product": "cat", "polygons": [polygon], "requestId": "forecast123"}),
+    )
+    .unwrap();
+    assert_eq!(result.as_object().unwrap().len(), 4);
+    assert_eq!(result["clippedHatches"], serde_json::json!([]));
+    assert_eq!(result["hiddenHatches"], serde_json::json!([]));
+    let generated = result["generatedContours"].as_array().unwrap();
+    assert_eq!(generated.len(), 1);
+    assert_eq!(generated[0]["sourceId"], "risk");
+    assert_eq!(generated[0]["level"], 0);
+    assert!(generated[0]["points"].as_array().unwrap().len() >= 3);
+    let areas = result["areas"].as_array().unwrap();
+    assert_eq!(areas.len(), 2);
+    let area = areas[0].as_object().unwrap();
+    assert_eq!(area.len(), 8);
+    for key in [
+        "label",
+        "description",
+        "fill",
+        "stroke",
+        "rank",
+        "hatch",
+        "hatchLevel",
+        "rings",
+    ] {
+        assert!(area.contains_key(key), "missing OutlookArea field {key}");
+    }
+
+    let mut invalid_polygon = polygon;
+    invalid_polygon["level"] = serde_json::json!(9);
+    for args in [
+        serde_json::json!({"product": "unknown", "polygons": []}),
+        serde_json::json!({"product": "cat"}),
+        serde_json::json!({"product": "cat", "polygons": [invalid_polygon]}),
+    ] {
+        let error: BackendError =
+            parse(invoke_args(&webview, "build_forecast_drawing", args).unwrap_err());
+        assert_eq!(error.code, ErrorCode::InvalidArgument);
+        assert!(!error.retryable);
+    }
+}
+
+#[test]
 fn place_labels_and_pre_archive_spc_outlooks_run_natively_without_python() {
     let launcher = FakeLauncher::with(vec![script(|mut io| async move {
         while let Some(request) = io.next_request().await {

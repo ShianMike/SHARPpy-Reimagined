@@ -1,48 +1,51 @@
 // @vitest-environment jsdom
 import catalog from "@contracts/public/map/catalog.json";
 import contours from "@contracts/public/map/contours.json";
-import field from "@contracts/public/map/field.shrf?url&inline";
 import models from "@contracts/public/soundings/models.catalog.json";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { BackendProvider } from "../lib/backend/BackendProvider";
-import { BackendClient } from "../lib/backend/client";
 import { BackendFailure } from "../lib/backend/errors";
-import { createQueryClient, mapKeys, QUERY_KEYS } from "../lib/backend/queryOptions";
-import { parseFieldFrame } from "../lib/contracts/frames";
+import { mapKeys, QUERY_KEYS } from "../lib/backend/queryOptions";
 import { parseMapCatalog } from "../lib/contracts/map";
 import { parseContourLines } from "../lib/contracts/contours";
 import { parseModelCatalog } from "../lib/contracts/soundings";
 import { useForecastStore } from "../stores/forecastStore";
 import { useMapStore } from "../stores/mapStore";
-import { defaultLayerStates } from "./layers/registry";
 import { useFrameDownload } from "./useFrameDownload";
+import { frame, setupFrameDownload as setup } from "./useFrameDownloadFixture";
 
 const savedMap = useMapStore.getState();
 const savedForecast = useForecastStore.getState();
 afterEach(() => { cleanup(); useMapStore.setState(savedMap); useForecastStore.setState(savedForecast); vi.restoreAllMocks(); });
-const frame = parseFieldFrame(Uint8Array.from(atob(field.split(",")[1] ?? ""), (c) => c.charCodeAt(0)).buffer);
 
-function setup() {
-  const layers = defaultLayerStates(); layers["model-field"].visible = true;
-  useMapStore.setState({ panelLayout: 4, productKey: "hgt-wind-500", layers,
-    panels: useMapStore.getInitialState().panels.map(panel => ({ ...panel, productKey: "hgt-wind-500", layers })) });
-  useForecastStore.setState({ modelKey: "hrrr", runTime: "2026-10-04T12:00:00Z", forecastHour: 1, playing: true });
-  const queryClient = createQueryClient();
-  queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
-  queryClient.setQueryData(mapKeys.catalog("hrrr", "2026-10-04T12:00:00Z", 1), parseMapCatalog(catalog));
-  const client = new BackendClient({ call: () => new Promise(() => undefined), listen: () => Promise.resolve(() => undefined) });
-  const storedFields = new Set<number>(), storedWinds = new Set<number>();
-  const fields = vi.spyOn(client, "getWeatherField").mockImplementation((_product, _run, hour) => { storedFields.add(hour); return Promise.resolve(frame); });
-  const winds = vi.spyOn(client, "getFieldContours").mockImplementation((_product, _run, hour) => { storedWinds.add(hour); return Promise.resolve(parseContourLines(contours)); });
-  const saved = vi.spyOn(client, "getCachedForecastHours").mockImplementation((_model, _products, _run, hours) => Promise.resolve(hours.filter((hour) => storedFields.has(hour) && storedWinds.has(hour))));
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
-  );
-  return { queryClient, client, fields, winds, saved, storedFields, wrapper };
-}
+it("reads the current hour rows on opening and tracks only matching cache updates", async () => {
+  const { queryClient, wrapper } = setup();
+  const run = "2026-10-04T12:00:00Z", product = "hgt-wind-500";
+  const fieldKey = mapKeys.field(product, run, 2);
+  const contourKey = mapKeys.contours(product, run, 2);
+  const otherModel = mapKeys.field(product, run, 2, "gfs");
+  const hook = renderHook(({ open }) => useFrameDownload(open), { initialProps: { open: false }, wrapper });
+  const read = vi.spyOn(queryClient, "getQueryState");
+  const state = () => hook.result.current.hourStates.find((row) => row.hour === 2)?.state;
+  try {
+    await act(async () => {
+      queryClient.setQueryData(fieldKey, frame);
+      await Promise.resolve();
+    });
+    expect(hook.result.current.hourStates).toEqual([]);
+    expect(read).not.toHaveBeenCalled();
+    hook.rerender({ open: true });
+    await waitFor(() => { expect(state()).toBe("missing"); });
+    read.mockClear();
+    act(() => { queryClient.setQueryData(otherModel, frame); });
+    expect(read).not.toHaveBeenCalled();
+    act(() => { queryClient.setQueryData(contourKey, parseContourLines(contours)); });
+    expect(read.mock.calls.map(([key]) => key)).toEqual([fieldKey, contourKey]);
+    expect(state()).toBe("cached");
+    act(() => { queryClient.removeQueries({ queryKey: fieldKey, exact: true }); });
+    expect(state()).toBe("missing");
+  } finally { hook.unmount(); queryClient.clear(); }
+});
 
 it.each([
   ...["gfs", "aigfs", "openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km", "rrfs-a", "refs-m1", "refs-m5"].map((modelKey) => ({ modelKey, individual: false })),

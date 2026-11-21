@@ -12,13 +12,13 @@ afterEach(() => { useHoverStore.setState({ outlook: null, hovered: null, report:
 
 it("keeps forecast context separate from live layers even with old saved visibility", () => {
   for (const id of LAYER_IDS) {
-    if (["warnings", "watches", "radar", "satellite", "surface-plots"].includes(id)) {
+    if (["warnings", "watches", "radar", "satellite", "spotter-network"].includes(id)) {
       expect(layerInView(id, "live")).toBe(true);
       expect(layerInView(id, "map")).toBe(false);
     } else if (id.startsWith("spc-") || id === "model-field") {
       expect(layerInView(id, "map")).toBe(true);
       expect(layerInView(id, "live")).toBe(false);
-    } else if (id === "storm-reports") {
+    } else if (id === "storm-reports" || id === "surface-plots") {
       expect(layerInView(id, "map")).toBe(true);
       expect(layerInView(id, "live")).toBe(true);
     }

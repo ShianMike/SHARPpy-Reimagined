@@ -6,6 +6,7 @@ import { Notice } from "../../components/Notice";
 import { useBackendClient } from "../../lib/backend/BackendProvider";
 import { copyPngToClipboard, useCanCopyPng } from "../../lib/imageClipboard";
 import { useAppStore } from "../../stores/appStore";
+import { useForecastDrawingStore } from "../../stores/forecastDrawingStore";
 import { useMapStore, panelLayers, panelProduct } from "../../stores/mapStore";
 import { useMapCatalog } from "../../map/catalogQuery";
 import { productOf } from "../../map/panelField";
@@ -21,6 +22,7 @@ import { exportForecast, forecastExportFilename, type ExportProgress, type Forec
 import { copyForecastGif, useCanCopyGif } from "./forecastClipboard";
 import { useObjectUrl } from "../sounding/soundingQueries";
 import { ForecastHourSelection } from "./ForecastHourSelection";
+import { ForecastDrawingDetailsFields } from "./ForecastDrawingDetailsFields";
 import styles from "./ForecastExportDialog.module.css";
 
 const STAGES = { loading: "Loading forecast", capturing: "Capturing maps", encoding: "Encoding animation" };
@@ -55,6 +57,9 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
   const client = useBackendClient();
   const queryClient = useQueryClient();
   const units = useUiStore((state) => state.units);
+  const hasOutlook = useForecastDrawingStore((state) => state.enabled && (state.results[state.product]?.areas.length ?? 0) > 0);
+  const includesDrawing = map.view === "map" && hasOutlook;
+  const [details, setDetails] = useState(() => useUiStore.getState().forecastDrawingDetails);
   const selectedHours = hours.filter((hour) => selected.includes(hour));
   const height = width * 9 / 16;
   const resetResult = (): void => { setResult(null); setProgress(null); setError(""); setCopy(null); };
@@ -67,6 +72,7 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
     if (busy || preview.current === null) return;
     const job = new AbortController();
     controller.current = job;
+    if (includesDrawing) useUiStore.getState().setForecastDrawingDetails(details);
     setBusy(true); setError(""); setResult(null); setProgress(null); setCopy(null); setActiveFormat(format);
     const options: ForecastExportOptions = { context, product, panel, model: context.model.label, run: context.run,
       hours: format === "png" ? [context.hour] : selectedHours, width, height, delay, units, format,
@@ -124,6 +130,10 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
     <div className={styles.body}>
       <div className={styles.settings}>
         <section className={styles.identity} aria-label="Export parameter"><span>{scope === "layout" ? "Complete map layout" : `Selected parameter · Panel ${String(panel + 1)}`}</span><strong>{parts.map((part) => part.product?.label ?? "Unavailable parameter").join(" · ")}</strong><p>{scope === "layout" ? "Each panel keeps its parameter, color scale and valid time." : product.caveat || "Exports the current map extent with its color scale and valid times."}</p></section>
+        {includesDrawing ? <section className={styles.outlookDetails} aria-label="Outlook details">
+          <h3>Outlook details</h3>
+          <ForecastDrawingDetailsFields value={details} disabled={busy} onChange={(value) => { resetResult(); setDetails(value); }} />
+        </section> : null}
         {map.panelLayout > 1 ? <SourceSelect label="Export area" value={scope} disabled={busy} options={[{ value: "panel", label: `Panel ${String(panel + 1)} only` }, { value: "layout", label: `Whole layout · ${String(map.panelLayout)} panels` }]} onChange={(value) => { resetResult(); setSettings({ scope: value }); }} /> : null}
         {available ? null : <Notice tone="danger" title="A map panel is unavailable" message="Show a forecast parameter in every selected panel before exporting." />}
         <ForecastHourSelection hours={hours} currentHour={context.hour} selected={selected} disabled={busy}

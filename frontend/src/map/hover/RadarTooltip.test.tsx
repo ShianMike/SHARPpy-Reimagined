@@ -75,16 +75,17 @@ it("decodes every PNG filter without losing native codes or values beyond the co
   expect(radarCodeAt(samples, bounds, NaN, 32)).toBe(0);
 });
 
-it("decodes compressed 16-bit radar gate codes for high-precision sweeps", async () => {
+function wideScan(codes: readonly number[]): Uint8Array<ArrayBuffer> {
   const header = Buffer.alloc(13);
   header.writeUInt32BE(2); header.writeUInt32BE(2, 4); header[8] = 8; header[9] = 3;
-  const grid = new Uint16Array([0, 300, 2, 1]);
+  const grid = Buffer.alloc(codes.length * 2);
+  for (const [index, code] of codes.entries()) grid.writeUInt16LE(code, index * 2);
   const values = [null, null, ...Array.from({ length: 300 }, (_, index) => -30 + index * 0.25)];
   const metadata = deflateSync(Buffer.from(JSON.stringify({
-    values, folded: 1, lowerBounds: [300], codes: Buffer.from(grid.buffer).toString("base64"),
+    values, folded: 1, lowerBounds: [300], codes: grid.toString("base64"),
   })));
   const pixels = deflateSync(Uint8Array.from([0, 0, 200, 0, 2, 1]));
-  const png = Uint8Array.from(Buffer.concat([
+  return Uint8Array.from(Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     chunk("IHDR", header),
     chunk("zTXt", Buffer.concat([Buffer.from("sharppy-radar\0\0"), metadata])),
@@ -92,9 +93,17 @@ it("decodes compressed 16-bit radar gate codes for high-precision sweeps", async
     chunk("IDAT", pixels),
     chunk("IEND", new Uint8Array()),
   ]));
-  const samples = await decodeRadarValues(new Blob([png]));
+}
+
+it("decodes compressed 16-bit radar gate codes for high-precision sweeps", async () => {
+  const samples = await decodeRadarValues(new Blob([wideScan([0, 300, 2, 1])]));
   expect(samples?.values[radarCodeAt(samples, bounds, -97, 34)]).toBe(44.5);
   expect(samples?.lowerBounds.has(300)).toBe(true);
+});
+
+it("rejects truncated and out-of-range 16-bit radar gate codes", async () => {
+  await expect(decodeRadarValues(new Blob([wideScan([0, 300, 2])]))).rejects.toThrow("dimensions");
+  await expect(decodeRadarValues(new Blob([wideScan([0, 302, 2, 1])]))).rejects.toThrow("out of range");
 });
 
 it("ignores images without native values and rejects malformed calibration or oversized decompression", async () => {

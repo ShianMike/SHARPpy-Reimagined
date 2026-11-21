@@ -207,4 +207,17 @@ def plots(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-HANDLERS = {"surface.plots": plots}
+def latest_plots(_params: dict[str, Any]) -> dict[str, Any]:
+    import sharpmod_rs
+
+    try:
+        return json.loads(sharpmod_rs.latest_surface_plots_json())
+    except RuntimeError as exc:
+        raise BridgeError(
+            "OVERLAY_FETCH_FAILED",
+            f"The latest surface observations could not be loaded: {_short(exc)}.",
+            True,
+        ) from None
+
+
+HANDLERS = {"surface.plots": plots, "surface.latest_plots": latest_plots}

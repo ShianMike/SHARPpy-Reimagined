@@ -17,7 +17,8 @@ import { fieldImage } from "./fieldImages";
 import type { FieldImage, RasterImage } from "./layers/registry";
 import { useFieldContours } from "./contourQueries";
 import { usePanelRadar, usePlaceLabels, useRadarFrame, useRadarSiteFrame, useRadarSites, useSatelliteFrame, useStormReports, useSpcOutlooks } from "./mapQueries";
-import { useSelectionAnchor, useSurfacePlots } from "./surfaceQueries";
+import { useSurfaceLayer } from "./surfaceQueries";
+import { useSpotterPositions } from "./spotterQueries";
 import { fieldAuxiliaries, usePanelField, type PanelField } from "./panelField";
 import type { MapRuntime } from "./runtime/MapRuntime";
 import { useFieldTransition } from "./useFieldTransition";
@@ -155,9 +156,9 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   const alerts = live && !alertQuery.isError && (layers.warnings.visible || layers.watches.visible) ? alertQuery.data?.alerts ?? null : null;
   const reportQuery = useStormReports(validTime, reportWindowS, reportFilter, reportsVisible);
   const reports = reportsVisible && !reportQuery.isError ? reportQuery.data?.reports ?? null : null;
-  const surfaceAnchor = useSelectionAnchor();
-  const surfaceQuery = useSurfacePlots(surfaceAnchor, validTime, live && surfaceVisible);
-  const surfacePlots = !live || !surfaceVisible || surfaceQuery.isError ? null : surfaceQuery.data?.plots ?? null;
+  const surfaceQuery = useSurfaceLayer(live, validTime, surfaceVisible);
+  const surfacePlots = surfaceVisible && (!live || !surfaceQuery.isError) ? surfaceQuery.data?.plots ?? null : null;
+  const { positions: spotterPositions } = useSpotterPositions(live && layers["spotter-network"].visible);
   // Pressure lines belong to the independent Isobars control, including when
   // the coloured product itself is MSLP; do not draw a second copy underneath.
   const contourSpec = live || field.product?.key === "mslp" ? null : field.product?.contour ?? null;
@@ -190,18 +191,18 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
     && (!reportsVisible || reportQuery.isSuccess && !reportQuery.isFetching)
     && (!auxiliaryWanted || contourQuery.isSuccess && !contourQuery.isFetching)
     && (!isobarRequest || isobarQuery.isSuccess && !isobarQuery.isFetching)
+    && (!surfaceVisible || (live ? surfaceQuery.isSuccess && !surfaceQuery.isFetching : surfaceQuery.data !== undefined))
     && (!live || (!radarVisible || radarImage.decodedCurrent && radarImage.issue === null)
       && (!layers.satellite.visible || satellite.decodedCurrent && satellite.issue === null)
-      && (!(layers.warnings.visible || layers.watches.visible) || alertQuery.isSuccess && !alertQuery.isFetching)
-      && (!surfaceVisible || surfaceQuery.isSuccess && !surfaceQuery.isFetching));
+      && (!(layers.warnings.visible || layers.watches.visible) || alertQuery.isSuccess && !alertQuery.isFetching));
 
   useEffect(() => {
     runtime?.setStations(stations);
   }, [runtime, stations]);
   useFieldTransition(runtime, image, model?.key);
   useEffect(() => {
-    runtime?.setScene({ captureReady, captureTime: validTime, radar, satellite: satellite.image, reports, alerts, surfacePlots, contourSpec, contours: contourLines, isobars, outlooks, domain, radarSites, selectedRadarSite, unavailableRadarSites });
-  }, [runtime, captureReady, validTime, radar, satellite.image, reports, alerts, surfacePlots, contourSpec, contourLines, isobars, outlooks, domain, radarSites, selectedRadarSite, unavailableRadarSites]);
+    runtime?.setScene({ captureReady, captureTime: validTime, radar, satellite: satellite.image, reports, alerts, surfacePlots, spotterPositions, contourSpec, contours: contourLines, isobars, outlooks, domain, radarSites, selectedRadarSite, unavailableRadarSites });
+  }, [runtime, captureReady, validTime, radar, satellite.image, reports, alerts, surfacePlots, spotterPositions, contourSpec, contourLines, isobars, outlooks, domain, radarSites, selectedRadarSite, unavailableRadarSites]);
   useEffect(() => {
     runtime?.setScene({ places });
   }, [runtime, places]);
@@ -209,6 +210,7 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   return { ...field, issues: [
     ...(radarImage.issue === null ? [] : [`Radar: ${radarImage.issue}`]),
     ...(satellite.issue === null ? [] : [`Satellite: ${satellite.issue}`]),
+    ...(surfaceVisible && surfaceQuery.isError && surfacePlots === null ? ["Surface observations unavailable."] : []),
     ...(auxiliaryWanted && contourQuery.isError ? ["Wind and contour overlays unavailable."] : []),
     ...(missingWind ? ["Wind barbs are missing from this frame."] : []),
     ...(isobarRequest && isobarQuery.isError ? ["Isobars unavailable."] : []),

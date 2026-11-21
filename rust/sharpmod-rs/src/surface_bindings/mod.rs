@@ -2,7 +2,11 @@
 
 mod source;
 
-use pyo3::{exceptions::PyValueError, prelude::*, types::PyTuple};
+use pyo3::{
+    exceptions::{PyRuntimeError, PyValueError},
+    prelude::*,
+    types::{PyString, PyTuple},
+};
 use sharpmod_weather::surface::{
     self, Dataset, FetchError, Observation, Request, Station, SurfaceClient,
 };
@@ -210,11 +214,21 @@ fn surface_plots_json(
         .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
 }
 
+#[pyfunction]
+fn latest_surface_plots_json(py: Python<'_>) -> PyResult<Bound<'_, PyString>> {
+    let runtime = crate::weather::runtime()?;
+    let latest = py
+        .detach(|| runtime.block_on(surface::fetch_latest_plots()))
+        .map_err(PyRuntimeError::new_err)?;
+    Ok(PyString::new(py, &latest.bridge_json))
+}
+
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(parse_surface_stations, module)?)?;
     module.add_function(wrap_pyfunction!(parse_surface_observations, module)?)?;
     module.add_function(wrap_pyfunction!(select_surface_observation, module)?)?;
     module.add_function(wrap_pyfunction!(fetch_surface_observations, module)?)?;
     module.add_function(wrap_pyfunction!(surface_plots_json, module)?)?;
+    module.add_function(wrap_pyfunction!(latest_surface_plots_json, module)?)?;
     Ok(())
 }

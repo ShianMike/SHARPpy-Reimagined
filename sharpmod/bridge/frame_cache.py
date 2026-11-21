@@ -11,11 +11,14 @@ from typing import Any
 
 
 def path(kind: str, model: str, product: str, run: datetime, hour: int,
-         size: tuple[int, int]) -> Path:
+         size: tuple[int, int], *, legacy: bool = False) -> Path:
     from sharpmod.providers import hrrr_field
 
     # Version the derived representation separately from the provider's raw data.
-    version = 2 if kind == "contours" and product == "mslp" else 1
+    version = 2 if (
+        (kind == "grid" and not legacy)
+        or (kind == "contours" and product == "mslp")
+    ) else 1
     return hrrr_field.disk_cache_root() / (
         f"{kind}-v{version}_{model}_{product}_{run:%Y%m%d%H}_f{hour:03d}_{size[0]}x{size[1]}.json.gz"
     )
@@ -69,9 +72,12 @@ def cached_hours(params):
     for hour in sorted(set(hours)):
         if hour < first_hour:
             continue
-        needed = [path(kind, model, product.key, run, hour, fields.FRAME)
+        needed = [(
+                      path(kind, model, product.key, run, hour, fields.FRAME),
+                      path(kind, model, product.key, run, hour, fields.FRAME, legacy=True),
+                  )
                   for model, product, run, _ in selections
                   for kind in (["grid", "contours"] if product.contour is not None or product.wind else ["grid"])]
-        if all(target in present for target in needed):
+        if all(current in present or legacy in present for current, legacy in needed):
             result.append(hour)
     return result

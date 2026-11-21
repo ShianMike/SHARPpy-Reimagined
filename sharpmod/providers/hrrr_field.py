@@ -531,16 +531,13 @@ def decode_message(payload: bytes, eccodes=None, *, field_index: int = 0,
 
 @dataclass(frozen=True)
 class _IndexMap:
-    """Nearest-neighbour mapping from an output frame to HRRR grid cells.
+    """Mapping from an output frame to native model grid cells.
 
     ``flat`` indexes a raveled HRRR grid; ``inside`` marks the output pixels that
     fall within the model domain at all. Both are flat arrays of the output
     frame's pixel count.
 
-    Nearest neighbour rather than bilinear on purpose: the output frame is
-    slightly finer than the source grid, so bilinear would smooth model detail
-    without adding information, and for a banded scale it would invent
-    intermediate classes along every boundary.
+    The scalar overlay also keeps fractional coordinates for native interpolation.
     """
 
     width: int
@@ -548,6 +545,7 @@ class _IndexMap:
     bounds: tuple[float, float, float, float]
     flat: np.ndarray
     inside: np.ndarray
+    fractional: tuple[np.ndarray, np.ndarray] | None = None
 
 
 _INDEX_LOCK = threading.Lock()
@@ -564,7 +562,13 @@ _INDEX_CACHE: OrderedDict[tuple, _IndexMap] = OrderedDict()
 
 
 def reproject(field: np.ndarray, mapping: _IndexMap) -> np.ndarray:
-    """Sample a HRRR grid onto the output frame."""
+    """Sample a native grid onto the output frame."""
+    if mapping.fractional is not None:
+        import sharpmod_rs
+
+        return sharpmod_rs.reproject_regional_map_field(
+            field, *mapping.fractional, (mapping.width, mapping.height),
+        )
     sampled = field.reshape(-1)[mapping.flat]
     sampled = np.where(mapping.inside, sampled, MISSING)
     return sampled.reshape(mapping.height, mapping.width)
@@ -609,7 +613,7 @@ _DISK_LOCK = threading.RLock()
 _NEXT_DISK_PRUNE = 0.0
 _MANAGED_FRAME = re.compile(
     r"(?:[a-z0-9-]+_\d{10}_f\d{2,3}_\d+x\d+\.png|"
-    r"(?:grid|contours)-v1_[a-z0-9-]+_[a-z0-9-]+_\d{10}_f\d{3}_\d+x\d+\.json\.gz|"
+    r"(?:grid|contours)-v[12]_[a-z0-9-]+_[a-z0-9-]+_\d{10}_f\d{3}_\d+x\d+\.json\.gz|"
     r"tmp[a-z0-9_]{8}\.part)"
 )
 

@@ -7,12 +7,16 @@ import { Columns2, Grid2x2, MapPin, Minus, Plus, Scan, Square, SquareDashedMouse
 import type { CSSProperties, ReactNode } from "react";
 import { Surface } from "../../ui/Surface";
 import { IconAction } from "../../ui/Controls";
+import { useAppStore } from "../../stores/appStore";
 import { useMapStore, type PanelLayout } from "../../stores/mapStore";
 import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
+import { useForecastDrawingStore } from "../../stores/forecastDrawingStore";
 import { useForecastStore } from "../../stores/forecastStore";
+import { ForecastDrawingTools } from "../forecastDrawing/ForecastDrawingTools";
 import styles from "./MapToolbar.module.css";
 
 export interface MapToolbarProps {
+  feedbackTarget: HTMLElement | null;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetView: () => void;
@@ -25,12 +29,13 @@ const LAYOUTS: readonly { layout: PanelLayout; icon: LucideIcon; label: string }
   { layout: 4, icon: Grid2x2, label: "Four synchronized panels" },
 ];
 
-export function MapToolbar({ onZoomIn, onZoomOut, onResetView, onLayoutChange }: MapToolbarProps): ReactNode {
+export function MapToolbar({ feedbackTarget, onZoomIn, onZoomOut, onResetView, onLayoutChange }: MapToolbarProps): ReactNode {
   const current = useMapStore((state) => state.panelLayout);
   const live = useMapStore((state) => state.view === "live");
+  const forecastMap = useAppStore((state) => state.activeWorkspace === "map");
   const mode = useBoxSoundingStore((state) => state.mode);
-  return (
-    <Surface role="toolbar" aria-label="Map" aria-orientation="vertical" elevation="floating" className={styles.toolbar}>
+  const drawing = useForecastDrawingStore((state) => !live && forecastMap && state.enabled);
+  return <Surface role="toolbar" aria-label="Map" aria-orientation="vertical" elevation="floating" className={styles.toolbar}>
       <IconAction icon={Plus} label="Zoom in" hintSide="right" onClick={onZoomIn} />
       <IconAction icon={Minus} label="Zoom out" hintSide="right" onClick={onZoomOut} />
       <IconAction icon={Scan} label="Reset view" hintSide="right" onClick={onResetView} />
@@ -42,14 +47,13 @@ export function MapToolbar({ onZoomIn, onZoomOut, onResetView, onLayoutChange }:
       </div>
       {live ? null : <>
         <span className={styles.divider} aria-hidden="true" />
-        <div className={styles.layouts} role="group" aria-label="Sounding selection" data-selection-track="vertical"
+        {drawing ? <ForecastDrawingTools feedbackTarget={feedbackTarget} /> : <div className={styles.layouts} role="group" aria-label="Sounding selection" data-selection-track="vertical"
           style={{ "--selection-index": mode === "point" ? 0 : 1 } as CSSProperties}>
           <IconAction icon={MapPin} label="Point sounding" hintSide="right" aria-pressed={mode === "point"}
             onClick={() => { useBoxSoundingStore.getState().setMode("point"); }} />
           <IconAction icon={SquareDashedMousePointer} label="Box sounding" hintSide="right" aria-pressed={mode === "box"}
             onClick={() => { useForecastStore.getState().setPlaying(false); useBoxSoundingStore.getState().setMode("box"); }} />
-        </div>
+        </div>}
       </>}
-    </Surface>
-  );
+    </Surface>;
 }

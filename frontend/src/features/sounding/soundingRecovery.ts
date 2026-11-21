@@ -33,7 +33,11 @@ export function createSoundingRecovery(client: RecoveryClient, repository: Recov
       if (stopped) return;
       if (dirty) continue;
       const added = [...sources.values()].filter(source => !written.has(source.soundingId));
-      await repository.save(session, added, previousOverride);
+      const nextPrevious = previousOverride;
+      await repository.save(session, added, nextPrevious);
+      if (!stopped && nextPrevious === null && recovery.getState().previous !== null) {
+        recovery.setState({ previous: null, prompt: false });
+      }
       for (const source of added) written.add(source.soundingId);
       const keep = new Set(session?.open.map(item => item.soundingId));
       for (const id of sources.keys()) if (!keep.has(id)) { sources.delete(id); written.delete(id); }
@@ -83,9 +87,12 @@ export function createSoundingRecovery(client: RecoveryClient, repository: Recov
   const discard = async (): Promise<void> => {
     if (restoring) return;
     await running;
+    if (stopped || restoring || recovery.getState().previous === null) return;
+    const checkpoint = previousOverride;
     previousOverride = null;
-    recovery.setState({ previous: null, prompt: false });
     schedule();
+    await running;
+    if (recovery.getState().status === "error" && recovery.getState().previous !== null) previousOverride = checkpoint;
   };
   const backendRestart = (): void => {
     restoring = true;

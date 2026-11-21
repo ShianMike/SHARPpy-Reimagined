@@ -42,12 +42,6 @@ function byPriority(selectedId: string | null): (a: Station, b: Station) => numb
   };
 }
 
-/** The cell key of a screen point. */
-export function cellKey(point: ScreenPoint, cell: number): string {
-  const size = Math.max(1, cell);
-  return `${String(Math.floor(point.x / size))}:${String(Math.floor(point.y / size))}`;
-}
-
 /** Whether two screen points are less than `distance` apart on both axes. */
 export function near(a: ScreenPoint, b: ScreenPoint, distance: number): boolean {
   return Math.abs(a.x - b.x) < distance && Math.abs(a.y - b.y) < distance;
@@ -66,7 +60,8 @@ export function declutterPoints<T>(
   cell: number,
 ): T[] {
   const size = Math.max(1, cell);
-  const owners = new Map<string, ScreenPoint>();
+  const offsets = [-size, 0, size];
+  const rows = new Map<number, Map<number, ScreenPoint>>();
   const kept: T[] = [];
   for (const item of items) {
     const point = project(item);
@@ -80,16 +75,25 @@ export function declutterPoints<T>(
     ) {
       continue;
     }
-    const crowded = [-size, 0, size].some((dx) =>
-      [-size, 0, size].some((dy) => {
-        const owner = owners.get(cellKey({ x: point.x + dx, y: point.y + dy }, size));
-        return owner !== undefined && near(owner, point, size);
-      }),
-    );
+    let crowded = false;
+    neighbors: for (const dy of offsets) {
+      const row = rows.get(Math.floor((point.y + dy) / size));
+      if (row === undefined) continue;
+      for (const dx of offsets) {
+        const owner = row.get(Math.floor((point.x + dx) / size));
+        if (owner !== undefined && near(owner, point, size)) {
+          crowded = true;
+          break neighbors;
+        }
+      }
+    }
     if (crowded) {
       continue;
     }
-    owners.set(cellKey(point, size), point);
+    const y = Math.floor(point.y / size);
+    const row = rows.get(y) ?? new Map<number, ScreenPoint>();
+    row.set(Math.floor(point.x / size), point);
+    rows.set(y, row);
     kept.push(item);
   }
   return kept;

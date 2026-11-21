@@ -177,6 +177,17 @@
   --parameter-ramp-w: 10.8px;
   --scale-label-w: var(--control-h-lg);
   --attribution-size: 18px;
+  /* Match the categorical contour fills in weather-core's SPC outlook palette. */
+  --spc-thunderstorms-fill: #C1E9C1;
+  --spc-marginal-fill: #66A366;
+  --spc-slight-fill: #FFE066;
+  --spc-enhanced-fill: #FFA366;
+  --spc-moderate-fill: #E06666;
+  --spc-high-fill: #EE99EE;
+  --spc-5-percent-fill: #9D4E15;
+  --spc-60-percent-fill: #D633FF;
+  --spc-75-percent-fill: #C04DFF;
+  --spc-90-percent-fill: #A366FF;
   --track-h: 4.5px;
   --track-fill: rgb(255 255 255 / 0.22);
   --slider-thumb: #ffffff;
@@ -254,6 +265,8 @@
   --map-selected-halo: rgb(255 208 0 / 0.28);
   --map-label-text: #f1efeb;
   --map-label-halo: #000000;
+  --map-spotter-active: #79b9b5;
+  --map-spotter-chase-cam: #b9a2d3;
   --map-station-label-text: #25354a;
   --map-station-label-fill: rgb(248 251 255 / 0.94);
   --map-radar-label-selected-edge: var(--success);

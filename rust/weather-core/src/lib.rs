@@ -24,6 +24,7 @@ pub mod reports;
 pub mod satellite;
 pub mod sounding_recovery;
 pub mod spc_outlook;
+pub mod spotter_network;
 pub mod surface;
 pub mod threshold_catalog;
 pub mod transfer_policy;

@@ -84,6 +84,9 @@ pub(super) struct Server {
     pub bytes: Arc<AtomicU64>,
     pub requests: Arc<AtomicU64>,
     pub active: Arc<AtomicUsize>,
+    pub identity_requests: Arc<AtomicU64>,
+    pub identity_gate: Arc<Mutex<()>>,
+    pub identity_missing: Arc<AtomicBool>,
 }
 
 impl Server {
@@ -101,6 +104,9 @@ impl Server {
         let bytes = Arc::new(AtomicU64::new(0));
         let requests = Arc::new(AtomicU64::new(0));
         let active = Arc::new(AtomicUsize::new(0));
+        let identity_requests = Arc::new(AtomicU64::new(0));
+        let identity_gate = Arc::new(Mutex::new(()));
+        let identity_missing = Arc::new(AtomicBool::new(false));
         let (stopping, count, sent, inflight) = (
             stop.clone(),
             requests.clone(),
@@ -113,6 +119,9 @@ impl Server {
             etag: "\"fixed-hrrr-fixture\"".into(),
         }));
         let current = version.clone();
+        let probes = identity_requests.clone();
+        let gate = identity_gate.clone();
+        let missing = identity_missing.clone();
         let worker = std::thread::spawn(move || {
             let mut workers = Vec::new();
             for stream in listener.incoming() {
@@ -128,6 +137,7 @@ impl Server {
                     sent.clone(),
                     inflight.clone(),
                 );
+                let (probes, gate, missing) = (probes.clone(), gate.clone(), missing.clone());
                 workers.push(std::thread::spawn(move || {
                     stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
                     let mut input=BufReader::new(stream);
@@ -144,6 +154,14 @@ impl Server {
                     }
                     let mut stream=input.into_inner();
                     count.fetch_add(1,Ordering::Relaxed);
+                    let _identity_response = (range == Some((0, 0))).then(|| {
+                        probes.fetch_add(1, Ordering::Relaxed);
+                        gate.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+                    });
+                    if range == Some((0, 0)) && missing.load(Ordering::Relaxed) {
+                        let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                        return;
+                    }
                     let (data,status,content_range)=if path.ends_with(".idx") {
                         (index.as_slice(),"200 OK",String::new())
                     } else if let Some((start,end))=range {
@@ -175,6 +193,9 @@ impl Server {
             bytes,
             requests,
             active,
+            identity_requests,
+            identity_gate,
+            identity_missing,
         }
     }
 }

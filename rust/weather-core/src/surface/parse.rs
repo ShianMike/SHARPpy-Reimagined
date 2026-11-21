@@ -89,6 +89,13 @@ pub fn stations(payload: &Value) -> Vec<Station> {
         .collect()
 }
 
+pub(super) fn observation_time(timestamp: &str) -> Option<OffsetDateTime> {
+    let instant = OffsetDateTime::parse(timestamp, &Rfc3339)
+        .ok()?
+        .checked_to_offset(UtcOffset::UTC)?;
+    (1..=9999).contains(&instant.year()).then_some(instant)
+}
+
 pub fn observations(payload: &Value) -> Vec<Observation> {
     let mut observations: Vec<_> = payload
         .get("features")
@@ -97,15 +104,8 @@ pub fn observations(payload: &Value) -> Vec<Observation> {
         .flatten()
         .filter_map(|feature| {
             let properties = feature.get("properties")?;
-            let observed_at =
-                OffsetDateTime::parse(properties.get("timestamp")?.as_str()?, &Rfc3339)
-                    .ok()?
-                    .checked_to_offset(UtcOffset::UTC)?;
-            if !(1..=9999).contains(&observed_at.year()) {
-                return None;
-            }
             Some(Observation {
-                observed_at,
+                observed_at: observation_time(properties.get("timestamp")?.as_str()?)?,
                 temperature_c: quantity(properties.get("temperature"), Unit::Celsius),
                 dewpoint_c: quantity(properties.get("dewpoint"), Unit::Celsius),
                 direction_deg: quantity(properties.get("windDirection"), Unit::Degrees),

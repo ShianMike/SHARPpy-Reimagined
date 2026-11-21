@@ -21,6 +21,8 @@ import { WeatherLegend } from "./WeatherLegend";
 import { DomainStatus, OutlookStatus, PlaceStatus, RadarControls, SatelliteControls } from "./OverlayControls";
 import { ReportControls } from "./ReportControls";
 import { SurfacePlotControls } from "./SurfacePlotControls";
+import { SpotterNetworkStatus } from "./SpotterNetworkStatus";
+import { spotterNetworkAvailable } from "../spotterQueries";
 import { OpacityControl } from "./OpacityControl";
 import styles from "./LayerPanel.module.css";
 
@@ -37,7 +39,7 @@ const CATEGORIES = [
 const PROJECTIONS = ["mercator", "globe"] as const;
 const descriptor = (id: string): LayerDescriptor | undefined => LAYER_REGISTRY.find((item) => item.id === id);
 /** The map layers, in the order the panel lists them. */
-const MAP_LAYERS = ["model-domain", "place-labels", "roads", "radar-site-labels", "stations", "station-labels", "basemap"]
+const MAP_LAYERS = ["model-domain", "place-labels", "roads", "rivers", "radar-site-labels", "stations", "station-labels", "basemap"]
   .map(descriptor)
   .filter((item): item is LayerDescriptor => item !== undefined && item.userControllable);
 
@@ -64,6 +66,8 @@ function WeatherExtra({ id, panel }: { id: OrderableLayerId; panel: number }): R
       return <ReportControls />;
     case "surface-plots":
       return <SurfacePlotControls />;
+    case "spotter-network":
+      return <SpotterNetworkStatus />;
     default:
       return <OutlookStatus panel={panel} product={id.slice("spc-".length) as "cat" | "torn" | "wind" | "hail"} />;
   }
@@ -86,7 +90,9 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
   const catalog = useMapCatalog().data;
   const isobarsUnavailable = !live && states.isobars.visible && context !== null && catalog !== undefined
     && (!context.fieldsAvailable || !catalog.products.some((product) => product.key === "mslp"));
-  const topFirst = [...order].reverse().filter((id) => ORDERABLE.has(id) && layerInView(id, live ? "live" : "map"));
+  const showSpotters = live && spotterNetworkAvailable();
+  const topFirst = [...order].reverse().filter((id) =>
+    ORDERABLE.has(id) && layerInView(id, live ? "live" : "map") && (id !== "spotter-network" || showSpotters));
   const active = topFirst.filter((id) => states[id].visible);
   const available = topFirst.filter((id) => !states[id].visible);
   const selectedId = expandedWeather?.panel === panel && active.includes(expandedWeather.id) ? expandedWeather.id : null;
@@ -109,18 +115,20 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
         {isobarsUnavailable ? <span className={styles.hint}>Isobars are unavailable for this model and forecast time.</span> : null}
       </div>
       <div className={styles.categories}>
-        {layout === 1 ? null : <div className={styles.panelPicker} role="group" aria-label="Active map panel"
-          data-selection-track="horizontal" style={{ "--selection-index": panel } as CSSProperties}>
-          {Array.from({ length: layout }, (_, index) => <button key={index} type="button" aria-pressed={panel === index}
-            onClick={() => { useMapStore.getState().setActivePanel(index); }}>Panel {index + 1}</button>)}
-        </div>}
-        <div className={styles.groups} role="group" aria-label="Layer categories" data-selection-track="horizontal"
-          style={{ "--selection-index": CATEGORIES.findIndex((item) => item.id === group) } as CSSProperties}>
+        <div className={styles.groups} role="group" aria-label="Layer categories">
           {CATEGORIES.map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-pressed={group === id}
             aria-label={id === "map" ? "Map details" : undefined} onClick={() => { useMapStore.getState().setLayerPanelGroup(id); }}>
             <Icon className="icon" aria-hidden="true" /> {label}
           </button>)}
         </div>
+        {layout === 1 ? null : <div className={styles.panelScope}>
+          <span className={styles.panelLabel} aria-hidden="true">Panel</span>
+          <div className={styles.panelPicker} role="group" aria-label="Active map panel"
+            data-selection-track="horizontal" style={{ "--selection-index": panel } as CSSProperties}>
+            {Array.from({ length: layout }, (_, index) => <button key={index} type="button" aria-pressed={panel === index}
+              aria-label={`Panel ${String(index + 1)}`} onClick={() => { useMapStore.getState().setActivePanel(index); }}>{index + 1}</button>)}
+          </div>
+        </div>}
       </div>
       <div className={styles.body}>
         {group !== "weather" ? null : <div className={styles.weatherLayout} data-motion="fade" data-editing={selectedLayer !== undefined}>

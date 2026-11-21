@@ -15,7 +15,7 @@ from sharpmod.providers import hrrr_field as _api
 
 def index_map(size: tuple[int, int],
               bounds: tuple[float, float, float, float], *,
-              model: str = "hrrr") -> _api._IndexMap:
+              model: str = "hrrr", interpolate: bool = False) -> _api._IndexMap:
     """Return the cached output-frame to native-model-grid index map.
 
     This is the expensive part of a first render -- a projection of every output
@@ -23,7 +23,7 @@ def index_map(size: tuple[int, int],
     and then shared by every product, every run and every forecast hour.
     """
     grid = _api.field_grid(model)
-    key = (model, grid.shape, int(size[0]), int(size[1]), tuple(round(value, 6) for value in bounds))
+    key = (model, grid.shape, int(size[0]), int(size[1]), tuple(round(value, 6) for value in bounds), interpolate)
     with _api._INDEX_LOCK:
         cached = _api._INDEX_CACHE.get(key)
         if cached is not None:
@@ -46,6 +46,7 @@ def index_map(size: tuple[int, int],
             lat1 - lat0) / height
         lon_grid, lat_grid = np.meshgrid(lons, lats)
 
+        fractional = None
         if model in _api.GLOBAL_MODELS:
             # Stabilize half-cell ties against decimal grid-spacing roundoff.
             col = np.floor(np.round((lon_grid.ravel() + 180) / grid.spacing + 0.5, 8)).astype(np.int32) % grid.shape[1]
@@ -60,14 +61,18 @@ def index_map(size: tuple[int, int],
                 CRS.from_proj4(projection),
                 always_xy=True)
             xs, ys = transformer.transform(lon_grid.ravel(), lat_grid.ravel())
-            col = np.rint((np.asarray(xs) - grid.x0) / grid.spacing).astype(np.int32)
-            row = np.rint((np.asarray(ys) - grid.y0) / grid.spacing).astype(np.int32)
+            x = (np.asarray(xs) - grid.x0) / grid.spacing
+            y = (np.asarray(ys) - grid.y0) / grid.spacing
+            col = np.rint(x).astype(np.int32)
+            row = np.rint(y).astype(np.int32)
+            if interpolate:
+                fractional = (x, y)
         inside = ((col >= 0) & (col < grid.shape[1])
                   & (row >= 0) & (row < grid.shape[0]))
         flat = np.where(inside, row.astype(np.int64) * grid.shape[1] + col,
                         0).astype(np.int32)
 
-        resolved = _api._IndexMap(width, height, tuple(bounds), flat, inside)
+        resolved = _api._IndexMap(width, height, tuple(bounds), flat, inside, fractional)
         _api._INDEX_CACHE[key] = resolved
         while len(_api._INDEX_CACHE) > _api._INDEX_CACHE_MAX_ENTRIES:
             _api._INDEX_CACHE.popitem(last=False)

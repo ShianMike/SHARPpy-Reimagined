@@ -118,7 +118,7 @@ describe("layer registry", () => {
     expect(dimmed?.props.visible).toBe(false);
     expect(dimmed?.props.opacity).toBe(0.4);
     expect(first).toBeInstanceOf(TextLayer);
-    if (first === undefined) throw new Error("Expected surface labels");
+    if (!(first instanceof TextLayer)) throw new Error("Expected surface labels");
     expect(first.props.outlineWidth).toBeGreaterThan(0);
     expect(first.props.outlineColor).toEqual(ctx.tokens.colours.labelHalo);
     expect(first.props.background).toBe(false);
@@ -277,7 +277,7 @@ describe("layer registry", () => {
 
   it("lists only the user-controllable layers for the panel, in zOrder", () => {
     expect(controllableLayers(LAYER_REGISTRY).map((d) => d.id)).toEqual([
-      "basemap", "roads", "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "isobars", "surface-plots", "watches", "warnings", "model-domain", "place-labels",
+      "basemap", "roads", "rivers", "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "isobars", "surface-plots", "watches", "warnings", "spotter-network", "model-domain", "place-labels",
       "stations", "radar-site-labels", "station-labels",
     ]);
   });

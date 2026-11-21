@@ -13,6 +13,7 @@ export interface FieldSamplingProps {
   fieldPalette: TextureSource;
   fieldTransform: [number, number, number, number];
   fieldRange: [number, number];
+  fieldWrapLongitude: number;
 }
 
 // shortcut: check a 4 ms task budget every 65536 cells; retune the chunk if hardware checks show an overrun.
@@ -94,6 +95,7 @@ export function smoothFieldProps({ frame, palette }: FieldImage): FieldSamplingP
     image, fieldPalette: paletteImage(palette),
     fieldTransform: [frame.scale, frame.offset, palette.floor ?? low, palette.ceiling ?? 3.4e38],
     fieldRange: [low, high > low ? high - low : 1],
+    fieldWrapLongitude: frame.bounds.east - frame.bounds.west === 360 ? 1 : 0,
   };
 }
 

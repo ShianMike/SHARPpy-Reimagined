@@ -37,7 +37,7 @@ const reactHooksAsErrors = Object.fromEntries(
 );
 
 export default tseslint.config(
-  { ignores: ["dist/", "dist-browser/", "dist-fixture/", "test-results/", "playwright-report/"] },
+  { ignores: ["dist/", "dist-browser/", "dist-fixture/", "test-results/", ".test-results/", "playwright-report/"] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked.map((config) => ({ ...config, files: config.files ?? TS_FILES })),
   {

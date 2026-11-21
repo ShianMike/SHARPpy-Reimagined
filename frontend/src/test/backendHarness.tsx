@@ -61,6 +61,7 @@ export function scriptedTransport(replies: Partial<Record<CommandName, ScriptedR
     get_map_catalog: 0,
     get_weather_field: 0,
     get_spc_outlook: 0,
+    build_forecast_drawing: 0,
     get_weather_alerts: 0,
     get_radar_frame: 0,
     get_radar_site_frame: 0,
@@ -71,6 +72,8 @@ export function scriptedTransport(replies: Partial<Record<CommandName, ScriptedR
     get_report_options: 0,
     get_field_contours: 0,
     get_surface_plots: 0,
+    get_latest_surface_plots: 0,
+    get_spotter_positions: 0,
     get_place_labels: 0,
     get_station_availability: 0,
   };

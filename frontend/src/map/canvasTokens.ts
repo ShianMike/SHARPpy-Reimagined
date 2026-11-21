@@ -36,6 +36,8 @@ const COLOUR_TOKENS = {
   selectedHalo: "--map-selected-halo",
   labelText: "--map-label-text",
   labelHalo: "--map-label-halo",
+  spotterActive: "--map-spotter-active",
+  spotterChaseCam: "--map-spotter-chase-cam",
   stationLabelText: "--map-station-label-text",
   stationLabelFill: "--map-station-label-fill",
   radarLabelSelectedEdge: "--map-radar-label-selected-edge",

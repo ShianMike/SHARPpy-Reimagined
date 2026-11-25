@@ -15,7 +15,7 @@ name = "sharpmod_rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-base64 = "=0.22.1"
+base64 = "=0.23.1"
 csv = "1.4"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 libloading = "0.9"

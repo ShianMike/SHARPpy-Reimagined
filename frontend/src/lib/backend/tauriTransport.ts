@@ -10,6 +10,23 @@ export { getCurrentWindow } from "@tauri-apps/api/window";
 
 export type DesktopPlatform = "windows" | "linux" | "macos" | "unknown";
 
+export interface GitHubStarOutcome {
+  status: "starred" | "openedBrowser";
+  url: string;
+}
+
+export async function starGitHubRepository(): Promise<GitHubStarOutcome> {
+  const result = await invoke<unknown>("star_github_repository");
+  if (result === null || typeof result !== "object") {
+    throw new Error("Unexpected response from star_github_repository.");
+  }
+  const { status, url } = result as Record<string, unknown>;
+  if ((status !== "starred" && status !== "openedBrowser") || typeof url !== "string") {
+    throw new Error("Invalid response payload from star_github_repository.");
+  }
+  return { status, url };
+}
+
 export async function getDesktopPlatform(): Promise<DesktopPlatform> {
   const platform = await invoke<unknown>("check_for_updates", { action: "getPlatform" });
   return platform === "windows" || platform === "linux" || platform === "macos" ? platform : "unknown";

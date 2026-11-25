@@ -127,6 +127,8 @@ def _sized(skewt, qt_app, width, height):
 def _lapse(skewt):
     recorder = _Recorder()
     type(skewt).draw_max_lapse_rate_layer(skewt, recorder)
+    # The halo uses offset draws of the same text. Measure the foreground box.
+    recorder.texts[:] = recorder.texts[-1:]
     return recorder
 
 

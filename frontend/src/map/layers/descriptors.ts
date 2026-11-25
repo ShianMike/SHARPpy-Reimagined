@@ -14,7 +14,7 @@ import { buildSurfacePlotLayers } from "./SurfacePlotLayer";
 import { buildSpotterLayers } from "./SpotterLayer";
 import { buildRadarSiteLabels, buildStationLabels, buildStationMarkers } from "./StationLayer";
 import { buildIsobarLayers } from "./IsobarLayer";
-import { OUTLOOK_NAMES, type OutlookKey } from "../../types/map";
+import { OUTLOOK_NAMES, WPC_OUTLOOK_NAME, WPC_WINTER_NAME, type OutlookKey } from "../../types/map";
 
 function outlookDescriptor(key: OutlookKey, zOrder: number): LayerDescriptor {
   const id = `spc-${key}` as const;
@@ -106,10 +106,30 @@ export const LAYER_REGISTRY: readonly LayerDescriptor[] = [
   outlookDescriptor("wind", 16),
   outlookDescriptor("hail", 17),
   {
+    id: "wpc-ero",
+    label: WPC_OUTLOOK_NAME,
+    kind: "deck",
+    zOrder: 18,
+    userControllable: true,
+    opacityControl: true,
+    defaults: LAYER_DEFAULTS["wpc-ero"],
+    build: (ctx, state) => buildOutlookLayers("ero", ctx, state),
+  },
+  {
+    id: "wpc-winter",
+    label: WPC_WINTER_NAME,
+    kind: "deck",
+    zOrder: 19,
+    userControllable: true,
+    opacityControl: true,
+    defaults: LAYER_DEFAULTS["wpc-winter"],
+    build: (ctx, state) => buildOutlookLayers("winter", ctx, state),
+  },
+  {
     id: "isobars",
     label: "Isobars",
     kind: "deck",
-    zOrder: 18,
+    zOrder: 19,
     userControllable: true,
     opacityControl: true,
     defaults: LAYER_DEFAULTS.isobars,
@@ -117,7 +137,7 @@ export const LAYER_REGISTRY: readonly LayerDescriptor[] = [
   },
   ...(["watch", "warning"] as const).map((kind, index): LayerDescriptor => {
     const id = kind === "warning" ? "warnings" : "watches";
-    return { id, label: `NWS ${id}`, kind: "deck", zOrder: 20 + index, userControllable: true,
+    return { id, label: `NWS ${id}`, kind: "deck", zOrder: 21 + index, userControllable: true,
       opacityControl: true, defaults: LAYER_DEFAULTS[id], build: (ctx, state) => buildAlertLayers(kind, ctx, state) };
   }),
   {
@@ -125,7 +145,7 @@ export const LAYER_REGISTRY: readonly LayerDescriptor[] = [
     id: "surface-plots",
     label: "Surface observations",
     kind: "deck",
-    zOrder: 19,
+    zOrder: 20,
     userControllable: true,
     opacityControl: true,
     defaults: LAYER_DEFAULTS["surface-plots"],
@@ -135,7 +155,7 @@ export const LAYER_REGISTRY: readonly LayerDescriptor[] = [
     id: "spotter-network",
     label: "Spotter Network",
     kind: "deck",
-    zOrder: 22,
+    zOrder: 23,
     userControllable: true,
     opacityControl: true,
     defaults: LAYER_DEFAULTS["spotter-network"],

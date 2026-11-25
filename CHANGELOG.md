@@ -7,6 +7,181 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v3.10.0] - 2026-11-25
+
+### Added
+
+- Add NOAA WPC Day 1–3 Excessive Rainfall and Winter Weather outlooks to
+  Overview and Model Viewer, with forecast discussions when available. The
+  winter outlook includes overall impact, snow amount, ice accumulation, snow
+  load, and blowing snow.
+- Add an opt-in Cloudflare Worker for the hosted web app. Route eligible reads
+  to OVH, limit edge traffic, cache public assets, and publish independent
+  origin, HRRR, MRMS and stable-release status.
+- Add 1 km AGL Reflectivity, 0–3 km AGL CAPE, Surface-Based CIN, and
+  Surface-Based LCL Height to HRRR and RRFS. Offer the matching NOAA fields
+  in RAP, GFS, REFS Mean, and archived NAM runs where published. Add
+  Surface-Based CIN from MSC Datamart to GDPS and RDPS. The 1 km map shares
+  the composite reflectivity dBZ scale, and the other fields use their
+  stepped CAPE, CIN, and LCL scales.
+- Add an Ensemble category to the Model Viewer forecast picker. Find the
+  individual REFS members and open NOAA's REFS ensemble mean for 500, 700, and
+  850 mb geopotential height and wind. Check the published fields for the
+  selected run and forecast hour, from F001 through F060.
+- Add a Guidance category to REFS Mean parameters with SPC GREFS tornado,
+  hail, and damaging-wind probabilities for four-hour and full 24-hour windows.
+  The maps use the SPC GREFS viewer's color bands, and the timeline follows the
+  selected product's valid forecast hours.
+- Add REFS Mean maps for 2-m temperature, 2-m dewpoint, and precipitable water.
+  Both surface maps include labeled mean sea-level pressure contours every
+  4 hPa and 10-m wind barbs. The precipitable water map includes 700 mb wind barbs
+  and a scale labeled in fractional inches.
+- Add REFS Mean Surface-Based CAPE Min/Mean/Max and Most-Unstable CAPE Mean
+  under Instability using the application's CAPE color scale and 0–6 km mean
+  bulk shear wind barbs, with a Field selector for Ensemble Minimum, Ensemble
+  Mean, and Ensemble Maximum on Surface-Based CAPE.
+- Add REFS Mean 0–3 km and 0–1 km Storm-Relative Helicity under Wind Shear
+  using the application's SRH color scales and m²/s² units.
+- Add REFS Mean Energy Helicity Index (0–1 km and 0–3 km AGL, derived from
+  SPC REFS ensemble-mean SBCAPE and SRH), Supercell Composite (derived from
+  SPC REFS ensemble-mean MUCAPE, 0–3 km SRH, and 0–6 km bulk shear), and
+  Significant Tornado Parameter under Composite Parameters using the
+  application's EHI, SCP, and STP color scales.
+- Add REFS Mean 4-h and 24-h maximum 10-m wind speed (under Surface, kt) and
+  4-h and 24-h maximum reflectivity (under Radar, dBZ) using the application's
+  surface-wind and reflectivity color scales and forecast-window schedules.
+- Add REFS Mean 1-h QPF and Dominant Precipitation Type under Precipitation
+  with SPC REFS consensus rain, snow, freezing rain, and mix color bands in
+  inches.
+- Add REFS Mean 3-h, 6-h, 24-h, and 48-h QPF Mean under Precipitation using
+  the application's precipitation color scale in inches and each accumulation
+  window's forecast schedule.
+- Add ECCC Canadian HRDPS (2.5 km continental rotated grid, 00/06/12/18Z runs,
+  hourly F000–F048) under Regional (Maps only) via MSC Datamart with 20 map
+  parameters: 500/700/850 mb Height & Wind, 10 m AGL Wind Gusts, 2 m AGL
+  Temperature, Dewpoint, Relative Humidity, and Theta-e with 10 m wind barbs,
+  Precipitation Type & Rate (`in/h`), 6-h/12-h/24-h/Total QPF, Total Snowfall
+  (10:1), 700–500 mb Lapse Rate, Surface-Based CAPE, Surface-Based LCL Height,
+  Surface–500 mb Bulk Shear, 0–3 km SRH, and 0–3 km EHI.
+- Add DWD ICON Global under Global. The 21 forecast maps include 500/700/850/925 mb
+  height and wind, near-surface temperature, dewpoint, relative humidity and
+  theta-e, sea-level pressure and 10 m wind, precipitation type and rate,
+  6/24/48/120-hour and total QPF, precipitable water, 700–500 mb lapse rate,
+  mixed-layer CAPE, surface LCL, and surface–500 mb bulk shear. The 6-hour
+  maximum 10 m gust map uses the supplied 15–75 mph scale. Forecasts run hourly
+  through F078 and every three hours thereafter to F120 or F180 by cycle.
+- Add `Updraft Helicity: 0-3 km AGL (run max)` (`0-3km UH Max`) and
+  `Updraft Helicity: 2-5 km AGL (run max)` (`2-5km UH Max`) under Explicit
+  Convective across all models publishing hourly MXUPHL (HRRR, RRFS-A,
+  NAM 3 km CONUS, REFS Members 1–5, and HiResW), computed as the run-to-date
+  maximum from F001 through the selected forecast hour.
+- Add `Supercell Composite` (`SCP`) and `Significant Tornado Parameter` (`STP`)
+  to REFS Members 1–5 (`refs-m1`–`refs-m5`) under Composite Parameters using
+  published surface-based CAPE/CIN, 2-m temperature/dewpoint LCL height, 0–3 km
+  / 0–1 km SRH, and 0–6 km bulk shear from the reduced REFS member stream.
+- Add `Surface-Based CIN`, `Surface-Based LCL Height`,
+  `Energy Helicity Index (EHI): 0-1 km AGL` and `0-3 km AGL`, and `1-h`, `6-h`,
+  `12-h`, `24-h`, and `Total QPF` across REFS Members 1–5 (`refs-m1`–`refs-m5`).
+- Add `1-h Snowfall` under Winter Weather for REFS Mean (`refs`, from SPC REFS
+  Zarr `snow_01h_acc_mean`) and REFS Members 1–5 (`refs-m1`–`refs-m5`, derived
+  from consecutive cumulative `ASNOW` records) using the 0.1–60 in snowfall
+  color scale.
+- Add an in-app GitHub star notification for `ShianMike/SHARPpy-Reimagined`
+  that appears after a few cooled-down interactions and 30 seconds of
+  inactivity while the window is visible and no Release Notes or update review
+  dialog is open. Clicking **Star on GitHub** stars the repository directly via
+  the Rust/Tauri backend and GitHub API when an authorized local GitHub
+  credential (`GH_TOKEN`/`GITHUB_TOKEN`, `gh auth token`, or
+  `git credential fill`) is available, or opens the repository in the browser
+  otherwise. Include **Not Now** (7-day snooze) and **Don’t ask again**
+  dismissal options, preserve the choice across sessions and settings resets,
+  stop prompting after a successful star, and never star without explicit user
+  consent.
+- Add `5×` and `6×` playback speed options in **Settings → Playback** and on
+  the **Model Viewer** and **Live Tracking** timelines.
+
+### Changed
+
+- Restyle the Overview outlooks with the app's glass surface, a prominent risk
+  summary, compact category and product icons, aligned UTC timing, and a
+  continuous forecast discussion reader.
+- Refresh the README gallery with full-resolution v3.10.0 screenshots of
+  Overview, the REFS Mean parameter picker and F043 precipitation map, Live
+  Tracking, and Soundings.
+- Start Model Viewer panels with Road networks and Rivers off by default.
+- Preserve subtle map shading and frame-to-frame color changes in forecast and
+  sounding GIFs while keeping cropped-frame compression.
+- Print the app version in the header of forecast map PNG, GIF, and WebP exports.
+- Keep labeled **Sources** and **Sounding controls** tabs visible at the top
+  of the Soundings sidebar. Reopening the sidebar restores the last view.
+- Restore NAM and NAM 3 km CONUS in the CONUS model selectors as archive-only
+  choices. Default to the final published 3 November 2026 06 UTC run and
+  allow earlier dates.
+- Refine the Model Viewer forecast picker with underlined category tabs,
+  a searchable model list with aligned grid spacing, and a highlighted current model.
+- Use the same 20–80 kt wind shading and legend for the 700 and 850 mb maps
+  across all supported models.
+- Use a 20–140 kt wind scale with 1 kt color steps for 500 mb Height and Wind
+  across supported models.
+- Set the application and package versions to 3.10.0.
+- Migrate additional Python backend compute, planning, and I/O modules into
+  Rust (`sharpmod-rs` and `sharpmod-weather`, M9–M14): model field and HTTP
+  byte-range planning, NOAA RRFS/REFS NOMADS inventory and provenance handling,
+  derived convective/hazard/winter/fire indices and fast effective STP/CIN,
+  box grid regions/lattice/transects/statistics, sounding profile decoder
+  cleanup and bridge gzip/TTL/storage caching, and batch extraction manifest
+  loading, containment, and SHA-256 fingerprinting.
+- Replace the plain sounding loading badge with a centered status overlay
+  covering initial rendering, profile recalculation, updated sounding redraws,
+  preview-ready locator refinement, and centered workspace loading states.
+
+### Fixed
+
+- Show separate Rain, Snow, Freezing rain, and Mix color tables with weather
+  icons for REFS Mean 1-h QPF. Stack the tables in a single column in forecast
+  exports. The interactive scale reports amounts in inches.
+- Label geopotential height contours with their values in decametres on height
+  and wind maps. Refresh saved contour frames when the source fields are
+  available and retain earlier geometry when a refresh cannot be loaded.
+- Preserve exact contour coordinates when reading compressed forecast frames
+  from disk.
+- Make geopotential height contours easier to follow in dark mode with pale gold
+  strokes, contrasting outlines, and larger numbers that match the lines.
+- Fix the 5-control forecast toolbar width and spacing so model names, UTC cycle
+  hours, `Forecast hour` labels, and ensemble field variants display without
+  premature truncation or multi-line wrapping.
+- Align forecast catalog, cache, cancellation and precipitation tests with
+  the products, cycles and request paths each model supports.
+- Check HRDPS availability in Overview through MSC Datamart and show its
+  map-only capability in the box inspector.
+- Wait for the selected forecast hour's inventory before loading its fields
+  and contours so unavailable accumulation windows do not trigger requests.
+- Verify the map detail defaults in Model Viewer and Live Tracking, and keep
+  the forecast palette tests within the frontend's source boundaries.
+- Update the map legend tests for the WPC winter layer and the forecast
+  discussion reader. Reduce repeated model-selector interactions, isolate the
+  radar error-state test, and reuse the GIF test decoder.
+- Run frontend performance tests without treating the GIF benchmark's type
+  declarations as a test suite. Check the desktop sidecar process ID on
+  every supported platform.
+- Fit the release highlights into the What’s New dialog at the minimum
+  desktop window size.
+- Keep the background outline of Skew-T lapse-rate labels stable across
+  repeated renders by drawing it with the same font as the label.
+- Unify Live Tracking's Surface observations layer and controls with Model
+  Viewer so both views use the shared worldwide METAR snapshot, keep reporting
+  station markers visible through pan and zoom, and show station plots at
+  closer scales without querying separate per-frame nearby-station snapshots.
+- Check REFS Mean (`refs`) availability in Overview (`model_status`) against
+  NOAA/NCEP NOMADS map inventories and include it in the models catalog as a
+  map-only model instead of rejecting it as missing from the forecast
+  catalogue.
+
+### Security
+
+- Update the locked Rust URL, cookie, and filesystem dependencies and the
+  HDF5 reader's cache dependency to versions with upstream fixes.
+
 ## [v3.9.0] - 2026-11-21
 
 ### Added

@@ -4,6 +4,7 @@
 pub mod animation;
 pub mod backend;
 pub mod clipboard;
+pub mod github;
 pub mod map;
 pub mod soundings;
 pub mod stations;

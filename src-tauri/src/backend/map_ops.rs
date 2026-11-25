@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::backend::router::Router;
 use crate::backend::sounding_ops::{invalid, rejected};
 use crate::dto::map::{AvailabilityReport, FieldGridResult, MapCatalog, PlaceLabels, SpcOutlook};
-use crate::dto::overlays::{Outlook, OutlookArea, Place};
+use crate::dto::overlays::{DiscussionSection, Outlook, OutlookArea, OutlookDiscussion, Place};
 use crate::dto::stations::{Station, StationAvailability as StationAvailabilityState};
 use crate::error::{BackendError, ErrorCode, ErrorContext, PYTHON_PROVIDER};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -16,12 +16,75 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 pub const OP_MAP_CATALOG: &str = "get_map_catalog";
 pub const OP_FIELD: &str = "get_weather_field";
 pub const OP_OUTLOOK: &str = "get_spc_outlook";
+pub const OP_WPC_OUTLOOK: &str = "get_wpc_outlook";
 pub const OP_PLACES: &str = "get_place_labels";
 pub const OP_AVAILABILITY: &str = "get_station_availability";
 
 const CATALOG_TIMEOUT: Duration = Duration::from_secs(30);
 const FIELD_TIMEOUT: Duration = Duration::from_secs(120);
 const OUTLOOK_VERTEX_SCALE: f64 = 10_000.0;
+
+fn build_outlook_dto(
+    layer: &sharpmod_weather::spc_outlook::OutlookLayer,
+    when: OffsetDateTime,
+    include_states: bool,
+    discussion: Option<sharpmod_weather::outlook_discussion::OutlookDiscussion>,
+) -> Outlook {
+    let round4 = |v: f64| (v * OUTLOOK_VERTEX_SCALE).round() / OUTLOOK_VERTEX_SCALE;
+    Outlook {
+        title: layer.title.clone(),
+        subtitle: layer.subtitle.clone(),
+        valid_from: layer.valid_from.clone(),
+        valid_to: layer.valid_to.clone(),
+        issued: layer.issued.clone(),
+        covers: layer.covers(when),
+        source_url: layer.source_url.clone(),
+        attribution: layer.attribution.clone(),
+        affected_states: include_states.then(|| {
+            layer
+                .affected_states()
+                .into_iter()
+                .map(Into::into)
+                .collect()
+        }),
+        discussion: discussion.map(|disc| OutlookDiscussion {
+            headline: disc.headline,
+            summary: disc.summary,
+            sections: disc
+                .sections
+                .into_iter()
+                .map(|s| DiscussionSection {
+                    heading: s.heading,
+                    body: s.body,
+                })
+                .collect(),
+            issued: disc.issued,
+            source_url: disc.source_url,
+        }),
+        areas: layer
+            .areas
+            .iter()
+            .map(|area| OutlookArea {
+                label: area.label.clone(),
+                description: area.description.clone(),
+                fill: Some(area.fill.clone()),
+                stroke: area.stroke.clone(),
+                rank: area.rank,
+                hatch: area.hatch,
+                hatch_level: area.hatch_level,
+                rings: area
+                    .rings
+                    .iter()
+                    .map(|ring| {
+                        ring.iter()
+                            .map(|&[lon, lat]| [round4(lon), round4(lat)])
+                            .collect()
+                    })
+                    .collect(),
+            })
+            .collect(),
+    }
+}
 
 pub(crate) fn key_ok(key: &str) -> bool {
     (1..=40).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
@@ -166,64 +229,95 @@ impl Router {
             "cat"
         };
         let client = sharpmod_weather::spc_outlook::client();
-        let layer = match day {
-            Some(day) => client.fetch_latest(day, product).await,
-            None => client.fetch(when, OffsetDateTime::now_utc(), product).await,
-        }
-        .map_err(|error| BackendError {
+        let (layer_res, discussion) = match day {
+            Some(d) => tokio::join!(
+                client.fetch_latest(d, product),
+                client.fetch_discussion(d, None)
+            ),
+            None => (
+                client.fetch(when, OffsetDateTime::now_utc(), product).await,
+                None,
+            ),
+        };
+        let layer = layer_res.map_err(|error| BackendError {
             code: ErrorCode::OverlayFetchFailed,
             message: format!("The SPC outlook could not be read: {error}."),
             retryable: true,
             context: Some(Box::new(context.clone())),
             details: None,
         })?;
-        let round4 = |v: f64| (v * OUTLOOK_VERTEX_SCALE).round() / OUTLOOK_VERTEX_SCALE;
         let outlook = SpcOutlook {
             product: product.to_owned(),
             valid_time: Some(sharpmod_weather::format_rfc3339_utc(when)),
-            outlook: layer.map(|layer| Outlook {
-                title: layer.title.clone(),
-                subtitle: layer.subtitle.clone(),
-                valid_from: layer.valid_from.clone(),
-                valid_to: layer.valid_to.clone(),
-                issued: layer.issued.clone(),
-                covers: layer.covers(when),
-                source_url: layer.source_url.clone(),
-                attribution: layer.attribution.clone(),
-                affected_states: day.map(|_| {
-                    layer
-                        .affected_states()
-                        .into_iter()
-                        .map(Into::into)
-                        .collect()
-                }),
-                areas: layer
-                    .areas
-                    .iter()
-                    .map(|area| OutlookArea {
-                        label: area.label.clone(),
-                        description: area.description.clone(),
-                        fill: Some(area.fill.clone()),
-                        stroke: area.stroke.clone(),
-                        rank: area.rank,
-                        hatch: area.hatch,
-                        hatch_level: area.hatch_level,
-                        rings: area
-                            .rings
-                            .iter()
-                            .map(|ring| {
-                                ring.iter()
-                                    .map(|&[lon, lat]| [round4(lon), round4(lat)])
-                                    .collect()
-                            })
-                            .collect(),
-                    })
-                    .collect(),
-            }),
+            outlook: layer.map(|layer| build_outlook_dto(&layer, when, day.is_some(), discussion)),
         };
         outlook
             .validate()
             .map_err(|reason| rejected(&context, "outlooks.spc", reason))?;
+        Ok(outlook)
+    }
+
+    /// Read the WPC Excessive Rainfall or Winter Weather Outlook by valid time or issuance day.
+    pub async fn wpc_outlook(
+        &self,
+        valid_time: &str,
+        day: Option<u8>,
+        product: Option<&str>,
+    ) -> Result<SpcOutlook, BackendError> {
+        let product = product.unwrap_or("ero");
+        let winter = sharpmod_weather::wpc_winter_outlook::winter_product_spec(product).is_some();
+        let label = if winter {
+            "WPC winter weather outlook"
+        } else {
+            "WPC excessive rainfall outlook"
+        };
+        let context = context(OP_WPC_OUTLOOK, label);
+        if product != "ero" && !winter {
+            return Err(invalid(&context, "product is not a supported WPC outlook"));
+        }
+        if !time_ok(valid_time) {
+            return Err(invalid(&context, "validTime must be an RFC 3339 time"));
+        }
+        let when = OffsetDateTime::parse(valid_time, &Rfc3339)
+            .map_err(|_| invalid(&context, "validTime must be an RFC 3339 time"))?;
+        if day.is_some_and(|day| !(1..=3).contains(&day)) {
+            return Err(invalid(&context, "day must be 1, 2, or 3"));
+        }
+        let resolved = if winter {
+            let client = sharpmod_weather::wpc_winter_outlook::client();
+            match day {
+                Some(d) => client.fetch_latest(d, product).await,
+                None => client
+                    .fetch(when, OffsetDateTime::now_utc(), product)
+                    .await
+                    .map(|opt| opt.map(|layer| (layer, None))),
+            }
+        } else {
+            let client = sharpmod_weather::wpc_outlook::client();
+            match day {
+                Some(d) => client.fetch_latest(d).await,
+                None => client
+                    .fetch(when, OffsetDateTime::now_utc())
+                    .await
+                    .map(|opt| opt.map(|layer| (layer, None))),
+            }
+        }
+        .map_err(|error| BackendError {
+            code: ErrorCode::OverlayFetchFailed,
+            message: format!("The WPC outlook could not be read: {error}."),
+            retryable: true,
+            context: Some(Box::new(context.clone())),
+            details: None,
+        })?;
+        let outlook = SpcOutlook {
+            product: product.to_owned(),
+            valid_time: Some(sharpmod_weather::format_rfc3339_utc(when)),
+            outlook: resolved
+                .map(|(layer, disc)| build_outlook_dto(&layer, when, day.is_some(), disc)),
+        };
+        outlook
+            .validate()
+            .map_err(|reason| rejected(&context, "outlooks.wpc", reason))?;
         Ok(outlook)
     }
 

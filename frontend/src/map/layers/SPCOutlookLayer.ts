@@ -5,7 +5,7 @@
 
 import { LayerExtension, type Layer } from "@deck.gl/core";
 import { PathLayer, SolidPolygonLayer, TextLayer } from "@deck.gl/layers";
-import type { Outlook, OutlookArea, OutlookKey } from "../../types/map";
+import type { Outlook, OutlookArea, OutlookLayerKey } from "../../types/map";
 import { parseColour } from "../canvasTokens";
 import { bandLabelPoints, closedPaths, labelPoint, type LonLat } from "./outlookGeometry";
 import type { LayerBuildContext, LayerState } from "./registry";
@@ -117,16 +117,16 @@ export function outlookShapes(outlook: OutlookGraphic): OutlookShapes {
 }
 
 /** The layer id prefix of a product; hover picks the fill layer by it. */
-export function outlookLayerId(key: OutlookKey): string {
-  return `spc-${key}`;
+export function outlookLayerId(key: OutlookLayerKey): string {
+  return key === "ero" ? "wpc-ero" : key === "winter" ? "wpc-winter" : `spc-${key}`;
 }
 
-export function buildOutlookLayers(key: OutlookKey, ctx: LayerBuildContext, state: LayerState): Layer[] {
+export function buildOutlookLayers(key: OutlookLayerKey, ctx: LayerBuildContext, state: LayerState): Layer[] {
   const outlook = ctx.outlooks[key];
   return outlook === undefined ? [] : drawOutlookLayers(key, outlook, ctx, state);
 }
 
-export function drawOutlookLayers(key: OutlookKey, outlook: OutlookGraphic,
+export function drawOutlookLayers(key: OutlookLayerKey, outlook: OutlookGraphic,
   ctx: Pick<LayerBuildContext, "tokens" | "outlookLabelLayout">, state: LayerState,
   { custom = false, outlinesOnly = false }: OutlookRenderOptions = {},
 ): Layer[] {
@@ -154,7 +154,7 @@ export function drawOutlookLayers(key: OutlookKey, outlook: OutlookGraphic,
   const layout = ctx.outlookLabelLayout;
   const labels: AreaLabel[] = [...shapes.labels].reverse().flatMap((label) => {
     const labelText = label.text.replace(/^CIG([123])$/u, "CIG $1");
-    const text = custom ? labelText : `${key === "torn" ? "TOR" : key.toUpperCase()} ${labelText}`;
+    const text = custom ? labelText : `${key === "torn" ? "TOR" : key === "ero" ? "ERO" : key === "winter" ? "WSSI" : key.toUpperCase()} ${labelText}`;
     const width = text.length * lengths.outlookLabelSize * 0.7 + 8;
     const height = lengths.outlookLabelSize + 8;
     const position = layout === undefined ? label.candidates[0] : label.candidates.find((candidate) => {

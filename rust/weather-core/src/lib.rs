@@ -3,12 +3,15 @@
 pub mod alerts;
 pub mod animation;
 pub mod australian_radar;
+pub mod bridge_cache;
 pub mod dwd_radar;
+pub mod github_star;
 mod http;
 pub mod map_fields;
 pub mod model_http;
 pub mod nexrad_level2;
 pub mod opera_radar;
+pub mod outlook_discussion;
 pub mod place_names;
 pub mod polar_radar;
 pub mod radar;
@@ -29,6 +32,8 @@ pub mod surface;
 pub mod threshold_catalog;
 pub mod transfer_policy;
 pub mod uwyo;
+pub mod wpc_outlook;
+pub mod wpc_winter_outlook;
 
 use time::{OffsetDateTime, UtcOffset};
 

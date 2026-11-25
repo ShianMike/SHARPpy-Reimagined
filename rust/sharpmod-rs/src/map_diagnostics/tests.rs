@@ -48,6 +48,66 @@ fn tornado_lcl_cin_and_shear_terms_preserve_their_thresholds() {
 }
 
 #[test]
+fn stp_surface_lcl_derives_lifting_condensation_level_from_two_metre_spread() {
+    // 8 C dewpoint depression -> 1000 m LCL -> LCL term = 1.0 -> STP = 1.0.
+    assert_eq!(
+        evaluate(
+            Diagnostic::StpSurfaceLcl,
+            &[1500.0f64, 293.15, 285.15, 150.0, 20.0, 0.0, -50.0],
+        ),
+        1.0
+    );
+    // Supersaturated input clamps spread at 0 m -> LCL term = 1.0 -> STP = 1.0.
+    assert_eq!(
+        evaluate(
+            Diagnostic::StpSurfaceLcl,
+            &[1500.0f64, 290.15, 291.15, 150.0, 20.0, 0.0, -50.0],
+        ),
+        1.0
+    );
+    // 12 C spread -> 1500 m LCL -> LCL term = 0.5 -> STP = 0.5.
+    assert_eq!(
+        evaluate(
+            Diagnostic::StpSurfaceLcl,
+            &[1500.0f64, 297.15, 285.15, 150.0, 20.0, 0.0, -50.0],
+        ),
+        0.5
+    );
+    // >= 16 C spread -> >= 2000 m LCL -> LCL term = 0.0 -> STP = 0.0.
+    assert_eq!(
+        evaluate(
+            Diagnostic::StpSurfaceLcl,
+            &[1500.0f64, 301.15, 285.15, 150.0, 20.0, 0.0, -50.0],
+        ),
+        0.0
+    );
+    for invalid in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        assert!(evaluate(
+            Diagnostic::StpSurfaceLcl,
+            &[1500.0f64, invalid, 285.15, 150.0, 20.0, 0.0, -50.0],
+        )
+        .is_nan());
+        assert!(evaluate(
+            Diagnostic::StpSurfaceLcl,
+            &[1500.0f64, 293.15, invalid, 150.0, 20.0, 0.0, -50.0],
+        )
+        .is_nan());
+    }
+}
+
+#[test]
+fn surface_lcl_converts_kelvin_dewpoint_depression_to_metres() {
+    let kind = Diagnostic::parse("surface-lcl").expect("surface-lcl diagnostic");
+    assert_eq!(kind.arity(), 2);
+    assert_eq!(evaluate(kind, &[293.15f64, 285.15]), 1000.0);
+    assert_eq!(evaluate(kind, &[285.15f64, 290.15]), 0.0);
+    for invalid in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        assert!(evaluate(kind, &[invalid, 285.15]).is_nan());
+        assert!(evaluate(kind, &[293.15, invalid]).is_nan());
+    }
+}
+
+#[test]
 fn lapse_uses_geopotential_thickness_and_refuses_collapsed_layers() {
     assert_eq!(
         evaluate(Diagnostic::Lapse, &[280.0f32, 260.0, 3000.0, 5500.0]),

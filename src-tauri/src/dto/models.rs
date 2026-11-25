@@ -126,7 +126,12 @@ impl ForecastModel {
             || self
                 .max_forecast_hours
                 .iter()
-                .any(|h| !self.forecast_hours.contains(h))
+                .enumerate()
+                .any(|(cycle, hour)| {
+                    // An unpublished cycle's zero limit is a sentinel, even if F000 is absent.
+                    (*hour != 0 || self.cycles.contains(&(cycle as u8)))
+                        && !self.forecast_hours.contains(hour)
+                })
             || self.recent_runs.is_empty()
             || self.recent_runs.len() > MAX_RUNS
             || self.cycles.iter().any(|c| *c > 23)

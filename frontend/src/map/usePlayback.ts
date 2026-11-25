@@ -18,7 +18,7 @@ import { useUiStore } from "../stores/uiStore";
 import { panelLayers, panelProduct, useMapStore, type MapState } from "../stores/mapStore";
 import type { FieldProduct, MapCatalog } from "../types/map";
 import { fieldQueryOptions, useFieldFrames, useMapCatalog } from "./mapQueries";
-import { fieldAuxiliaries, productOf, useDrawnProducts } from "./panelField";
+import { fieldAuxiliaries, productOf, useDrawnFields, variantKeyOf } from "./panelField";
 import { mapCatalogQueryOptions } from "./catalogQuery";
 import { contourQueryOptions } from "./contourQueries";
 import { queryFrame } from "./queryFrame";
@@ -56,7 +56,7 @@ interface FrameLoad {
 export function usePlayback(): void {
   const active = useAppStore((state) => state.activeWorkspace === "map");
   const context = useForecastContext();
-  const products = useDrawnProducts();
+  const products = useDrawnFields();
   const playing = useForecastStore((state) => state.playing);
   const exporting = useForecastStore((state) => state.exporting);
   const speed = useUiStore((state) => state.speed);
@@ -72,7 +72,7 @@ export function usePlayback(): void {
   const hour = context?.hour ?? null;
   const hours = context?.hours ?? null;
   const current = useFieldFrames(
-    !active || run === null || hour === null ? [] : products.map((product) => ({ model, product: product.key, runTime: run, forecastHour: hour })),
+    !active || run === null || hour === null ? [] : products.map(({ key }) => ({ model, product: key, runTime: run, forecastHour: hour })),
   );
   const settled = current.every((query) => query.isSuccess || query.isError);
   // While playing, the extra frames of the window are fetched too.
@@ -122,25 +122,26 @@ export function usePlayback(): void {
       const ready = inventory.then(async (catalog) => {
         if (signal.aborted || catalog === undefined) return false;
         if (catalog.fieldModel !== model) return true;
-        const fields = new Map<FieldProduct, Set<boolean>>();
+        const fields = new Map<string, { product: FieldProduct; modes: Set<boolean> }>();
         for (const panel of panels) {
           const layer = panelLayers(map, panel)["model-field"];
-          const product = productOf(catalog, panelProduct(map, panel), panel);
+          const chosen = panelProduct(map, panel);
+          const product = productOf(catalog, chosen, panel);
           if (!layer.visible || product === null) continue;
-          const modes = fields.get(product) ?? new Set<boolean>();
-          modes.add(layer.smoothing === true && product.palette.units !== "flag");
-          fields.set(product, modes);
+          const requestKey = variantKeyOf(product, chosen);
+          const entry = fields.get(requestKey) ?? { product, modes: new Set<boolean>() };
+          entry.modes.add(layer.smoothing === true && product.palette.units !== "flag");
+          fields.set(requestKey, entry);
         }
         const tasks: Promise<unknown>[] = [];
-        for (const [product, modes] of fields) {
-          const request = { ...frame, product: product.key };
-          tasks.push(queryFrame(queryClient, fieldQueryOptions(client, queryClient, request), signal, {
+        for (const [requestKey, { product, modes }] of fields) {
+          tasks.push(queryFrame(queryClient, fieldQueryOptions(client, queryClient, { ...frame, product: requestKey }), signal, {
             keepUntil,
             prepare: (data) => Promise.all([...modes].sort().map((smooth) =>
               prepareFieldImage(data, product.palette, smooth, signal))),
           }));
           if (fieldAuxiliaries(product)) {
-            tasks.push(queryFrame(queryClient, contourQueryOptions(client, queryClient, request), signal, { keepUntil }));
+            tasks.push(queryFrame(queryClient, contourQueryOptions(client, queryClient, { ...frame, product: product.key }), signal, { keepUntil }));
           }
         }
         // A failed layer must not cut short the wait for the remaining layers.

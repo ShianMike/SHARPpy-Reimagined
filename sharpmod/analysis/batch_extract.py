@@ -13,7 +13,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import copy
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -68,11 +67,9 @@ def _canonical_time(value: datetime) -> str:
 
 
 def _safe_identifier(value: str) -> str:
-    safe = "".join(
-        character if character.isalnum() or character in "-_" else "_"
-        for character in str(value)
-    ).strip("_-")
-    return safe or "request"
+    import sharpmod_rs
+
+    return sharpmod_rs.batch_safe_identifier(value)
 
 
 @dataclass(frozen=True)
@@ -179,93 +176,35 @@ def load_batch_result(
     ``running`` entries; callers can explicitly surface those as cancelled
     while preserving every artifact that completed atomically.
     """
-    manifest_path = Path(manifest_path).expanduser().resolve()
-    output_root = (
-        Path(output_dir).expanduser().resolve()
-        if output_dir is not None
-        else manifest_path.parent
+    import sharpmod_rs
+
+    resolved_manifest, job_id, completed, failed, cancelled, skipped, raw_items, manifest = (
+        sharpmod_rs.batch_load_manifest(
+            Path(manifest_path).expanduser(),
+            None if output_dir is None else Path(output_dir).expanduser(),
+            bool(incomplete_as_cancelled),
+        )
     )
-    try:
-        with manifest_path.open("r", encoding="utf-8") as handle:
-            manifest = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise BatchManifestError(
-            f"could not read batch manifest {manifest_path}: {exc}"
-        ) from exc
-    if not isinstance(manifest, Mapping):
-        raise BatchManifestError("batch manifest must be a JSON object")
-    if (
-        manifest.get("schema") != MANIFEST_SCHEMA
-        or manifest.get("version") != MANIFEST_VERSION
-    ):
-        raise BatchManifestError(
-            f"manifest {manifest_path} has an unsupported schema/version"
+    items = tuple(
+        BatchItemResult(
+            id=item_id,
+            status=status,
+            output_path=Path(out_path),
+            sidecar_path=Path(sidecar_path),
+            resumed=resumed,
+            error=error,
         )
-    job_id = manifest.get("job_id")
-    records = manifest.get("requests")
-    if not isinstance(job_id, str) or not job_id:
-        raise BatchManifestError("batch manifest has no valid job id")
-    if not isinstance(records, list) or not records:
-        raise BatchManifestError("batch manifest has no request records")
-
-    items = []
-    seen_ids: set[str] = set()
-    allowed = {"completed", "failed", "cancelled"}
-    incomplete = {"pending", "running"}
-    for record in records:
-        if not isinstance(record, Mapping):
-            raise BatchManifestError("batch manifest request must be an object")
-        request_id = record.get("id")
-        output = record.get("output")
-        status = str(record.get("status") or "")
-        if not isinstance(request_id, str) or not request_id:
-            raise BatchManifestError("batch manifest request has no valid id")
-        if request_id in seen_ids:
-            raise BatchManifestError(
-                f"batch manifest has duplicate request id {request_id!r}"
-            )
-        seen_ids.add(request_id)
-        if not isinstance(output, str):
-            raise BatchManifestError(
-                f"batch manifest request {request_id!r} has no output"
-            )
-        try:
-            output_path = _contained_path(output_root, output)
-        except BatchSpecError as exc:
-            raise BatchManifestError(str(exc)) from exc
-        if status in incomplete and incomplete_as_cancelled:
-            status = "cancelled"
-        elif status not in allowed:
-            raise BatchManifestError(
-                f"batch manifest request {request_id!r} has "
-                f"non-final status {status!r}"
-            )
-        error = record.get("error")
-        items.append(
-            BatchItemResult(
-                id=request_id,
-                status=status,
-                output_path=output_path,
-                sidecar_path=output_path.with_suffix(".json"),
-                resumed=bool(record.get("resumed", False)),
-                error=(
-                    {str(key): str(value) for key, value in error.items()}
-                    if isinstance(error, Mapping)
-                    else None
-                ),
-            )
-        )
-
-    statuses = [item.status for item in items]
+        for item_id, status, out_path, sidecar_path, resumed, error in raw_items
+    )
     return BatchRunResult(
-        manifest_path=manifest_path,
+        manifest_path=Path(resolved_manifest),
         job_id=job_id,
-        completed=statuses.count("completed"),
-        failed=statuses.count("failed"),
-        cancelled=statuses.count("cancelled"),
-        skipped=sum(item.resumed for item in items),
-        items=tuple(items),
-        manifest=copy.deepcopy(manifest),
+        completed=completed,
+        failed=failed,
+        cancelled=cancelled,
+        skipped=skipped,
+        items=items,
+        manifest=manifest,
     )
 
 
@@ -333,36 +272,21 @@ def load_batch_spec(path) -> list[BatchRequest]:
 
 
 def _fingerprint(payload: Mapping[str, object]) -> str:
-    encoded = json.dumps(
-        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    import sharpmod_rs
+
+    return sharpmod_rs.batch_json_fingerprint(payload)
 
 
 def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    import sharpmod_rs
+
+    return sharpmod_rs.batch_file_sha256(path)
 
 
 def _contained_path(root: Path, relative: str) -> Path:
-    candidate = Path(relative)
-    if candidate.is_absolute():
-        raise BatchSpecError("batch output paths must be relative to output_dir")
-    resolved = (root / candidate).resolve()
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise BatchSpecError(
-            f"batch output path escapes output_dir: {relative!r}"
-        ) from exc
-    if resolved.suffix.lower() != ".npz":
-        raise BatchSpecError(
-            f"batch output path must end in .npz: {relative!r}"
-        )
-    return resolved
+    import sharpmod_rs
+
+    return Path(sharpmod_rs.batch_contained_path(root, relative))
 
 
 class BatchExtractor:

@@ -52,7 +52,8 @@ function pickedSurfacePlot(info: PickingInfo): SurfacePlot | undefined {
 
 function pickedOutlook(info: PickingInfo): AreaFill | undefined {
   const id = info.layer?.id ?? "";
-  return id.startsWith("spc-") && id.endsWith("-fill") ? (info.object ?? undefined) as AreaFill | undefined : undefined;
+  return (id.startsWith("spc-") || id.startsWith("wpc-")) && id.endsWith("-fill")
+    ? (info.object ?? undefined) as AreaFill | undefined : undefined;
 }
 
 /** deck.gl onHover: only the hover store changes. `origin` is the panel's viewport offset. */

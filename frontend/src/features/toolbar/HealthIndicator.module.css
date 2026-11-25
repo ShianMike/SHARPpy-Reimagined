@@ -5,3 +5,16 @@
 .indicator[data-health-tone="danger"] > svg {
   color: var(--danger);
 }
+
+.edgeStatus {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-0-5) var(--space-2);
+  margin-inline-start: auto;
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.edgeStatus strong { color: var(--text-primary); }
+.edgeStatus a { color: var(--accent-bright); }

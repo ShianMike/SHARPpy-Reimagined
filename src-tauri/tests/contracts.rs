@@ -159,10 +159,18 @@ fn sounding_fixtures_convert_from_bridge_to_public_form() {
         .models
         .iter()
         .filter(|model| !model.soundings_available)
+        .map(|model| model.key.as_str())
         .collect();
-    assert_eq!(maps_only.len(), 1);
-    assert_eq!(maps_only[0].key, "aigfs");
-    assert_eq!(maps_only[0].domain, "Global");
+    assert_eq!(maps_only, vec!["aigfs", "refs", "hrdps"]);
+    let aigfs = catalog.models.iter().find(|m| m.key == "aigfs").unwrap();
+    assert_eq!(aigfs.domain, "Global");
+    let hrdps = catalog.models.iter().find(|m| m.key == "hrdps").unwrap();
+    assert_eq!(hrdps.domain, "Canada and Northern US");
+    assert_eq!(hrdps.max_forecast_hours[0], 48);
+    assert_eq!(hrdps.max_forecast_hours[6], 48);
+    assert_eq!(hrdps.max_forecast_hours[12], 48);
+    assert_eq!(hrdps.max_forecast_hours[18], 48);
+    assert!(hrdps.outline.len() > 100);
     let ecmwf = catalog
         .models
         .iter()
@@ -437,23 +445,297 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
         bridge_to_public("bridge/map/catalog.result.json", "public/map/catalog.json");
     catalog.validate().unwrap();
     assert_eq!(catalog.max_forecast_hours.len(), 24);
+    let palette = |key: &str| {
+        let product = catalog
+            .products
+            .iter()
+            .find(|product| product.key == key)
+            .unwrap();
+        serde_json::to_value(&product.palette).unwrap()
+    };
+    assert_eq!(palette("refd-1km"), palette("refc"));
+    let wind_500 = &catalog
+        .products
+        .iter()
+        .find(|product| product.key == "hgt-wind-500")
+        .unwrap()
+        .palette;
+    assert_eq!(wind_500.units, "kt");
+    assert!(wind_500.stepped);
+    assert_eq!(wind_500.floor, Some(20.0));
+    assert_eq!(wind_500.stops.len(), 121);
+    assert_eq!(wind_500.stops.first().unwrap().0, 20.0);
+    assert_eq!(wind_500.stops.last().unwrap().0, 140.0);
+    assert_eq!(
+        wind_500.ticks,
+        (20..=140).step_by(5).map(f64::from).collect::<Vec<_>>()
+    );
+    let reference = &catalog
+        .products
+        .iter()
+        .find(|product| product.key == "hgt-wind-850")
+        .unwrap()
+        .palette;
+    assert_eq!(reference.floor, Some(20.0));
+    assert_eq!(reference.stops.last().unwrap().0, 80.0);
+    let check_wind_scales = |catalog: &MapCatalog| {
+        let upper = catalog
+            .products
+            .iter()
+            .find(|product| product.key == "hgt-wind-500")
+            .unwrap();
+        assert_eq!(&upper.palette, wind_500, "{} 500 mb", catalog.field_model);
+        for key in ["hgt-wind-700", "hgt-wind-850"] {
+            let product = catalog
+                .products
+                .iter()
+                .find(|product| product.key == key)
+                .unwrap();
+            assert_eq!(&product.palette, reference, "{} {key}", catalog.field_model);
+        }
+    };
+    check_wind_scales(&catalog);
+    let uh_run = catalog
+        .products
+        .iter()
+        .find(|product| product.key == "uh-0-3km-run")
+        .unwrap();
+    assert_eq!(uh_run.label, "Updraft Helicity: 0-3 km AGL (run max)");
+    assert_eq!(uh_run.short_label, "0-3km UH Max");
+    assert_eq!(uh_run.category, "Explicit Convective");
+    assert_eq!(uh_run.minimum_forecast_hour, Some(1));
+    assert_eq!(uh_run.palette.units, "m^2/s^2");
+    assert_eq!(uh_run.palette.stops.len(), 61);
+    assert_eq!(uh_run.palette.floor, Some(5.0));
+    assert!(uh_run.contour.is_none() && !uh_run.wind);
+    let uh25_run = catalog
+        .products
+        .iter()
+        .find(|product| product.key == "uh-2-5km-run")
+        .unwrap();
+    assert_eq!(uh25_run.label, "Updraft Helicity: 2-5 km AGL (run max)");
+    assert_eq!(uh25_run.short_label, "2-5km UH Max");
+    assert_eq!(uh25_run.category, "Explicit Convective");
+    assert_eq!(uh25_run.minimum_forecast_hour, Some(1));
+    assert_eq!(uh25_run.palette.units, "m^2/s^2");
+    assert_eq!(uh25_run.palette.stops.len(), 61);
+    assert_eq!(uh25_run.palette.floor, Some(10.0));
+    assert!(uh25_run.contour.is_none() && !uh25_run.wind);
     for (model, data) in value("bridge/map/catalog.models.json").as_object().unwrap() {
         let catalog: MapCatalog = serde_json::from_value(data.clone()).unwrap();
         catalog.validate().unwrap();
         assert_eq!(&catalog.field_model, model);
+        check_wind_scales(&catalog);
         assert_eq!(
             catalog.products.len(),
-            if model.starts_with("refs-") {
-                23
+            if model == "refs" {
+                let guidance = catalog
+                    .products
+                    .iter()
+                    .filter(|product| product.category == "Guidance")
+                    .collect::<Vec<_>>();
+                assert_eq!(guidance.len(), 6);
+                assert!(guidance.iter().all(|product| product.palette.units == "%"
+                    && !product.wind
+                    && product.contour.is_none()));
+                for (key, label) in [
+                    ("tmp-2m", "2-m Temperature, MSLP, Wind"),
+                    ("dpt-2m", "2-m Dewpoint, MSLP, Wind"),
+                ] {
+                    let surface = catalog
+                        .products
+                        .iter()
+                        .find(|product| product.key == key)
+                        .unwrap();
+                    assert_eq!(surface.label, label);
+                    assert_eq!(surface.category, "Surface");
+                    assert!(surface.wind);
+                    let pressure = surface.contour.as_ref().unwrap();
+                    assert_eq!(pressure.label, "hPa");
+                    assert_eq!(pressure.interval, 4.0);
+                }
+                let qpf_ptype = catalog
+                    .products
+                    .iter()
+                    .find(|product| product.key == "qpf-1h-ptype")
+                    .unwrap();
+                assert_eq!(qpf_ptype.label, "1-h QPF and Dominant Precipitation Type");
+                assert_eq!(qpf_ptype.short_label, "1-h QPF & P-Type");
+                assert_eq!(qpf_ptype.category, "Precipitation");
+                assert_eq!(qpf_ptype.palette.units, "in");
+                assert_eq!(qpf_ptype.palette.stops.len(), 68);
+                assert_eq!(qpf_ptype.palette.floor, Some(0.01));
+                assert_eq!(qpf_ptype.minimum_forecast_hour, Some(1));
+                assert!(qpf_ptype.contour.is_none() && !qpf_ptype.wind);
+                let water = catalog
+                    .products
+                    .iter()
+                    .find(|product| product.key == "pwat")
+                    .unwrap();
+                assert_eq!(water.label, "Precipitable Water");
+                assert_eq!(water.category, "Precipitation");
+                assert_eq!(water.palette.units, "in");
+                assert!(water.contour.is_none() && water.wind);
+                for (key, label, has_variants) in [
+                    ("sbcape", "Surface-Based CAPE Min/Mean/Max", true),
+                    ("mucape", "Most-Unstable CAPE Mean", false),
+                ] {
+                    let cape = catalog
+                        .products
+                        .iter()
+                        .find(|product| product.key == key)
+                        .unwrap();
+                    assert_eq!(cape.label, label);
+                    assert_eq!(cape.category, "Instability");
+                    assert_eq!(cape.palette.units, "J/kg");
+                    assert_eq!(cape.palette.stops.len(), 70);
+                    assert!(cape.contour.is_none() && cape.wind);
+                    if has_variants {
+                        let variants = cape.variants.as_ref().unwrap();
+                        assert_eq!(
+                            variants
+                                .iter()
+                                .map(|variant| (variant.key.as_str(), variant.label.as_str()))
+                                .collect::<Vec<_>>(),
+                            vec![
+                                ("sbcape-min", "Ensemble Minimum"),
+                                ("sbcape", "Ensemble Mean"),
+                                ("sbcape-max", "Ensemble Maximum"),
+                            ]
+                        );
+                    } else {
+                        assert!(cape.variants.is_none());
+                    }
+                }
+                for (key, label, floor) in [
+                    ("srh-0-3km", "Storm Relative Helicity: 0-3 km AGL", 50.0),
+                    ("srh-0-1km", "Storm Relative Helicity: 0-1 km AGL", 25.0),
+                ] {
+                    let srh = catalog
+                        .products
+                        .iter()
+                        .find(|product| product.key == key)
+                        .unwrap();
+                    assert_eq!(srh.label, label);
+                    assert_eq!(srh.category, "Wind Shear");
+                    assert_eq!(srh.palette.units, "m^2/s^2");
+                    assert_eq!(srh.palette.stops.len(), 70);
+                    assert_eq!(srh.palette.floor, Some(floor));
+                    assert!(srh.contour.is_none() && !srh.wind);
+                    assert!(srh.variants.is_none());
+                }
+                let stp = catalog
+                    .products
+                    .iter()
+                    .find(|product| product.key == "stp")
+                    .unwrap();
+                assert_eq!(stp.label, "Significant Tornado Parameter");
+                assert_eq!(stp.category, "Composite Parameters");
+                assert_eq!(stp.palette.units, "");
+                assert_eq!(stp.palette.stops.len(), 70);
+                assert_eq!(stp.palette.floor, Some(0.5));
+                assert!(stp.contour.is_none() && !stp.wind);
+                assert!(stp.variants.is_none());
+                for (key, label, min_hour) in [
+                    ("wind-10m-4h", "10-m Wind Speed (4-h Max)", 4),
+                    ("wind-10m-24h", "10-m Wind Speed (24-h Max)", 24),
+                ] {
+                    let item = catalog
+                        .products
+                        .iter()
+                        .find(|product| product.key == key)
+                        .unwrap();
+                    assert_eq!(item.label, label);
+                    assert_eq!(item.category, "Surface");
+                    assert_eq!(item.palette.units, "kt");
+                    assert_eq!(item.palette.stops.len(), 53);
+                    assert_eq!(item.palette.floor, Some(10.0));
+                    assert_eq!(item.minimum_forecast_hour, Some(min_hour));
+                    assert!(item.contour.is_none() && !item.wind);
+                }
+                for (key, label, min_hour) in [
+                    ("refc-4h", "Reflectivity (4-h Max)", 4),
+                    ("refc-24h", "Reflectivity (24-h Max)", 24),
+                ] {
+                    let item = catalog
+                        .products
+                        .iter()
+                        .find(|product| product.key == key)
+                        .unwrap();
+                    assert_eq!(item.label, label);
+                    assert_eq!(item.category, "Radar");
+                    assert_eq!(item.palette.units, "dBZ");
+                    assert_eq!(item.palette.stops.len(), 27);
+                    assert_eq!(item.palette.floor, Some(7.5));
+                    assert_eq!(item.minimum_forecast_hour, Some(min_hour));
+                    assert!(item.contour.is_none() && !item.wind);
+                }
+                for (key, label, min_hour) in [
+                    ("qpf-3h", "3-h QPF Mean", 3),
+                    ("qpf-6h", "6-h QPF Mean", 6),
+                    ("qpf-24h", "24-h QPF Mean", 24),
+                    ("qpf-48h", "48-h QPF Mean", 48),
+                ] {
+                    let item = catalog
+                        .products
+                        .iter()
+                        .find(|product| product.key == key)
+                        .unwrap();
+                    assert_eq!(item.label, label);
+                    assert_eq!(item.category, "Precipitation");
+                    assert_eq!(item.palette.units, "in");
+                    assert_eq!(item.palette.stops.len(), 52);
+                    assert_eq!(item.palette.floor, Some(0.01));
+                    assert_eq!(item.minimum_forecast_hour, Some(min_hour));
+                    assert!(item.contour.is_none() && !item.wind);
+                }
+                let snow = catalog
+                    .products
+                    .iter()
+                    .find(|product| product.key == "snow-1h")
+                    .unwrap();
+                assert_eq!(snow.label, "1-h Snowfall");
+                assert_eq!(snow.category, "Winter Weather");
+                assert_eq!(snow.palette.units, "in");
+                assert_eq!(snow.palette.stops.len(), 41);
+                assert_eq!(snow.palette.floor, Some(0.1));
+                assert_eq!(snow.minimum_forecast_hour, Some(1));
+                assert!(snow.contour.is_none() && !snow.wind);
+                31
+            } else if model.starts_with("refs-") {
+                assert!(catalog
+                    .categories
+                    .iter()
+                    .any(|c| c == "Composite Parameters"));
+                assert!(catalog.categories.iter().any(|c| c == "Winter Weather"));
+                for key in [
+                    "scp",
+                    "stp",
+                    "sbcin",
+                    "lcl",
+                    "ehi-0-1km",
+                    "ehi-0-3km",
+                    "qpf-1h",
+                    "qpf-6h",
+                    "qpf-12h",
+                    "qpf-24h",
+                    "snow-1h",
+                ] {
+                    assert!(
+                        catalog.products.iter().any(|product| product.key == key),
+                        "{model} missing {key}"
+                    );
+                }
+                36
             } else if model == "nam-3km-conus" {
-                37
+                42
             } else if model == "nam" {
-                34
+                37
             } else if model.starts_with("hrw-") {
-                29
+                31
             } else if model == "gfs" {
                 assert!(catalog.products.iter().any(|product| product.key == "refc"));
-                22
+                24
             } else if model == "gdps" {
                 assert_eq!(catalog.max_forecast_hours[0], 240);
                 assert_eq!(catalog.max_forecast_hours[6], 0);
@@ -463,7 +745,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                     .products
                     .iter()
                     .any(|product| matches!(product.key.as_str(), "refc" | "pwat" | "mucape")));
-                20
+                21
             } else if model == "rap" {
                 assert_eq!(catalog.max_forecast_hours[0], 21);
                 assert_eq!(catalog.max_forecast_hours[3], 51);
@@ -472,7 +754,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                     .products
                     .iter()
                     .any(|product| matches!(product.key.as_str(), "ltng" | "stp")));
-                35
+                38
             } else if model == "rdps" {
                 assert_eq!(catalog.max_forecast_hours[0], 84);
                 assert_eq!(catalog.max_forecast_hours[6], 84);
@@ -490,15 +772,64 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                         .minimum_forecast_hour,
                     Some(1)
                 );
+                21
+            } else if model == "hrdps" {
+                assert_eq!(catalog.max_forecast_hours[0], 48);
+                assert_eq!(catalog.max_forecast_hours[6], 48);
+                assert_eq!(catalog.max_forecast_hours[12], 48);
+                assert_eq!(catalog.max_forecast_hours[18], 48);
+                for key in [
+                    "hgt-wind-500",
+                    "hgt-wind-700",
+                    "hgt-wind-850",
+                    "tmp-2m",
+                    "dpt-2m",
+                    "thetae-2m",
+                    "rh-2m",
+                    "gust",
+                    "prate-ptype",
+                    "qpf-6h",
+                    "qpf-12h",
+                    "qpf-24h",
+                    "apcp",
+                    "snow-10-1",
+                    "lapse-700-500",
+                    "sbcape",
+                    "lcl",
+                    "shear-sfc-500",
+                    "srh-0-3km",
+                    "ehi-0-3km",
+                ] {
+                    assert!(
+                        catalog.products.iter().any(|product| product.key == key),
+                        "hrdps missing {key}"
+                    );
+                }
+                let ptype = catalog
+                    .products
+                    .iter()
+                    .find(|product| product.key == "prate-ptype")
+                    .unwrap();
+                assert_eq!(ptype.palette.units, "in/h");
+                assert_eq!(ptype.palette.stops.len(), 68);
+                assert_eq!(ptype.minimum_forecast_hour, Some(1));
+                let snow = catalog
+                    .products
+                    .iter()
+                    .find(|product| product.key == "snow-10-1")
+                    .unwrap();
+                assert_eq!(snow.palette.units, "in");
+                assert_eq!(snow.minimum_forecast_hour, Some(1));
                 20
-            } else if model == "ecmwf-ifs-9km" || model == "openmeteo-ecmwf-ifs025" {
+            } else if matches!(
+                model.as_str(),
+                "ecmwf-ifs-9km" | "openmeteo-ecmwf-ifs025" | "openmeteo-icon-global"
+            ) {
                 21
             } else if model == "aigfs" {
                 9
-            } else if model == "hrrr" {
-                40
             } else {
-                39
+                45
             }
         );
         assert_eq!(

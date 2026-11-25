@@ -1,11 +1,7 @@
-// Model Viewer shares the latest worldwide snapshot. Live Tracking can also
-// request nearby observations at a specific playback time.
+// Model Viewer and Live Tracking share the latest worldwide METAR snapshot.
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
-import { useStationCatalog } from "../stations/stationQueries";
-import { useAppStore } from "../stores/appStore";
-import { useMapStore } from "../stores/mapStore";
+import { useCallback } from "react";
 import { useBackendClient } from "../lib/backend/BackendProvider";
 import { BASE_QUERY_OPTIONS, mapKeys } from "../lib/backend/queryOptions";
 import type { SurfacePlots } from "../types/surface";
@@ -20,26 +16,8 @@ export interface SurfaceAnchor {
   longitude: number;
 }
 
-/** The map's own selection as a point: a station's spot or the picked point. */
-export function useSelectionAnchor(enabled = true): SurfaceAnchor | null {
-  const point = useAppStore((state) => enabled ? state.selectedPoint : null);
-  const stationId = useAppStore((state) => enabled ? state.selectedStationId : null);
-  const stations = useStationCatalog(enabled).data?.stations;
-  const camera = useMapStore((state) => enabled ? state.cameraSnapshot : null);
-  const live = useMapStore((state) => state.view === "live");
-  return useMemo(() => {
-    if (!enabled) return null;
-    if (point !== null && !live) return point;
-    const station = stationId === null ? undefined : stations?.find((item) => item.id === stationId);
-    return station === undefined
-      ? live ? { latitude: camera?.center[1] ?? 39.8, longitude: camera?.center[0] ?? -98.6 } : null
-      : { latitude: station.latitude, longitude: station.longitude };
-  }, [enabled, point, stationId, stations, camera, live]);
-}
-
-export function useSurfaceLayer(live: boolean, validTime: string | null, enabled: boolean): UseQueryResult<SurfacePlots> {
-  const anchor = useSelectionAnchor(live && enabled);
-  return useSurfacePlots(anchor, live && enabled ? validTime : null, enabled, live ? "nearby" : "latest");
+export function useSurfaceLayer(enabled: boolean): UseQueryResult<SurfacePlots> {
+  return useSurfacePlots(null, null, enabled, "latest");
 }
 
 /** The current global snapshot or historical observations near an anchor. */

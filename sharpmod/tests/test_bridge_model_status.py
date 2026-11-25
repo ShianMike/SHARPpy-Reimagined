@@ -84,20 +84,23 @@ def test_direct_model_status_checks_both_nomads_products_without_herbie(monkeypa
             iter_content=lambda **_kwargs: iter([b"G"]),
         ))
 
-    monkeypatch.setattr(rrfs_nomads, "_RELEASE_CACHE", None)
+    rrfs_nomads.forget_release()
     monkeypatch.setattr(rrfs_nomads, "_new_session", lambda: nullcontext(SimpleNamespace(get=get)))
     monkeypatch.setattr(mx, "require_runtime_dependencies", lambda: pytest.fail("inventory check loaded GRIB runtime"))
-    result = soundings.model_status({**REQUEST, "model": model})
-    assert result["state"] == "available" and result["provider"] == "NOAA NOMADS"
-    config = mx.get_config(model)
-    for product in (rrfs_nomads.PRESSURE_PRODUCT, rrfs_nomads.SURFACE_PRODUCT):
-        url = rrfs_nomads.build_url("para", datetime(2026, 10, 13, tzinfo=UTC), 0,
-                                    product, config.kwargs["domain"], member=config.kwargs.get("member"))
-        assert any(request == url + ".idx" for request, _ in calls)
-        assert any(request == url and args["headers"] == {"Range": "bytes=0-0"}
-                   for request, args in calls)
-    assert all(0 < args["timeout"] <= 2 for _, args in calls)
-    assert len(calls) == 5  # One unavailable release, then two index/range pairs.
+    try:
+        result = soundings.model_status({**REQUEST, "model": model})
+        assert result["state"] == "available" and result["provider"] == "NOAA NOMADS"
+        config = mx.get_config(model)
+        for product in (rrfs_nomads.PRESSURE_PRODUCT, rrfs_nomads.SURFACE_PRODUCT):
+            url = rrfs_nomads.build_url("para", datetime(2026, 10, 13, tzinfo=UTC), 0,
+                                        product, config.kwargs["domain"], member=config.kwargs.get("member"))
+            assert any(request == url + ".idx" for request, _ in calls)
+            assert any(request == url and args["headers"] == {"Range": "bytes=0-0"}
+                       for request, args in calls)
+        assert all(0 < args["timeout"] <= 2 for _, args in calls)
+        assert len(calls) == 5  # One unavailable release, then two index/range pairs.
+    finally:
+        rrfs_nomads.forget_release()
 
 
 @pytest.mark.parametrize(("failure", "state"), [("partial", "partial"), ("missing", "unknown"), ("timeout", "unknown")])
@@ -133,18 +136,21 @@ def test_direct_probe_obeys_the_total_deadline_and_cancellation(monkeypatch):
         return SimpleNamespace(close=lambda: closed.append(True))
 
     monkeypatch.setattr(model_extract_probe.time, "monotonic", lambda: moment[0])
-    monkeypatch.setattr(rrfs_nomads, "_RELEASE_CACHE", None)
+    rrfs_nomads.forget_release()
     monkeypatch.setattr(rrfs_nomads, "_new_session", lambda: nullcontext(SimpleNamespace(get=get)))
-    result = mx.probe("refs-m1", run_time=REQUEST["run_time"], request_timeout=2, deadline_seconds=0.5)
-    assert not result["available"] and "TimeoutError" in result["error"]
-    assert len(calls) == 1 and closed == [True]
+    try:
+        result = mx.probe("refs-m1", run_time=REQUEST["run_time"], request_timeout=2, deadline_seconds=0.5)
+        assert not result["available"] and "TimeoutError" in result["error"]
+        assert len(calls) == 1 and closed == [True]
 
-    def cancelled_inventory(*_args, **_kwargs):
-        raise mx.DownloadCancelled("cancelled during inventory check")
+        def cancelled_inventory(*_args, **_kwargs):
+            raise mx.DownloadCancelled("cancelled during inventory check")
 
-    monkeypatch.setattr(rrfs_nomads, "_inventory", cancelled_inventory)
-    with pytest.raises(mx.DownloadCancelled):
-        mx.probe("refs-m1", run_time=REQUEST["run_time"])
+        monkeypatch.setattr(rrfs_nomads, "_inventory", cancelled_inventory)
+        with pytest.raises(mx.DownloadCancelled):
+            mx.probe("refs-m1", run_time=REQUEST["run_time"])
+    finally:
+        rrfs_nomads.forget_release()
 
 
 def test_direct_probe_explicit_subset_uses_the_same_member_and_cleans_up(monkeypatch):

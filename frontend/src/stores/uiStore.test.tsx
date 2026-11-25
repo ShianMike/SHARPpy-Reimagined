@@ -3,8 +3,10 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { useTheme, useUiStore } from "./uiStore";
 import { DEFAULT_FORECAST_EXPORT_SETTINGS } from "./forecastExportSettings";
+import { DEFAULT_GITHUB_STAR_PREFERENCE } from "./githubStarPreferences";
+import { resetAllSettings } from "./preferences";
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); useUiStore.setState({ lastVersion: null, lastUpdateCheckWindow: null, whatsNewOpen: false, theme: "system", speed: 1, loop: true, smoothPlayback: false, collapsed: false, popupPositions: {}, forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS, forecastOutlinesOnly: false }); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); useUiStore.setState({ lastVersion: null, lastUpdateCheckWindow: null, whatsNewOpen: false, githubStar: DEFAULT_GITHUB_STAR_PREFERENCE, theme: "system", speed: 1, loop: true, smoothPlayback: false, collapsed: false, popupPositions: {}, forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS, forecastOutlinesOnly: false }); });
 
 it("restores valid forecast export choices and defaults missing or invalid fields independently", () => {
   const merge = useUiStore.persist.getOptions().merge;
@@ -66,7 +68,7 @@ it("restores optional outlook details across sessions", () => {
   state.setForecastDrawingDetails(state.forecastDrawingDetails);
 });
 
-it.each([3, 4])("restores %s times playback after a fresh UI session", async (speed) => {
+it.each([3, 4, 5, 6])("restores %s times playback after a fresh UI session", async (speed) => {
   const storage = useUiStore.persist.getOptions().storage;
   if (storage === undefined) throw new Error("UI preferences require storage");
   useUiStore.getState().setSpeed(speed);
@@ -115,4 +117,24 @@ it("keeps all UI settings usable in memory after a storage failure, warning only
     expect(save).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledTimes(1);
   } finally { save.mockRestore(); warn.mockRestore(); }
+});
+
+it("validates, persists, and preserves githubStar across resetAllSettings", async () => {
+  const merge = useUiStore.persist.getOptions().merge;
+  const storage = useUiStore.persist.getOptions().storage;
+  if (merge === undefined || storage === undefined) throw new Error("Persistence required");
+  const state = useUiStore.getInitialState();
+  for (const invalid of [null, "starred", { status: "bogus" }, { status: "snoozed", snoozedUntil: -1 }]) {
+    expect(merge({ githubStar: invalid }, state).githubStar).toEqual(DEFAULT_GITHUB_STAR_PREFERENCE);
+  }
+  expect(merge({ githubStar: { status: "starred", snoozedUntil: 123 } }, state).githubStar)
+    .toEqual({ status: "starred", snoozedUntil: null });
+  expect(merge({ githubStar: { status: "snoozed", snoozedUntil: 1_800_000_000_000 } }, state).githubStar)
+    .toEqual({ status: "snoozed", snoozedUntil: 1_800_000_000_000 });
+
+  useUiStore.getState().setGitHubStar({ status: "starred", snoozedUntil: null });
+  const saved = await storage.getItem("sharppy-workspace-ui");
+  expect(saved?.state).toMatchObject({ githubStar: { status: "starred", snoozedUntil: null } });
+  resetAllSettings();
+  expect(useUiStore.getState().githubStar).toEqual({ status: "starred", snoozedUntil: null });
 });

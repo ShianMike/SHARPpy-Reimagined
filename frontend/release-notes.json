@@ -1,4 +1,33 @@
 {
+  "3.10.0": {
+    "summary": "Explore more regional and ensemble forecasts, redesigned outlooks, and clearer map exports.",
+    "highlights": [
+      {
+        "title": "ICON Global and Canadian HRDPS",
+        "description": "Explore DWD ICON Global maps out to 180 hours, including 6-hour maximum wind gusts in mph. Canadian HRDPS adds hourly maps through F048 at 2.5 km resolution."
+      },
+      {
+        "title": "REFS ensemble and severe-weather guidance",
+        "description": "Choose REFS Mean or one of five ensemble members for wind, instability, precipitation, and snowfall maps. Open Guidance under REFS Mean for SPC’s 4- and 24-hour tornado, hail, and damaging-wind probabilities."
+      },
+      {
+        "title": "NAM archives and convection fields",
+        "description": "Browse NAM and NAM 3 km CONUS through the final run on 3 November 2026 at 06 UTC. Supported models add 1 km reflectivity, 0–3 km CAPE, surface-based CIN and LCL height, and run-maximum updraft helicity."
+      },
+      {
+        "title": "Soundings and playback",
+        "description": "Reopen the sounding sidebar on your last tab. Skew-T lapse-rate labels stay consistent when a sounding refreshes. Model Viewer and Live Tracking offer 5× and 6× playback."
+      },
+      {
+        "title": "Excessive rainfall and winter outlooks",
+        "description": "Read NOAA’s Day 1–3 outlooks alongside the convective briefing. Compact icons and one continuous discussion make the glass panel easier to scan."
+      },
+      {
+        "title": "Forecast maps and exports",
+        "description": "Read larger height labels and use the 20–140 kt wind scale at 500 mb. Exports show the app version and put REFS precipitation scales in one column under weather icons. GIFs retain basemap detail."
+      }
+    ]
+  },
   "3.9.0": {
     "summary": "Draw your own severe weather outlooks and read forecast maps and soundings more easily.",
     "highlights": [

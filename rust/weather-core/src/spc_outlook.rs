@@ -1,9 +1,10 @@
 //! Time-aware SPC convective outlook resolution, GeoJSON decoding, and caching.
 
-mod affected_areas;
+pub(crate) mod affected_areas;
 pub mod forecast;
 
 use crate::format_rfc3339_utc;
+use crate::outlook_discussion::{parse_spc_discussion, OutlookDiscussion};
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -17,10 +18,10 @@ const ARCHIVE_FIRST_YEAR: i32 = 2020;
 const CONVECTIVE_DAY_START_HOUR: u8 = 12;
 const MAX_CANDIDATES: usize = 12;
 const MAX_OUTLOOK_BYTES: usize = 8 * 1024 * 1024;
-const MAX_SHAPES_PER_LAYER: usize = 256;
+pub(crate) const MAX_SHAPES_PER_LAYER: usize = 256;
 const MAX_RINGS_PER_SHAPE: usize = 512;
 const MAX_POINTS_PER_RING: usize = 100_000;
-const MAX_POINTS_PER_LAYER: usize = 500_000;
+pub(crate) const MAX_POINTS_PER_LAYER: usize = 500_000;
 const MIN_RING_POINTS: usize = 3;
 const LIVE_CACHE_TTL: Duration = Duration::from_secs(300);
 const ARCHIVE_CACHE_TTL: Duration = Duration::from_secs(24 * 3600);
@@ -66,12 +67,44 @@ pub struct OutlookLayer {
     pub bounds: Option<[f64; 4]>,
     pub areas: Vec<OutlookArea>,
     #[serde(skip)]
-    valid_from_dt: Option<OffsetDateTime>,
+    pub(crate) valid_from_dt: Option<OffsetDateTime>,
     #[serde(skip)]
-    valid_to_dt: Option<OffsetDateTime>,
+    pub(crate) valid_to_dt: Option<OffsetDateTime>,
 }
 
 impl OutlookLayer {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
+        key: String,
+        title: String,
+        subtitle: String,
+        short_name: String,
+        valid_from: Option<String>,
+        valid_to: Option<String>,
+        issued: Option<String>,
+        source_url: String,
+        attribution: String,
+        bounds: Option<[f64; 4]>,
+        areas: Vec<OutlookArea>,
+        valid_from_dt: Option<OffsetDateTime>,
+        valid_to_dt: Option<OffsetDateTime>,
+    ) -> Self {
+        Self {
+            key,
+            title,
+            subtitle,
+            short_name,
+            valid_from,
+            valid_to,
+            issued,
+            source_url,
+            attribution,
+            bounds,
+            areas,
+            valid_from_dt,
+            valid_to_dt,
+        }
+    }
     /// State names for the highest non-hatched risk shown in the briefing.
     pub fn affected_states(&self) -> Vec<&'static str> {
         affected_areas::highest_risk_states(&self.areas)
@@ -449,7 +482,7 @@ fn parse_ring(raw_ring: &Value) -> Option<Vec<[f64; 2]>> {
     (points.len() >= MIN_RING_POINTS).then_some(points)
 }
 
-fn rings_from_geometry(geometry: Option<&Value>) -> Vec<Vec<Vec<[f64; 2]>>> {
+pub(crate) fn rings_from_geometry(geometry: Option<&Value>) -> Vec<Vec<Vec<[f64; 2]>>> {
     let Some(obj) = geometry.and_then(Value::as_object) else {
         return Vec::new();
     };
@@ -480,7 +513,7 @@ fn rings_from_geometry(geometry: Option<&Value>) -> Vec<Vec<Vec<[f64; 2]>>> {
     groups
 }
 
-fn bounds_of(rings: &[Vec<[f64; 2]>]) -> Option<[f64; 4]> {
+pub(crate) fn bounds_of(rings: &[Vec<[f64; 2]>]) -> Option<[f64; 4]> {
     let mut min_lon = f64::INFINITY;
     let mut max_lon = f64::NEG_INFINITY;
     let mut min_lat = f64::INFINITY;
@@ -513,6 +546,46 @@ fn short_month(month: Month) -> &'static str {
         Month::October => "Oct",
         Month::November => "Nov",
         Month::December => "Dec",
+    }
+}
+
+pub(crate) fn format_window_subtitle(
+    label: &str,
+    valid_from: Option<OffsetDateTime>,
+    valid_to: Option<OffsetDateTime>,
+) -> String {
+    match (valid_from, valid_to) {
+        (Some(vf), Some(vt)) => {
+            let prefix = if label.is_empty() {
+                String::new()
+            } else {
+                format!("{label} · ")
+            };
+            if vf.date() == vt.date() {
+                format!(
+                    "{prefix}valid {:02} {} {:02}{:02}–{:02}{:02}Z",
+                    vf.day(),
+                    short_month(vf.month()),
+                    vf.hour(),
+                    vf.minute(),
+                    vt.hour(),
+                    vt.minute()
+                )
+            } else {
+                format!(
+                    "{prefix}valid {:02} {} {:02}{:02}Z → {:02} {} {:02}{:02}Z",
+                    vf.day(),
+                    short_month(vf.month()),
+                    vf.hour(),
+                    vf.minute(),
+                    vt.day(),
+                    short_month(vt.month()),
+                    vt.hour(),
+                    vt.minute()
+                )
+            }
+        }
+        _ => label.to_owned(),
     }
 }
 
@@ -626,39 +699,7 @@ pub fn parse_outlook(
         Some([min_lon, max_lon, min_lat, max_lat])
     };
 
-    let subtitle = match (valid_from, valid_to) {
-        (Some(vf), Some(vt)) => {
-            let prefix = if label.is_empty() {
-                String::new()
-            } else {
-                format!("{label} · ")
-            };
-            if vf.date() == vt.date() {
-                format!(
-                    "{prefix}valid {:02} {} {:02}{:02}–{:02}{:02}Z",
-                    vf.day(),
-                    short_month(vf.month()),
-                    vf.hour(),
-                    vf.minute(),
-                    vt.hour(),
-                    vt.minute()
-                )
-            } else {
-                format!(
-                    "{prefix}valid {:02} {} {:02}{:02}Z → {:02} {} {:02}{:02}Z",
-                    vf.day(),
-                    short_month(vf.month()),
-                    vf.hour(),
-                    vf.minute(),
-                    vt.day(),
-                    short_month(vt.month()),
-                    vt.hour(),
-                    vt.minute()
-                )
-            }
-        }
-        _ => label.to_owned(),
-    };
+    let subtitle = format_window_subtitle(label, valid_from, valid_to);
     let spec = product_spec(product);
     Ok(OutlookLayer {
         key: "spc_outlook".into(),
@@ -685,10 +726,16 @@ struct CacheEntry {
     layer: Option<Arc<OutlookLayer>>,
 }
 
+struct DiscussionCacheEntry {
+    expires_at: Instant,
+    discussion: Option<OutlookDiscussion>,
+}
+
 pub struct OutlookClient {
     client: Result<Client, String>,
     layers: Mutex<HashMap<String, CacheEntry>>,
     day_misses: Mutex<HashMap<String, Instant>>,
+    discussions: Mutex<HashMap<u8, DiscussionCacheEntry>>,
 }
 
 pub fn client() -> &'static OutlookClient {
@@ -713,6 +760,7 @@ impl Default for OutlookClient {
                 .map_err(|error| error.to_string()),
             layers: Mutex::new(HashMap::new()),
             day_misses: Mutex::new(HashMap::new()),
+            discussions: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -724,6 +772,10 @@ impl OutlookClient {
             .unwrap_or_else(PoisonError::into_inner)
             .clear();
         self.day_misses
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+        self.discussions
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clear();
@@ -797,6 +849,63 @@ impl OutlookClient {
         }
         self.fetch_candidate(&live_request(day, spec.key), spec.key, LIVE_CACHE_TTL)
             .await
+    }
+
+    /// Fetch and parse SPC's plain-text discussion for Day 1, 2, or 3.
+    pub async fn fetch_discussion(
+        &self,
+        day: u8,
+        issued_fallback: Option<String>,
+    ) -> Option<OutlookDiscussion> {
+        if !(1..=3).contains(&day) {
+            return None;
+        }
+        let now = Instant::now();
+        {
+            let mut cache = self
+                .discussions
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            if let Some(entry) = cache.get(&day) {
+                if entry.expires_at >= now {
+                    return entry.discussion.clone();
+                }
+                cache.remove(&day);
+            }
+        }
+        let url = format!("{BASE}/day{day}otlk.txt");
+        let parsed = match self.download(&url).await {
+            Ok(Some(bytes)) => {
+                let text = String::from_utf8_lossy(&bytes);
+                let discussion = parse_spc_discussion(&text, day, issued_fallback);
+                self.discussions
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .insert(
+                        day,
+                        DiscussionCacheEntry {
+                            expires_at: Instant::now() + LIVE_CACHE_TTL,
+                            discussion: discussion.clone(),
+                        },
+                    );
+                discussion
+            }
+            Ok(None) => {
+                self.discussions
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .insert(
+                        day,
+                        DiscussionCacheEntry {
+                            expires_at: Instant::now() + Duration::from_secs(60),
+                            discussion: None,
+                        },
+                    );
+                None
+            }
+            Err(_) => None,
+        };
+        parsed
     }
 
     async fn fetch_candidate(
@@ -991,6 +1100,7 @@ mod tests {
             client: Err("the test must use the live endpoint cache".into()),
             layers: Mutex::default(),
             day_misses: Mutex::default(),
+            discussions: Mutex::default(),
         };
         let now = instant("2025-05-14T09:00:00Z");
         for (day, product, valid, expires) in [

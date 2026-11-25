@@ -8,7 +8,7 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 use rayon::prelude::*;
 
 #[pyfunction]
-fn derive_map_diagnostic(
+pub(crate) fn derive_map_diagnostic(
     py: Python<'_>,
     diagnostic: &str,
     values: Vec<NumericGrid<'_>>,
@@ -40,13 +40,13 @@ fn derive_map_diagnostic(
                     };
                 }
                 if single {
-                    let mut v = [0.0f32; 6];
+                    let mut v = [0.0f32; 7];
                     for (slot, buffer) in v.iter_mut().zip(&grids.buffers) {
                         *slot = buffer.value(cell) as f32;
                     }
                     f64::from(evaluate(kind, &v))
                 } else {
-                    let mut v = [0.0f64; 6];
+                    let mut v = [0.0f64; 7];
                     for (slot, buffer) in v.iter_mut().zip(&grids.buffers) {
                         *slot = buffer.value(cell);
                     }

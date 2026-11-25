@@ -202,6 +202,7 @@ class Palette:
     #: Labelled ticks for the colour bar. Empty means "use the stop values".
     ticks: tuple[float, ...] = ()
     display: Literal["auto", "fixed", "temperature-difference"] = "auto"
+    ptype_labels: tuple[str, str, str, str] | None = None
 
     def __post_init__(self) -> None:
         if self.display not in {"auto", "fixed", "temperature-difference"}:
@@ -667,6 +668,42 @@ PALETTE_PRECIPITATION = Palette(
            1, 1.2, 1.4, 1.6, 1.8, 2, 2.5, 3, 3.5, 4, 5, 6, 8, 10, 15, 17.5),
 )
 PALETTE_PRECIPITATION_RATE = replace(PALETTE_PRECIPITATION, units="in/h")
+# REFS 1-h QPF and dominant precipitation type: four 17-threshold ramps at offsets 0/10/20/30.
+_QPF_PTYPE_THRESHOLDS = (
+    0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08,
+    0.1, 0.12, 0.15, 0.17, 0.2, 0.25, 0.3, 0.4, 0.5,
+)
+_QPF_PTYPE_RAMPS = (
+    (0.0, (
+        "#bae6bd", "#a7d4a9", "#93c493", "#7db280", "#69a16b", "#569056",
+        "#48894d", "#3a8143", "#2c7b3a", "#1e7430", "#116d28", "#f4ee70",
+        "#f5db67", "#f8c75c", "#f7b250", "#f89d46", "#fa893d",
+    )),
+    (10.0, (
+        "#badef0", "#a4cee6", "#8bbfda", "#72aed1", "#5a9ec4", "#448fbb",
+        "#3680a9", "#2d7098", "#276685", "#185672", "#094760", "#b03390",
+        "#b6459a", "#c26ca8", "#d18abe", "#e2a9d4", "#efcde6",
+    )),
+    (20.0, (
+        "#eec8d9", "#edb7c0", "#eea9a9", "#ec9991", "#ec867b", "#ed7863",
+        "#ed674e", "#eb5536", "#e74725", "#df4527", "#d0402b", "#c23c30",
+        "#b43934", "#a53837", "#95363a", "#893440", "#793044",
+    )),
+    (30.0, (
+        "#e0c8eb", "#d7b5e6", "#cca2de", "#c48dd9", "#bc7ad4", "#b46acd",
+        "#a954c8", "#a241c2", "#9a37bc", "#8c30a8", "#842c99", "#772787",
+        "#6f2476", "#642262", "#5b2053", "#521e3e", "#471d2c",
+    )),
+)
+PALETTE_QPF_PTYPE = Palette(
+    stops=tuple(
+        (round(offset + threshold, 2), colour)
+        for offset, colours in _QPF_PTYPE_RAMPS
+        for threshold, colour in zip(_QPF_PTYPE_THRESHOLDS, colours, strict=True)
+    ),
+    units="in", stepped=True, floor=0.01,
+    ticks=(0.05, 0.1, 0.2, 0.5),
+)
 # Winter precipitation rates: supplied colours, with identical adjacent bands combined.
 PALETTE_FREEZING_RAIN_RATE = Palette(
     stops=(
@@ -1001,6 +1038,7 @@ CATEGORIES = (
     "Wind Shear",
     "Composite Parameters",
     "Explicit Convective",
+    "Guidance",
 )
 
 
@@ -1031,6 +1069,8 @@ class HrrrProduct:
     chip: str = ""
     #: Complete trailing interval of hourly maxima, within the selected run.
     max_hours: int = 0
+    #: Selectable ensemble/field variants exposed for this parameter: ``((key, label), ...)``.
+    variants: tuple[tuple[str, str], ...] = ()
 
     @property
     def short_label(self) -> str:
@@ -1302,6 +1342,15 @@ def _build_catalogue() -> tuple[HrrrProduct, ...]:
         derive=_single("uh03"), palette=PALETTE_UPDRAFT_HELICITY, max_hours=1,
         description=("Largest 0-3 km updraft helicity the model produced during "
                      "the hour ending at this forecast time.")))
+    products.append(HrrrProduct(
+        key="uh-0-3km-run", label="Updraft Helicity: 0-3 km AGL (run max)",
+        chip="0-3km UH Max",
+        category="Explicit Convective", fields=(F_UH03,),
+        derive=_single("uh03"), palette=PALETTE_UPDRAFT_HELICITY, max_hours=1,
+        description=("Largest 0-3 km updraft helicity the model produced from "
+                     "the start of the run through this forecast time, in m\u00b2/s\u00b2."),
+        caveat=("Computed as the maximum of native hourly 0-3 km MXUPHL "
+                "intervals from F001 through the selected forecast hour.")))
     for hours in (1, 3):
         products.append(HrrrProduct(
             key=f"uh-2-5km-{hours}h",
@@ -1313,6 +1362,15 @@ def _build_catalogue() -> tuple[HrrrProduct, ...]:
                          f"{'s' if hours > 1 else ''} ending at the selected forecast time, in m\u00b2/s\u00b2."),
             caveat=("Uses native hourly MXUPHL maxima from the same run. "
                     f"Available from F{hours:03d}; a complete interval is required.")))
+    products.append(HrrrProduct(
+        key="uh-2-5km-run", label="Updraft Helicity: 2-5 km AGL (run max)",
+        chip="2-5km UH Max", category="Explicit Convective",
+        fields=(F_UH25,), derive=_single("uh25"),
+        palette=PALETTE_UPDRAFT_HELICITY_2_5KM, max_hours=1,
+        description=("Largest 2-5 km AGL updraft helicity the model produced from "
+                     "the start of the run through this forecast time, in m\u00b2/s\u00b2."),
+        caveat=("Computed as the maximum of native hourly 2-5 km MXUPHL "
+                "intervals from F001 through the selected forecast hour.")))
 
     from sharpmod.backends.selector import _rust_is_installed
 
@@ -1332,14 +1390,14 @@ DEFAULT_PRODUCT = "refc"
 
 
 ECMWF_MODELS = ("openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km")
-GLOBAL_MODELS = (*ECMWF_MODELS, "aigfs", "gfs", "gdps")
+ICON_MODEL = "openmeteo-icon-global"
+GLOBAL_MODELS = (*ECMWF_MODELS, "aigfs", "gfs", "gdps", ICON_MODEL)
 HRW_MODELS = ("hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3")
-FIELD_MODELS = ("hrrr", "rap", "rdps", "rrfs-a", "nam", "nam-3km-conus", *(f"refs-m{i}" for i in range(1, 6)), *GLOBAL_MODELS, *HRW_MODELS)
+FIELD_MODELS = ("hrrr", "rap", "rdps", "hrdps", "rrfs-a", "nam", "nam-3km-conus", "refs", *(f"refs-m{i}" for i in range(1, 6)), *GLOBAL_MODELS, *HRW_MODELS)
 _HRW_UNSUPPORTED = frozenset({"ltng", "efhl", "prate", "prate-frzr", "prate-sleet", "prate-snow", "snod", "mucape", "scp", "stp"})
 # The reduced REFS member stream omits these products' ingredients.
 _REFS_UNSUPPORTED = frozenset({
     "hgt-wind-200", "mlcape", "mlcin", "mucape", "lapse-0-3km",
-    "ehi-0-1km", "ehi-0-3km", "scp", "stp",
     "efhl", "lftx", "prate", "prate-frzr", "prate-sleet", "prate-snow", "snod",
 })
 _SHEAR_LEVELS = (925, 850, 750, 650, 550, 450)
@@ -1366,7 +1424,7 @@ def _available_products(model: str) -> tuple[HrrrProduct, ...]:
         raise ValueError(f"{model!r} has no map field catalogue")
     if model == "hrrr":
         return tuple(PRODUCTS.values())
-    if model in {"gdps", "rap", "rdps"}:
+    if model in {"gdps", "hrdps", "rap", "rdps", "refs", ICON_MODEL}:
         return ()  # The native catalogue owns these provider product sets.
     if model == "aigfs":
         keys = {*(f"hgt-wind-{level}" for level in (200, 300, 500, 700, 850)),

@@ -25,8 +25,11 @@ mod acquire;
 mod benchmark;
 #[cfg(test)]
 mod fixtures;
+pub(crate) mod grefs;
 mod inventory;
 mod plan;
+pub(crate) mod refs;
+pub(crate) mod refs_zarr;
 #[cfg(test)]
 mod tests;
 
@@ -90,6 +93,7 @@ fn download_map_fields(
         identities,
         sum,
         maximum,
+        diff,
     } = plan::fields(
         py,
         product,
@@ -112,7 +116,10 @@ fn download_map_fields(
             &model,
         )?;
         for (field, grid) in batch.iter().zip(output) {
-            if let Some(previous) = arrays.get_mut(&field.name).filter(|_| sum || maximum) {
+            if let Some(previous) = arrays
+                .get_mut(&field.name)
+                .filter(|_| sum || maximum || diff)
+            {
                 if previous.shape != grid.shape {
                     return Err(field_error(
                         py,
@@ -120,7 +127,13 @@ fn download_map_fields(
                     ));
                 }
                 for (a, b) in previous.values.iter_mut().zip(&grid.values) {
-                    *a = if sum {
+                    *a = if diff {
+                        if a.is_nan() || b.is_nan() {
+                            f32::NAN
+                        } else {
+                            (*b - *a).max(0.0)
+                        }
+                    } else if sum {
                         *a + *b
                     } else if a.is_nan() || b.is_nan() {
                         f32::NAN
@@ -152,6 +165,9 @@ fn download_map_fields(
 }
 
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    grefs::register(module)?;
+    refs::register(module)?;
+    refs_zarr::register(module)?;
     module.add_function(wrap_pyfunction!(download_map_fields, module)?)?;
     module.add_function(wrap_pyfunction!(clear_model_field_cache, module)?)?;
     module.add_function(wrap_pyfunction!(model_field_cache_info, module)?)?;

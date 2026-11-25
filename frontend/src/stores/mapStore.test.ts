@@ -69,9 +69,18 @@ describe("mapStore", () => {
     expect(mapProjection(useMapStore.getState())).toBe("globe");
   });
 
-  it("starts from the registry defaults", () => {
-    const { layers, layerPanelCollapsed, cameraSnapshot, focusRequest } = useMapStore.getState();
-    expect(layers).toEqual(LAYER_DEFAULTS);
+  it("starts with roads and rivers hidden in Model Viewer", () => {
+    const state = useMapStore.getState();
+    const { layers, layerPanelCollapsed, cameraSnapshot, focusRequest } = state;
+    expect(layers).toEqual({
+      ...LAYER_DEFAULTS,
+      roads: { ...LAYER_DEFAULTS.roads, visible: false },
+      rivers: { ...LAYER_DEFAULTS.rivers, visible: false },
+    });
+    expect(panelLayers(state, 1).roads.visible).toBe(false);
+    expect(panelLayers(state, 1).rivers.visible).toBe(false);
+    expect(panelLayers({ ...state, view: "live" }, 0).roads.visible).toBe(true);
+    expect(panelLayers({ ...state, view: "live" }, 0).rivers.visible).toBe(true);
     expect(layerPanelCollapsed).toBe(false);
     expect(cameraSnapshot).toBeNull();
     expect(focusRequest).toBeNull();

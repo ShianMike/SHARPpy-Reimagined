@@ -2,9 +2,11 @@ import { Info } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { cx } from "../../lib/cx";
 import { useBackendHealth } from "../../lib/backend/BackendProvider";
+import { browserEdgePath } from "../../lib/backend/edge";
 import { useRestartBackend } from "../../lib/backend/useRestartBackend";
 import { IconAction } from "../../ui/Controls";
 import { HealthPopover } from "./HealthPopover";
+import { HostedEdgeStatus } from "./HostedEdgeStatus";
 import { healthView } from "./healthStatus";
 import styles from "./HealthIndicator.module.css";
 
@@ -18,9 +20,11 @@ export function HealthIndicator({ className }: HealthIndicatorProps): ReactNode 
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   const view = healthView(health.status, health.data);
+  const edgePath = browserEdgePath();
 
   return (
     <>
+      {edgePath === null ? null : <HostedEdgeStatus path={edgePath} />}
       <IconAction
         ref={setAnchor}
         icon={Info}

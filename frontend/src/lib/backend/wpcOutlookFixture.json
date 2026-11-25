@@ -1,0 +1,51 @@
+{
+  "ero": [
+    {
+      "label": "MRGL",
+      "description": "Marginal (At Least 5%)",
+      "fill": "#38A800",
+      "stroke": "#00734C",
+      "rank": 1,
+      "hatch": false,
+      "hatchLevel": 0
+    },
+    {
+      "label": "SLGT",
+      "description": "Slight (At Least 15%)",
+      "fill": "#FFFE00",
+      "stroke": "#E69800",
+      "rank": 2,
+      "hatch": false,
+      "hatchLevel": 0
+    }
+  ],
+  "winter": [
+    {
+      "label": "WWA",
+      "description": "Winter Weather Area",
+      "fill": "#D2DFE7",
+      "stroke": "#7B95A8",
+      "rank": 1,
+      "hatch": false,
+      "hatchLevel": 0
+    },
+    {
+      "label": "MINOR",
+      "description": "Minor Impacts",
+      "fill": "#FAF5A3",
+      "stroke": "#C9B428",
+      "rank": 2,
+      "hatch": false,
+      "hatchLevel": 0
+    },
+    {
+      "label": "MODERATE",
+      "description": "Moderate Impacts",
+      "fill": "#F7962F",
+      "stroke": "#B85A00",
+      "rank": 3,
+      "hatch": false,
+      "hatchLevel": 0
+    }
+  ]
+}

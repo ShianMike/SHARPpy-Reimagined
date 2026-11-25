@@ -52,16 +52,27 @@ fn display_geometry(
     bounds: (f64, f64, f64, f64),
     isobars: bool,
 ) -> Result<Geometry, String> {
+    let mut segments = contours::extract_display_levels(values, height, width, interval, 100_000)?;
+    let projection = Projection::new(height, width, bounds)?;
     if !isobars {
-        let mut segments = contours::extract_display(values, height, width, interval, 100_000)?;
-        contours::project(&mut segments, height, width, bounds)?;
+        for (_, (a, b)) in &mut segments {
+            let [ax, ay] = projection.point([a.0, a.1]);
+            let [bx, by] = projection.point([b.0, b.1]);
+            *a = (ax, ay);
+            *b = (bx, by);
+        }
+        let labels = label_anchors(
+            segments
+                .iter()
+                .map(|&(value, (a, b))| (value, [(a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0])),
+            bounds,
+        );
         return Ok(Geometry {
-            segments,
+            segments: segments.into_iter().map(|(_, segment)| segment).collect(),
+            labels,
             ..Geometry::default()
         });
     }
-    let segments = contours::extract_display_levels(values, height, width, interval, 100_000)?;
-    let projection = Projection::new(height, width, bounds)?;
     let mut paths = smooth_isobars(&segments, values, height, width);
     for (_, path) in &mut paths {
         for point in path {
@@ -111,7 +122,7 @@ fn map_contour_frame(
             }
             let (height, width) = (field.shape()[0], field.shape()[1]);
             let values: Vec<f64> = field.as_array().iter().copied().collect();
-            let isobars = product == "mslp";
+            let isobars = unit == "hPa";
             let output = py.detach(move || {
                 display_geometry(&values, height, width, interval, bounds, isobars)
             });
@@ -169,6 +180,23 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn height_geometry_labels_use_the_contour_interval_in_decametres() {
+        let field = [543.0, 552.0, 543.0, 552.0, 543.0, 552.0];
+        let geometry =
+            display_geometry(&field, 3, 2, 6.0, (-120.0, -60.0, 20.0, 50.0), false).unwrap();
+        assert!(!geometry.segments.is_empty());
+        for level in [546.0, 552.0] {
+            assert!(geometry.labels.iter().any(|label| label.value == level));
+        }
+        for label in geometry.labels {
+            assert!(geometry
+                .segments
+                .iter()
+                .any(|(a, b)| { label.position == [(a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0] }));
+        }
+    }
 
     #[test]
     fn numeric_labels_use_actual_levels_and_lie_on_their_own_segment() {

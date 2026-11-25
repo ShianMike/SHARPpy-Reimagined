@@ -136,6 +136,20 @@ pub async fn get_spc_outlook(
     state.router.spc_outlook(&product, &valid_time, day).await
 }
 
+/// The WPC Excessive Rainfall or Winter Weather Outlook covering `valid_time` or `day`.
+#[tauri::command]
+pub async fn get_wpc_outlook(
+    state: tauri::State<'_, AppState>,
+    valid_time: String,
+    day: Option<u8>,
+    product: Option<String>,
+) -> Result<SpcOutlook, BackendError> {
+    state
+        .router
+        .wpc_outlook(&valid_time, day, product.as_deref())
+        .await
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ForecastDrawingArgs {

@@ -15,7 +15,7 @@ it("keeps forecast context separate from live layers even with old saved visibil
     if (["warnings", "watches", "radar", "satellite", "spotter-network"].includes(id)) {
       expect(layerInView(id, "live")).toBe(true);
       expect(layerInView(id, "map")).toBe(false);
-    } else if (id.startsWith("spc-") || id === "model-field") {
+    } else if (id.startsWith("spc-") || id === "wpc-ero" || id === "model-field") {
       expect(layerInView(id, "map")).toBe(true);
       expect(layerInView(id, "live")).toBe(false);
     } else if (id === "storm-reports" || id === "surface-plots") {

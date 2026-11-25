@@ -59,6 +59,7 @@ from sharpmod.providers.hrrr_products import (
     Palette,
     ECMWF_MODELS,
     GLOBAL_MODELS,
+    ICON_MODEL,
     get_product,
 )
 from sharpmod.models.lambert_grid import HRRR_GRID, HRRR_PROJ4, NAM_GRID, NAM_PROJ4, HRW_GRID
@@ -118,14 +119,14 @@ NAM_COVERAGE_BOUNDS = NAM_GRID.bounds()
 
 def field_grid(model: str = "hrrr"):
     """Return the grid encoded by this model's native field products."""
-    if model in {"rap", "rdps"}:
+    if model in {"rap", "rdps", "hrdps"}:
         import sharpmod_rs
 
         return sharpmod_rs.regional_map_grid(model)
-    if model == "gdps":
+    if model in {"gdps", ICON_MODEL}:
         import sharpmod_rs
 
-        return sharpmod_rs.gdps_map_grid()
+        return sharpmod_rs.icon_map_grid() if model == ICON_MODEL else sharpmod_rs.gdps_map_grid()
     if model in GLOBAL_MODELS:
         from sharpmod.providers.ecmwf_fields import grid
         return grid(model)
@@ -135,6 +136,10 @@ def field_grid(model: str = "hrrr"):
 def field_bounds(model: str = "hrrr"):
     if model == "rap":
         return field_grid(model).bounds()
+    if model == "hrdps":
+        import sharpmod_rs
+
+        return sharpmod_rs.hrdps_domain_bounds()
     if model == "rdps":
         from sharpmod.providers.eccc_geomet import get_capability
         return get_capability(model).domain_bounds
@@ -261,6 +266,10 @@ def pin_request(run: datetime, fxx: int | None = None) -> tuple[datetime, int]:
 
 
 def grib_url(run: datetime, fxx: int, source: str, model: str = "hrrr", *, release=None) -> str:
+    if model == "refs":
+        import sharpmod_rs
+
+        return sharpmod_rs.refs_grib_url(run, fxx)
     if model == "rap":
         import sharpmod_rs
 
@@ -269,10 +278,18 @@ def grib_url(run: datetime, fxx: int, source: str, model: str = "hrrr", *, relea
         import sharpmod_rs
 
         return sharpmod_rs.rdps_map_directory(run, fxx)
+    if model == "hrdps":
+        import sharpmod_rs
+
+        return sharpmod_rs.hrdps_map_directory(run, fxx)
     if model == "gdps":
         import sharpmod_rs
 
         return sharpmod_rs.gdps_map_directory(run, fxx)
+    if model == ICON_MODEL:
+        import sharpmod_rs
+
+        return sharpmod_rs.icon_map_url(run, fxx)
     if model == "gfs":
         return (f"https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.{run:%Y%m%d}/{run:%H}/atmos/"
                 f"gfs.t{run:%H}z.pgrb2.0p25.f{int(fxx):03d}")

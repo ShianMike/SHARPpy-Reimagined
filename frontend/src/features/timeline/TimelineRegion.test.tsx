@@ -24,25 +24,15 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it.each(["gefs", "nam", "nam-3km-conus", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3", "sref", "href"])("offers exactly the requested models in both selectors and resolves removed choice %s safely", async (modelKey) => {
-  useForecastStore.getState().setModel(modelKey);
-  useSoundingStore.getState().setModel({ modelKey, latitude: "35", longitude: "-97" });
-  const base = createTransport();
-  let request: unknown;
-  renderWithBackend(<><ForecastControls /><ModelForm /></>, {
-    ...base,
-    call: (command, args) => {
-      if (command === "open_sounding") request = args;
-      return base.call(command, args);
-    },
-  });
+it("supports keyboard navigation across the sounding models", async () => {
+  renderWithBackend(<ModelForm />, createTransport());
   const model = await screen.findByRole("combobox", { name: "Model" });
-  const names = ["HRRR", "RAP", "RDPS", "RRFS", "REFSm1", "REFSm2", "REFSm3", "REFSm4", "REFSm5", "GFS", "GDPS", "ECMWF", "ECMWF 9km"].toSorted();
+  const names = ["HRRR", "RAP", "NAM", "NAM 3km CONUS", "RDPS", "RRFS", "REFSm1", "REFSm2", "REFSm3", "REFSm4", "REFSm5", "GFS", "GDPS", "ECMWF", "ECMWF 9km", "ICON"].toSorted();
   await userEvent.click(model);
   expect(screen.getAllByRole("option").map((option) => option.getAttribute("aria-label")).toSorted()).toEqual(names);
   const soundingModels = screen.getByRole("listbox", { name: "Model" });
-  expect(within(soundingModels).getByRole("group", { name: "CONUS" }).querySelectorAll('[role="option"]')).toHaveLength(7);
-  expect(within(within(soundingModels).getByRole("group", { name: "Global" })).getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["GFS", "ECMWF 9km", "ECMWF", "GDPS"]);
+  expect(within(soundingModels).getByRole("group", { name: "CONUS" }).querySelectorAll('[role="option"]')).toHaveLength(9);
+  expect(within(within(soundingModels).getByRole("group", { name: "Global" })).getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["GFS", "ECMWF 9km", "ICON", "ECMWF", "GDPS"]);
   expect(within(within(soundingModels).getByRole("group", { name: "Regional" })).getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["RAP", "RDPS"]);
   await userEvent.keyboard("{ArrowDown}{End}");
   expect(document.activeElement).toBe(screen.getByRole("option", { name: "RDPS" }));
@@ -52,19 +42,38 @@ it.each(["gefs", "nam", "nam-3km-conus", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3
   expect(document.activeElement).toBe(screen.getByRole("option", { name: "GFS" }));
   expect((model as HTMLButtonElement).value).toBe("hrrr");
   await userEvent.keyboard("{Escape}");
-  await userEvent.click(screen.getByRole("button", { name: "Choose model" }));
+});
+
+it("lists the supported map models in the forecast picker", async () => {
+  renderWithBackend(<ForecastControls />, createTransport());
+  const picker = screen.getByRole<HTMLButtonElement>("button", { name: "Choose model" });
+  await waitFor(() => { expect(picker.disabled).toBe(false); });
+  fireEvent.click(picker);
   const dialog = screen.getByRole("dialog", { name: "Forecast model" });
   expect(document.activeElement).toBe(screen.getByRole("searchbox", { name: "Search models" }));
   expect(within(dialog).getByRole<HTMLInputElement>("radio", { name: "CONUS" }).checked).toBe(true);
-  expect(within(within(dialog).getByRole("group", { name: "CONUS" })).getAllByRole("button")).toHaveLength(7);
+  expect(within(within(dialog).getByRole("group", { name: "CONUS" })).getAllByRole("button")).toHaveLength(4);
   expect(within(dialog).queryByRole("button", { name: "Choose ECMWF" })).toBeNull();
-  await userEvent.click(within(dialog).getByRole("radio", { name: "Global" }));
-  expect(within(within(dialog).getByRole("group", { name: "Global" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Choose GFS", "Choose ECMWF 9km", "Choose ECMWF", "Choose GDPS", "Choose AIGFS"]);
-  await userEvent.click(within(dialog).getByRole("radio", { name: "Regional" }));
-  expect(within(within(dialog).getByRole("group", { name: "Regional" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Choose RAP", "Choose RDPS"]);
-  await userEvent.click(screen.getByRole("button", { name: "Close forecast setup" }));
-  await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
-  await waitFor(() => { expect(request).toMatchObject({ request: { kind: "model", model: "hrrr" } }); });
+  fireEvent.click(within(dialog).getByRole("radio", { name: "Global" }));
+  expect(within(within(dialog).getByRole("group", { name: "Global" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Choose GFS", "Choose ECMWF 9km", "Choose ICON", "Choose ECMWF", "Choose GDPS", "Choose AIGFS"]);
+  fireEvent.click(within(dialog).getByRole("radio", { name: "Regional" }));
+  expect(within(within(dialog).getByRole("group", { name: "Regional" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Choose RAP", "Choose RDPS", "Choose HRDPS"]);
+});
+
+it.each(["gefs", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3", "sref", "href"])("falls back to HRRR for the removed model %s", async (modelKey) => {
+  useForecastStore.getState().setModel(modelKey);
+  useSoundingStore.getState().setModel({ modelKey, latitude: "35", longitude: "-97" });
+  const transport = createTransport();
+  const calls = vi.spyOn(transport, "call");
+  renderWithBackend(<><ForecastControls /><ModelForm /></>, transport);
+  const model = await screen.findByRole<HTMLButtonElement>("combobox", { name: "Model" });
+  expect(model.value).toBe("hrrr");
+  expect(screen.getByRole("button", { name: "Choose model" }).textContent).toContain("HRRR");
+  fireEvent.click(screen.getByRole("button", { name: "Open sounding" }));
+  await waitFor(() => {
+    const request = calls.mock.calls.find(([command]) => command === "open_sounding")?.[1];
+    expect(request).toMatchObject({ request: { kind: "model", model: "hrrr" } });
+  });
 });
 
 it("keeps AIGFS in maps and safely falls back to HRRR in the sounding form", async () => {
@@ -187,7 +196,7 @@ it("changes shared playback speed and loop settings", async () => {
   renderWithBackend(<TimelineRegion />, createTransport());
   await userEvent.click(screen.getByRole("button", { name: "Playback speed 1 times" }));
   expect(useUiStore.getState().speed).toBe(1.5);
-  for (const [before, after] of [[1.5, 2], [2, 3], [3, 4], [4, 0.5]]) {
+  for (const [before, after] of [[1.5, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 0.5]]) {
     await userEvent.click(screen.getByRole("button", { name: `Playback speed ${String(before)} times` }));
     expect(useUiStore.getState().speed).toBe(after);
   }

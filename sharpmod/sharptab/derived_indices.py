@@ -152,6 +152,8 @@ def _mmp_linear_predictor(sp):
 
 
 def _left_supercell_composite_impl(prof):
+    import sharpmod_rs
+
     sp = _api._convective_oracle_profile(prof)
     if sp is None:
         return MISSING
@@ -168,37 +170,18 @@ def _left_supercell_composite_impl(prof):
         esrh = _api._finite_or_none(left_esrh[0])
     except Exception:
         esrh = None
-    ebwd_ms = _api._finite_or_none(getattr(sp, "ebwspd", None))
-    if ebwd_ms is not None:
-        ebwd_ms = ebwd_ms / KTS_PER_MS
+    ebwd_kt = _api._finite_or_none(getattr(sp, "ebwspd", None))
 
-    if mucape is None or mucin is None or esrh is None or ebwd_ms is None:
+    if mucape is None or mucin is None or esrh is None or ebwd_kt is None:
         return MISSING
-    if mucape <= 0.0:
-        return 0.0
 
-    if ebwd_ms > 20.0:
-        ebwd_ms = 20.0
-    elif ebwd_ms < 10.0:
-        ebwd_ms = 0.0
-
-    if mucin > _api._LSCP_MUCIN_NORM:
-        mucin_term = 1.0
-    elif mucin < 0.0:
-        mucin_term = _api._LSCP_MUCIN_NORM / mucin
-    else:
-        mucin_term = 1.0
-
-    value = (
-        (mucape / _api._LSCP_MUCAPE_NORM)
-        * (esrh / _api._LSCP_ESRH_NORM)
-        * (ebwd_ms / _api._LSCP_EBWD_NORM)
-        * mucin_term
-    )
-    return float(value) if np.isfinite(value) else MISSING
+    value = sharpmod_rs.derived_lscp(mucape, mucin, esrh, ebwd_kt)
+    return MISSING if value is None else value
 
 
 def _non_supercell_tornado_parameter_impl(prof):
+    import sharpmod_rs
+
     sp = _api._convective_oracle_profile(prof)
     if sp is None:
         return MISSING
@@ -217,35 +200,24 @@ def _non_supercell_tornado_parameter_impl(prof):
     if None in (lr01, mlcape3, mlcin, shear06_ms, sfc_vort):
         return MISSING
 
-    value = (
-        (lr01 / _api._NSTP_LR_NORM)
-        * (mlcape3 / _api._NSTP_MLCAPE3_NORM)
-        * ((_api._NSTP_MLCIN_BASE - mlcin) / _api._NSTP_MLCIN_NORM)
-        * ((_api._NSTP_SHEAR_BASE_MS - shear06_ms) / _api._NSTP_SHEAR_NORM_MS)
-        * (sfc_vort / _api._NSTP_VORT_NORM_S)
-    )
-    return float(value) if np.isfinite(value) else MISSING
+    value = sharpmod_rs.derived_nstp(lr01, mlcape3, mlcin, shear06_ms, sfc_vort)
+    return MISSING if value is None else value
 
 
 def _modified_sherbe_impl(prof):
+    import sharpmod_rs
+
     sp = _api._convective_oracle_profile(prof)
     if sp is None:
         return MISSING
 
     lllr = _api._finite_or_none(getattr(sp, "lapserate_3km", None))
     s15mg = _api._finite_or_none(_api._bulk_shear_ms(prof, _api._SFC_1500M_AGL))
-    eshr = _api._finite_or_none(getattr(sp, "ebwspd", None))
-    if eshr is not None:
-        eshr = eshr / KTS_PER_MS
+    eshr_kt = _api._finite_or_none(getattr(sp, "ebwspd", None))
     maxtevv = _api._max_thetae_vertical_velocity(prof)
 
-    if None in (lllr, s15mg, eshr, maxtevv):
+    if None in (lllr, s15mg, eshr_kt, maxtevv):
         return MISSING
 
-    value = (
-        (((lllr - _api._MOSHE_LLLR_OFFSET) ** 2.0) / _api._MOSHE_LLLR_NORM)
-        * ((s15mg - _api._MOSHE_SHEAR_OFFSET_MS) / _api._MOSHE_SHEAR_NORM_MS)
-        * ((eshr - _api._MOSHE_SHEAR_OFFSET_MS) / _api._MOSHE_SHEAR_NORM_MS)
-        * ((maxtevv + _api._MOSHE_TEVV_OFFSET) / _api._MOSHE_TEVV_NORM)
-    )
-    return float(value) if np.isfinite(value) else MISSING
+    value = sharpmod_rs.derived_moshe(lllr, s15mg, eshr_kt, maxtevv)
+    return MISSING if value is None else value

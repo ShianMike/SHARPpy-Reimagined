@@ -256,7 +256,7 @@ test.describe("real-backend forecast map", () => {
     const timeline = page.getByRole("region", { name: "Forecast timeline", exact: true });
     // One half speed gives the real four-panel draw a 1.5 s display interval.
     const speed = timeline.getByRole("button", { name: /^Playback speed /u });
-    for (let attempt = 0; attempt < 4 && await speed.getAttribute("aria-label") !== "Playback speed 0.5 times"; attempt += 1) await speed.click();
+    for (let attempt = 0; attempt < 8 && await speed.getAttribute("aria-label") !== "Playback speed 0.5 times"; attempt += 1) await speed.click();
     await expect(speed).toHaveAccessibleName("Playback speed 0.5 times");
     const from = await forecastIdentity();
     const hour = page.getByRole("slider", { name: "Forecast hour", exact: true });

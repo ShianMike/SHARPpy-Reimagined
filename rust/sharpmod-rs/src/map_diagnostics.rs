@@ -7,6 +7,8 @@ pub(crate) enum Diagnostic {
     Ehi,
     Scp,
     Stp,
+    StpSurfaceLcl,
+    SurfaceLcl,
     Lapse,
     PrecipitationType,
     ThetaE,
@@ -18,6 +20,8 @@ impl Diagnostic {
             "ehi" => Ok(Self::Ehi),
             "scp" => Ok(Self::Scp),
             "stp" => Ok(Self::Stp),
+            "stp-surface-lcl" => Ok(Self::StpSurfaceLcl),
+            "surface-lcl" => Ok(Self::SurfaceLcl),
             "lapse-700-500" => Ok(Self::Lapse),
             "precipitation-type" => Ok(Self::PrecipitationType),
             "thetae" => Ok(Self::ThetaE),
@@ -26,9 +30,10 @@ impl Diagnostic {
     }
     pub fn arity(self) -> usize {
         match self {
-            Self::Ehi | Self::PrecipitationType => 2,
+            Self::Ehi | Self::SurfaceLcl | Self::PrecipitationType => 2,
             Self::Scp | Self::Lapse => 4,
             Self::Stp => 6,
+            Self::StpSurfaceLcl => 7,
             Self::ThetaE => 3,
         }
     }
@@ -52,6 +57,16 @@ pub(crate) fn precipitation_type<T: NdFloat>(rate: T, flag: f64) -> T {
         rate
     } else {
         T::zero()
+    }
+}
+
+fn surface_lcl_m<T: NdFloat>(tmp2m: T, dpt2m: T) -> T {
+    let zero = T::zero();
+    let scale = T::from(125.0).expect("finite diagnostic constant");
+    if !tmp2m.is_finite() || !dpt2m.is_finite() || tmp2m <= zero || dpt2m <= zero {
+        T::nan()
+    } else {
+        (tmp2m - dpt2m).max(zero) * scale
     }
 }
 
@@ -89,6 +104,14 @@ pub(crate) fn evaluate<T: NdFloat>(kind: Diagnostic, v: &[T]) -> T {
             let cin = clip((n(200.0) + v[5]) / n(150.0), n(0.0), n(1.0));
             (cape / n(1500.0)) * lcl * (v[2] / n(150.0)) * shear_term * cin
         }
+        Diagnostic::StpSurfaceLcl => {
+            let lcl = surface_lcl_m(v[1], v[2]);
+            if !lcl.is_finite() {
+                return T::nan();
+            }
+            evaluate(Diagnostic::Stp, &[v[0], lcl, v[3], v[4], v[5], v[6]])
+        }
+        Diagnostic::SurfaceLcl => surface_lcl_m(v[0], v[1]),
         Diagnostic::Lapse => {
             let depth = (v[3] - v[2]) / n(1000.0);
             if depth > n(0.1) {

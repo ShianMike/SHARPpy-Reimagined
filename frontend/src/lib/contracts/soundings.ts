@@ -87,8 +87,9 @@ function parseModel(value: unknown, path: string): ForecastModel {
     "gridSpacingKm", "notes", "members", "recentRuns", "suggestedRun", "soundingsAvailable",
   ]);
   const hours = expectArray(obj.forecastHours, at(path, "forecastHours"), (v, p) => expectInteger(v, p, { min: 0 }));
+  const cycles = expectArray(obj.cycles, at(path, "cycles"), (v, p) => expectInteger(v, p, { min: 0, max: 23 }));
   const limits = expectArray(obj.maxForecastHours, at(path, "maxForecastHours"), (v, p) => expectInteger(v, p, { min: 0 }));
-  if (limits.length !== 24 || limits.some((hour) => !hours.includes(hour))) {
+  if (limits.length !== 24 || limits.some((hour, cycle) => (hour !== 0 || cycles.includes(cycle)) && !hours.includes(hour))) {
     throw new ContractError(at(path, "maxForecastHours"), "expected 24 cycle limits from the published forecast hours");
   }
   const runs = expectArray(obj.recentRuns, at(path, "recentRuns"), expectTimestamp);
@@ -108,7 +109,7 @@ function parseModel(value: unknown, path: string): ForecastModel {
     domain: expectString(obj.domain, at(path, "domain"), { maxLength: 120 }),
     bounds: parseBounds(obj.bounds, at(path, "bounds")),
     outline: expectArray(obj.outline, at(path, "outline"), parsePoint),
-    cycles: expectArray(obj.cycles, at(path, "cycles"), (v, p) => expectInteger(v, p, { min: 0, max: 23 })),
+    cycles,
     forecastHours: hours,
     maxForecastHours: limits,
     defaultForecastHour: expectInteger(obj.defaultForecastHour, at(path, "defaultForecastHour"), { min: 0 }),

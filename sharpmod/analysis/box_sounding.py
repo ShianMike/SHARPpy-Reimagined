@@ -144,26 +144,12 @@ class BoxRegion:
         deliberate: the raw difference is the span the user actually dragged,
         including across the antimeridian, so only the west edge is wrapped.
         """
-        try:
-            lat_a = float(lat_a)
-            lat_b = float(lat_b)
-            lon_a = float(lon_a)
-            lon_b = float(lon_b)
-        except (TypeError, ValueError) as exc:
-            raise BoxRegionError(f"box corners must be numeric: {exc}") from exc
-        lat0, lat1 = sorted((lat_a, lat_b))
-        # Clamp before measuring: a drag that runs off the top of the map should
-        # become a box that stops at the pole, not an invalid region.
-        lat0 = max(-90.0, min(90.0, lat0))
-        lat1 = max(-90.0, min(90.0, lat1))
-        west, east = sorted((lon_a, lon_b))
-        span = min(360.0, east - west)
-        return cls(
-            lat0=lat0,
-            lat1=lat1,
-            lon0=_normalize_lon180(west),
-            lon_span=span,
+        import sharpmod_rs
+
+        lat0, lat1, lon0, span = sharpmod_rs.box_region_from_corners(
+            lat_a, lon_a, lat_b, lon_b
         )
+        return cls(lat0=lat0, lat1=lat1, lon0=lon0, lon_span=span)
 
     @property
     def lat_span(self) -> float:
@@ -210,14 +196,10 @@ class BoxRegion:
 
     def contains(self, lat, lon) -> bool:
         """Whether a point lies inside the rectangle, wrapping included."""
-        lat = float(lat)
-        if not self.lat0 <= lat <= self.lat1:
-            return False
-        # Measure eastward from the west edge so the test never has to branch
-        # on whether the box wraps.
-        delta = (_normalize_lon180(lon) - self.lon0) % 360.0
-        return delta <= self.lon_span or math.isclose(
-            delta, self.lon_span, abs_tol=1.0e-9
+        import sharpmod_rs
+
+        return sharpmod_rs.box_region_contains(
+            self.lat0, self.lat1, self.lon0, self.lon_span, float(lat), float(lon)
         )
 
     def longitude_segments(self) -> tuple[tuple[float, float], ...]:
@@ -322,24 +304,6 @@ class BoxSamplePlan:
             return None
 
 
-def _lattice_shape(region: BoxRegion, spacing_km: float) -> tuple[int, int]:
-    """Return ``(rows, cols)`` for a spacing, at least 1x1."""
-    lat_step = spacing_km / KM_PER_DEG_LAT
-    lon_step = spacing_km / km_per_deg_lon(region.center_lat)
-    # Edge-inclusive nodes create one fewer interval than nodes. Flooring the
-    # span-to-step ratio keeps every resulting interval at least as wide as the
-    # planned spacing; rounding can add an interval and oversample the model.
-    rows = max(1, int(math.floor(region.lat_span / lat_step)) + 1)
-    cols = max(1, int(math.floor(region.lon_span / lon_step)) + 1)
-    return rows, cols
-
-
-def _snap_to_native(spacing_km: float, native_km: float) -> float:
-    """Round a spacing up to a whole multiple of the model's grid spacing."""
-    multiple = max(1, int(math.ceil(spacing_km / native_km)))
-    return multiple * native_km
-
-
 def plan_box_samples(
     model,
     region: BoxRegion,
@@ -355,6 +319,7 @@ def plan_box_samples(
     snapped up to a multiple of the model's grid spacing, and both are coarsened
     further if the result would exceed the node budget.
     """
+    import sharpmod_rs
     from sharpmod.tools import model_extract
 
     config = (
@@ -377,111 +342,31 @@ def plan_box_samples(
 
     native = model_extract.grid_spacing_km(config)
     point_only = model_extract.point_only_provider(config)
-    notes: list[str] = []
-
-    ceiling = MAX_POINT_PROVIDER_POINTS if point_only else MAX_BOX_POINTS
-    if max_points is None:
-        budget = ceiling
-    else:
-        try:
-            budget = int(max_points)
-        except (TypeError, ValueError) as exc:
-            raise BoxSampleError("max_points must be an integer") from exc
-        if budget < 1:
-            raise BoxSampleError("max_points must be at least one")
-        budget = min(budget, ceiling)
-    if point_only:
-        notes.append(
-            f"{config.label} answers one request per point rather than sharing "
-            f"one downloaded grid, so this box is limited to "
-            f"{budget} soundings."
+    spacing, rows, cols, raw_nodes, rust_notes = sharpmod_rs.plan_box_lattice(
+        region.lat0,
+        region.lat1,
+        region.lon0,
+        region.lon_span,
+        float(native),
+        bool(point_only),
+        config.label,
+        spacing_km=spacing_km,
+        target_points=target_points,
+        max_points=max_points,
+    )
+    notes = list(rust_notes)
+    points: list[BoxSamplePoint] = [
+        BoxSamplePoint(
+            row=row,
+            col=col,
+            lat=lat6,
+            lon=lon6,
+            in_domain=bool(
+                model_extract.point_in_domain(config, raw_lat, raw_lon)
+            ),
         )
-
-    if spacing_km is not None and target_points is not None:
-        raise BoxSampleError(
-            "give either spacing_km or target_points, not both"
-        )
-
-    if spacing_km is not None:
-        try:
-            requested = float(spacing_km)
-        except (TypeError, ValueError) as exc:
-            raise BoxSampleError("spacing_km must be a number") from exc
-        if not math.isfinite(requested) or requested <= 0.0:
-            raise BoxSampleError("spacing_km must be positive")
-        if requested < native:
-            # State only the clamp, not a final figure: the budget pass below
-            # may coarsen further and will add its own note if it does.
-            notes.append(
-                f"Requested {requested:.1f} km spacing is finer than the "
-                f"{native:.1f} km {config.label} grid and was raised to "
-                f"{native:.1f} km so no two soundings come from one grid cell."
-            )
-    else:
-        if target_points is None:
-            target = (
-                DEFAULT_POINT_PROVIDER_TARGET if point_only
-                else DEFAULT_TARGET_POINTS
-            )
-        else:
-            try:
-                target = int(target_points)
-            except (TypeError, ValueError) as exc:
-                raise BoxSampleError("target_points must be an integer") from exc
-            if target < 1:
-                raise BoxSampleError("target_points must be at least one")
-        target = min(target, budget)
-        # Roughly square cells: a lattice of `target` nodes over this area has
-        # cells of side sqrt(area/target).
-        area = max(region.area_km2, 1.0e-6)
-        requested = math.sqrt(area / float(target))
-
-    spacing = _snap_to_native(max(requested, native), native)
-    rows, cols = _lattice_shape(region, spacing)
-
-    # Coarsen until the lattice fits the budget, staying on whole multiples of
-    # the native spacing. Node count falls as the square of spacing, so jumping
-    # straight to sqrt(count/budget) converges in one or two passes instead of
-    # stepping one multiple at a time -- which for a continental box against a
-    # 3 km grid would be hundreds of passes. The `+ 1` floor guarantees every
-    # pass advances, so this cannot stall.
-    coarsened_from = None
-    guard = 0
-    while rows * cols > budget and guard < 64:
-        guard += 1
-        if coarsened_from is None:
-            coarsened_from = spacing
-        scale = math.sqrt((rows * cols) / float(budget))
-        multiple = max(
-            int(round(spacing / native)) + 1,
-            int(math.ceil(spacing * scale / native)),
-        )
-        spacing = multiple * native
-        rows, cols = _lattice_shape(region, spacing)
-    if coarsened_from is not None:
-        notes.append(
-            f"Coarsened from {coarsened_from:.1f} km to {spacing:.1f} km to "
-            f"stay within {budget} soundings ({rows}x{cols})."
-        )
-
-    lats = _even_nodes(region.lat0, region.lat_span, rows)
-    lons = _even_nodes(region.lon0, region.lon_span, cols)
-
-    points: list[BoxSamplePoint] = []
-    # North-to-south row order matches raster/screen order, so a field renderer
-    # can walk the tuple directly.
-    for row, lat in enumerate(reversed(lats)):
-        for col, lon_raw in enumerate(lons):
-            lon = _normalize_lon180(lon_raw)
-            points.append(BoxSamplePoint(
-                row=row,
-                col=col,
-                lat=round(float(lat), 6),
-                lon=round(float(lon), 6),
-                in_domain=bool(
-                    model_extract.point_in_domain(config, lat, lon)
-                ),
-            ))
+        for row, col, raw_lat, raw_lon, lat6, lon6 in raw_nodes
+    ]
 
     inside = sum(1 for point in points if point.in_domain)
     if not inside:
@@ -675,24 +560,10 @@ def region_from_bounds(bounds: Sequence[float]) -> BoxRegion:
     ``lon0 > lon1`` is read as an antimeridian-crossing extent, matching
     ``model_extract``'s bounds convention.
     """
-    try:
-        lon0, lon1, lat0, lat1 = (float(value) for value in bounds)
-    except (TypeError, ValueError) as exc:
-        raise BoxRegionError(
-            "bounds must be four numbers (lon0, lon1, lat0, lat1)"
-        ) from exc
-    span = (lon1 - lon0) % 360.0
-    # A full-width extent (-180 to 180) leaves a zero remainder. Read that as
-    # the whole world rather than a degenerate box; a genuinely zero-width
-    # extent has identical edges and is rejected by BoxRegion.
-    if span < MIN_SPAN_DEG and abs(lon1 - lon0) >= 180.0:
-        span = 360.0
-    return BoxRegion(
-        lat0=min(lat0, lat1),
-        lat1=max(lat0, lat1),
-        lon0=_normalize_lon180(lon0),
-        lon_span=span,
-    )
+    import sharpmod_rs
+
+    lat0, lat1, lon0, span = sharpmod_rs.box_region_from_bounds(bounds)
+    return BoxRegion(lat0=lat0, lat1=lat1, lon0=lon0, lon_span=span)
 
 
 __all__ = [

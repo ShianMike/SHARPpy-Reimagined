@@ -50,8 +50,18 @@
 .weather h3, .weather h4 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); color: var(--text-primary); font-size: var(--font-size-small); font-weight: var(--font-weight-semibold); }
 .weather h3 > span, .weather h4 small { color: var(--text-tertiary); font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); }
 .weather h3 > span { margin-inline-start: auto; }
-.stack { display: grid; list-style: none; }
-.card, .stationKey { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); min-width: 0; gap: var(--space-5); padding: var(--space-4) 0; border-top: var(--hairline) solid var(--border-subtle); align-items: start; }
+.stack { display: grid; gap: var(--space-2); list-style: none; }
+.card, .stationKey {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  min-width: 0;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: var(--hairline) solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-1) 66%, transparent);
+  align-items: start;
+}
 .card h4 { flex-wrap: nowrap; align-items: flex-start; }
 .card h4 > span:first-child { flex: none; color: var(--text-tertiary); font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; }
 .card h4 small { display: block; margin-top: var(--space-1); }

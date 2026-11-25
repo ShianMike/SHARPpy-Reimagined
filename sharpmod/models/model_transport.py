@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-import math
 import os
 from pathlib import Path
 from typing import Iterable
@@ -58,69 +57,6 @@ class RangeTransferMetrics:
     fallback_used: bool = False
 
 
-def _coerce_range(row) -> ByteRange:
-    try:
-        start, end = row
-        if end is None or (isinstance(end, float) and math.isnan(end)):
-            raise OptimizedTransportUnavailable(
-                "inventory has no ending byte for a selected GRIB message"
-            )
-        item = ByteRange(int(start), int(end))
-    except OptimizedTransportUnavailable:
-        raise
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise OptimizedTransportUnavailable(
-            "inventory contains an invalid byte range"
-        ) from exc
-    if item.start < 0 or item.end < item.start:
-        raise OptimizedTransportUnavailable(
-            "inventory contains an invalid byte range"
-        )
-    return item
-
-
-def _collapse_contiguous(rows: Iterable[tuple[int, int]]) -> list[ByteRange]:
-    # Some wgrib2 inventories expose one physical vector message twice (for
-    # example UGRD and VGRD) with the same start offset. Herbie calculates the
-    # first duplicate's end as ``start - 1`` and the second duplicate carries
-    # the real message end. Consolidate equal starts before validating so the
-    # shared GRIB message remains downloadable without accepting a genuinely
-    # malformed singleton range.
-    grouped: dict[int, int] = {}
-    for row in rows:
-        try:
-            start, end = row
-            if end is None or (isinstance(end, float) and math.isnan(end)):
-                raise OptimizedTransportUnavailable(
-                    "inventory has no ending byte for a selected GRIB message"
-                )
-            start = int(start)
-            end = int(end)
-        except OptimizedTransportUnavailable:
-            raise
-        except (TypeError, ValueError, OverflowError) as exc:
-            raise OptimizedTransportUnavailable(
-                "inventory contains an invalid byte range"
-            ) from exc
-        if start < 0:
-            raise OptimizedTransportUnavailable(
-                "inventory contains an invalid byte range"
-            )
-        grouped[start] = max(grouped.get(start, end), end)
-
-    exact: list[ByteRange] = []
-    for item in sorted(_coerce_range(row) for row in grouped.items()):
-        if exact and item.start <= exact[-1].end + 1:
-            exact[-1] = ByteRange(exact[-1].start, max(exact[-1].end, item.end))
-        else:
-            exact.append(item)
-    if not exact:
-        raise OptimizedTransportUnavailable(
-            "inventory returned no byte ranges for the selected fields"
-        )
-    return exact
-
-
 def plan_ranges(
     rows: Iterable[tuple[int, int]],
     *,
@@ -128,22 +64,14 @@ def plan_ranges(
     max_overhead_ratio: float = 0.25,
 ) -> list[ByteRange]:
     """Merge nearby message spans without exceeding a global byte budget."""
-    exact = _collapse_contiguous(rows)
-    exact_bytes = sum(item.size for item in exact)
-    overhead_limit = max(0, int(exact_bytes * float(max_overhead_ratio)))
-    overhead = 0
-    planned: list[ByteRange] = []
-    for item in exact:
-        if not planned:
-            planned.append(item)
-            continue
-        gap = item.start - planned[-1].end - 1
-        if gap <= int(max_gap) and overhead + gap <= overhead_limit:
-            overhead += gap
-            planned[-1] = ByteRange(planned[-1].start, item.end)
-        else:
-            planned.append(item)
-    return planned
+    import sharpmod_rs
+
+    return [
+        ByteRange(start, end)
+        for start, end in sharpmod_rs.plan_model_ranges(
+            rows, max_gap=int(max_gap), max_overhead_ratio=float(max_overhead_ratio)
+        )
+    ]
 
 
 def inclusive_end_bytes(herbie, inventory):
@@ -199,58 +127,28 @@ def parallelize_range_plan(
     final file: the fragments are reassembled in byte order before validation.
     Small spans stay intact so request latency cannot dominate useful data.
     """
-    plan = sorted(_coerce_range((item.start, item.end)) for item in ranges)
-    if not plan:
-        return []
+    import sharpmod_rs
+
     target = range_worker_count(workers)
     minimum = max(1, int(min_part_bytes))
-    while len(plan) < target:
-        candidates = [
-            (item.size, index)
-            for index, item in enumerate(plan)
-            if item.size >= minimum * 2
-        ]
-        if not candidates:
-            break
-        _size, index = max(candidates)
-        item = plan[index]
-        left_size = item.size // 2
-        split_at = item.start + left_size - 1
-        plan[index:index + 1] = [
-            ByteRange(item.start, split_at),
-            ByteRange(split_at + 1, item.end),
-        ]
-    return plan
+    return [
+        ByteRange(start, end)
+        for start, end in sharpmod_rs.parallelize_model_range_plan(
+            ranges, workers=target, min_part_bytes=minimum
+        )
+    ]
 
 
 def _valid_grib(path: Path) -> bool:
-    try:
-        if path.stat().st_size < 8:
-            return False
-        with path.open("rb") as handle:
-            if handle.read(4) != b"GRIB":
-                return False
-            handle.seek(-4, os.SEEK_END)
-            return handle.read(4) == b"7777"
-    except OSError:
-        return False
+    import sharpmod_rs
+
+    return sharpmod_rs.valid_grib_file(path)
 
 
 def _parse_content_range_details(value: str) -> tuple[int, int, int] | None:
-    try:
-        unit, remainder = value.split(" ", 1)
-        span, total = remainder.split("/", 1)
-        start, end = span.split("-", 1)
-        if unit.lower() != "bytes" or total == "*":
-            return None
-        start = int(start)
-        end = int(end)
-        total = int(total)
-        if start < 0 or end < start or total <= end:
-            return None
-        return start, end, total
-    except (AttributeError, TypeError, ValueError):
-        return None
+    import sharpmod_rs
+
+    return sharpmod_rs.parse_content_range_details(value)
 
 
 def range_worker_count(value=None, *, default: int = 1) -> int:

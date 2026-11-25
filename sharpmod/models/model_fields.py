@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-
 
 NOAA_REQUIRED_FIELDS = ("HGT", "TMP", "UGRD", "VGRD")
 IFS_REQUIRED_FIELDS = ("gh", "t", "u", "v")
@@ -52,95 +50,56 @@ def variable_column(inventory) -> str | None:
     return None
 
 
-def _available_variables(inventory, *, upper: bool) -> set[str]:
+def choose_noaa_fields(inventory) -> tuple[str, ...]:
+    """Return one complete, non-duplicated NOAA sounding field plan."""
+    import sharpmod_rs
+
     column = variable_column(inventory)
     if column is None:
         raise ValueError(
             "model inventory has no variable or param column"
         )
-    values = inventory[column]
-    if upper:
-        return {str(value).upper() for value in values}
-    return {str(value).lower() for value in values}
-
-
-def choose_noaa_fields(inventory) -> tuple[str, ...]:
-    """Return one complete, non-duplicated NOAA sounding field plan."""
-    available = _available_variables(inventory, upper=True)
-    missing = [name for name in NOAA_REQUIRED_FIELDS if name not in available]
-    if missing:
-        raise ValueError(
-            "missing required pressure fields: %s" % ", ".join(missing)
-        )
-
-    fields = list(NOAA_REQUIRED_FIELDS)
-    if "RH" in available:
-        fields.append("RH")
-    elif "SPFH" in available:
-        fields.append("SPFH")
-    else:
-        raise ValueError("missing required pressure fields: RH or SPFH")
-
-    # VVEL is pressure vertical velocity and is preferred over the geometric
-    # DZDT field. Retaining one avoids downloading two interchangeable columns
-    # for the current point-sounding output.
-    if "VVEL" in available:
-        fields.append("VVEL")
-    elif "DZDT" in available:
-        fields.append("DZDT")
-
-    if "ABSV" in available:
-        fields.append("ABSV")
-    return tuple(fields)
+    return sharpmod_rs.choose_noaa_fields(inventory[column])
 
 
 def choose_ifs_fields(inventory) -> tuple[str, ...]:
     """Return one complete, non-duplicated ECMWF pressure-level field plan."""
-    available = _available_variables(inventory, upper=False)
-    missing = [name for name in IFS_REQUIRED_FIELDS if name not in available]
-    if missing:
+    import sharpmod_rs
+
+    column = variable_column(inventory)
+    if column is None:
         raise ValueError(
-            "missing required pressure fields: %s" % ", ".join(missing)
+            "model inventory has no variable or param column"
         )
-    fields = list(IFS_REQUIRED_FIELDS)
-    if "r" in available:
-        fields.append("r")
-    elif "q" in available:
-        fields.append("q")
-    else:
-        raise ValueError("missing required pressure fields: r or q")
-    for optional in ("w", "vo"):
-        if optional in available:
-            fields.append(optional)
-    return tuple(fields)
+    return sharpmod_rs.choose_ifs_fields(inventory[column])
 
 
 def build_noaa_search(fields) -> str:
     """Build an all-level NOAA search plus the verified surface inputs."""
-    names = "|".join(re.escape(str(field).upper()) for field in fields)
-    pressure = rf":(?:{names}):\d+(?:\.\d+)? mb:"
-    return rf"(?:{pressure})|(?:{NOAA_SURFACE_SEARCH})"
+    import sharpmod_rs
+
+    return sharpmod_rs.build_noaa_search(fields)
 
 
 def supports_noaa_surface_merge(fields) -> bool:
     """Return whether provenance proves all ground-level inputs were fetched."""
-    available = {str(field).upper() for field in (fields or ())}
-    required = set(NOAA_REQUIRED_FIELDS) | {"PRES"}
-    moisture = {"DPT", "RH", "SPFH"}
-    return required.issubset(available) and not moisture.isdisjoint(available)
+    import sharpmod_rs
+
+    return sharpmod_rs.supports_noaa_surface_merge(fields)
 
 
 def supports_ifs_surface_merge(fields) -> bool:
     """Return whether provenance includes the complete IFS ground contract."""
-    available = {str(field).lower() for field in (fields or ())}
-    return set(IFS_REQUIRED_FIELDS + IFS_SURFACE_FIELDS).issubset(available)
+    import sharpmod_rs
+
+    return sharpmod_rs.supports_ifs_surface_merge(fields)
 
 
 def build_ifs_search(fields) -> str:
     """Build an all-published-pressure-level ECMWF inventory regex."""
-    names = "|".join(re.escape(str(field).lower()) for field in fields)
-    pressure = rf":(?:{names}):\d+:pl:"
-    return rf"(?:{pressure})|(?:{IFS_SURFACE_SEARCH})"
+    import sharpmod_rs
+
+    return sharpmod_rs.build_ifs_search(fields)
 
 
 def choose_search(config, inventory) -> tuple[str, tuple[str, ...]]:

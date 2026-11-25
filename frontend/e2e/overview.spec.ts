@@ -31,7 +31,7 @@ for (const { width, height, theme } of [
     await expect(page.getByTestId("map").locator("canvas.maplibregl-canvas")).toBeVisible();
     await expect(page.locator('section[aria-label="Model map"]')).toHaveAttribute("inert", "");
     await expect(page.getByTestId("toolbar")).toHaveCount(0);
-    await expect(panel).toContainText("14 forecast models");
+    await expect(panel.getByText("19 forecast models", { exact: true })).toBeVisible();
     await expect(panel).not.toContainText("Parameters loading");
     await saveScreenshot(page, `overview-${String(width)}x${String(height)}-${theme}.png`);
   });

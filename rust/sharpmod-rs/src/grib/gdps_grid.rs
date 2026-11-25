@@ -3,6 +3,7 @@
 use super::*;
 use crate::gdps_fields::{Frame, Model, Period, Record, HEIGHT, SPACING, WIDTH};
 use crate::regional_grids::{
+    HRDPS_HEIGHT, HRDPS_POLE_LAT, HRDPS_POLE_LON, HRDPS_SPACING, HRDPS_WIDTH, HRDPS_X0, HRDPS_Y0,
     RDPS_HEIGHT, RDPS_POLE_LAT, RDPS_POLE_LON, RDPS_SPACING, RDPS_WIDTH, RDPS_X0, RDPS_Y0,
 };
 
@@ -35,33 +36,71 @@ pub(crate) fn decode(
         .next_multi_handle(payload, &mut cursor, &mut remaining)?
         .ok_or_else(|| GribError::new("GDPS GRIB2 field could not be opened"))?;
     let pointer = handle.as_ptr();
-    let regional = frame.model == Model::Rdps;
-    let (width, height, spacing) = if regional {
-        (RDPS_WIDTH, RDPS_HEIGHT, RDPS_SPACING)
-    } else {
-        (WIDTH, HEIGHT, SPACING)
+    let (width, height, spacing, first_lat, first_lon, pole) = match frame.model {
+        Model::Gdps => (WIDTH, HEIGHT, SPACING, -90.0, 0.0, None),
+        Model::Rdps => (
+            RDPS_WIDTH,
+            RDPS_HEIGHT,
+            RDPS_SPACING,
+            RDPS_Y0,
+            RDPS_X0 + 360.0,
+            Some((RDPS_POLE_LAT, RDPS_POLE_LON)),
+        ),
+        Model::Hrdps => (
+            HRDPS_WIDTH,
+            HRDPS_HEIGHT,
+            HRDPS_SPACING,
+            HRDPS_Y0,
+            HRDPS_X0 + 360.0,
+            Some((HRDPS_POLE_LAT, HRDPS_POLE_LON)),
+        ),
     };
+    let rotated = pole.is_some();
     let (level_type, level) = record.level.metadata();
-    let (step_type, start, divisor) = match record.period {
-        Period::Instant => ("instant", frame.hour, 1.0),
-        Period::RunTotal => ("accum", 0, 1.0),
-        Period::OneHour => (
-            "accum",
-            frame.hour.checked_sub(1).ok_or_else(|| {
-                GribError::new("RDPS winter rates require one complete forecast hour")
-            })?,
-            1.0,
-        ),
-        // ECCC publishes the liquid-equivalent amount over this interval.
-        Period::ThreeHours => (
-            "accum",
-            frame
-                .hour
-                .checked_sub(3)
-                .ok_or_else(|| GribError::new("GDPS winter rates require three forecast hours"))?,
-            3.0,
-        ),
-    };
+    let (step_type, start, divisor) =
+        match record.period {
+            Period::Instant => ("instant", frame.hour, 1.0),
+            Period::RunTotal => ("accum", 0, 1.0),
+            Period::OneHour => (
+                "accum",
+                frame.hour.checked_sub(1).ok_or_else(|| {
+                    GribError::new("RDPS winter rates require one complete forecast hour")
+                })?,
+                1.0,
+            ),
+            // ECCC publishes the liquid-equivalent amount over this interval.
+            Period::ThreeHours => (
+                "accum",
+                frame.hour.checked_sub(3).ok_or_else(|| {
+                    GribError::new("GDPS winter rates require three forecast hours")
+                })?,
+                3.0,
+            ),
+            Period::SixHours => (
+                "accum",
+                frame
+                    .hour
+                    .checked_sub(6)
+                    .ok_or_else(|| GribError::new("HRDPS 6-h QPF requires six forecast hours"))?,
+                1.0,
+            ),
+            Period::TwelveHours => (
+                "accum",
+                frame.hour.checked_sub(12).ok_or_else(|| {
+                    GribError::new("HRDPS 12-h QPF requires twelve forecast hours")
+                })?,
+                1.0,
+            ),
+            Period::TwentyFourHours => (
+                "accum",
+                frame.hour.checked_sub(24).ok_or_else(|| {
+                    GribError::new("HRDPS 24-h QPF requires twenty-four forecast hours")
+                })?,
+                1.0,
+            ),
+        };
+    // Operational HRDPS encodes analysis (F000) stepUnits in minutes (0) and F001-F048 in hours (1).
+    let expected_step_units = c_long::from(!(frame.model == Model::Hrdps && frame.hour == 0));
     let integers: &[(&[u8], c_long)] = &[
         (b"Ni\0", width as c_long),
         (b"Nj\0", height as c_long),
@@ -69,10 +108,10 @@ pub(crate) fn decode(
         (b"jScansPositively\0", 1),
         (b"jPointsAreConsecutive\0", 0),
         (b"alternativeRowScanning\0", 0),
-        (b"uvRelativeToGrid\0", c_long::from(regional)),
+        (b"uvRelativeToGrid\0", c_long::from(rotated)),
         (b"dataDate\0", frame.date as c_long),
         (b"dataTime\0", c_long::from(frame.cycle) * 100),
-        (b"stepUnits\0", 1),
+        (b"stepUnits\0", expected_step_units),
         (b"startStep\0", c_long::from(start)),
         (b"endStep\0", c_long::from(frame.hour)),
         (b"discipline\0", 0),
@@ -81,11 +120,8 @@ pub(crate) fn decode(
         (LEVEL_KEY, c_long::from(level)),
     ];
     let floats: &[(&[u8], f64)] = &[
-        (FIRST_LATITUDE_KEY, if regional { RDPS_Y0 } else { -90.0 }),
-        (
-            FIRST_LONGITUDE_KEY,
-            if regional { RDPS_X0 + 360.0 } else { 0.0 },
-        ),
+        (FIRST_LATITUDE_KEY, first_lat),
+        (FIRST_LONGITUDE_KEY, first_lon),
         (b"iDirectionIncrementInDegrees\0", spacing),
         (b"jDirectionIncrementInDegrees\0", spacing),
     ];
@@ -93,7 +129,7 @@ pub(crate) fn decode(
         (b"centre\0", "cwao"),
         (
             b"gridType\0",
-            if regional { "rotated_ll" } else { "regular_ll" },
+            if rotated { "rotated_ll" } else { "regular_ll" },
         ),
         (TYPE_OF_LEVEL_KEY, level_type),
         (b"stepType\0", step_type),
@@ -109,16 +145,10 @@ pub(crate) fn decode(
             return Err(wrong_record(key));
         }
     }
-    if regional {
+    if let Some((pole_lat, pole_lon)) = pole {
         for (key, expected) in [
-            (
-                b"latitudeOfSouthernPoleInDegrees\0".as_slice(),
-                RDPS_POLE_LAT,
-            ),
-            (
-                b"longitudeOfSouthernPoleInDegrees\0".as_slice(),
-                RDPS_POLE_LON,
-            ),
+            (b"latitudeOfSouthernPoleInDegrees\0".as_slice(), pole_lat),
+            (b"longitudeOfSouthernPoleInDegrees\0".as_slice(), pole_lon),
             (b"angleOfRotationInDegrees\0".as_slice(), 0.0),
         ] {
             let actual = api.get_double_value(pointer, key)?;
@@ -157,12 +187,20 @@ pub(crate) fn decode(
             "GDPS grid value count does not match its dimensions",
         ));
     }
-    if regional {
+    // HRDPS publishes -999 / -1 sentinels in CAPE_Sfc where no parcel reaches an LFC.
+    let clamp_non_negative =
+        frame.model == Model::Hrdps && record.category == 7 && record.number == 6;
+    if rotated {
         Ok(values
             .into_iter()
             .map(|value| {
                 if value.is_finite() && Some(value) != missing {
-                    (value / divisor) as f32
+                    let scaled = (value / divisor) as f32;
+                    if clamp_non_negative {
+                        scaled.max(0.0)
+                    } else {
+                        scaled
+                    }
                 } else {
                     f32::NAN
                 }

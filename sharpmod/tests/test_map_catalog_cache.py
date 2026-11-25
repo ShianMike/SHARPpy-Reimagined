@@ -42,6 +42,9 @@ def saved_frames(tmp_path, monkeypatch):
     monkeypatch.setattr(sharpmod_rs, "available_gdps_map_products", lambda products, *_args: [
         product for product in products if product.key == "tmp-2m"
     ])
+    monkeypatch.setattr(sharpmod_rs, "available_icon_map_products", lambda products, *_args: [
+        product for product in products if product.key == "tmp-2m"
+    ])
     hf.clear_cache()
     try:
         yield
@@ -57,6 +60,7 @@ def _offline(monkeypatch, error=hf.HrrrFieldOffline):
 
     monkeypatch.setattr(hf, "_default_opener", unavailable)
     monkeypatch.setattr(sharpmod_rs, "available_gdps_map_products", unavailable)
+    monkeypatch.setattr(sharpmod_rs, "available_icon_map_products", unavailable)
     monkeypatch.setattr(hf, "_download_fields", lambda *_args, **_kwargs: pytest.fail(
         "A saved frame must not be downloaded again"))
 
@@ -67,7 +71,7 @@ def test_saved_fields_remain_selectable_after_offline_restart(saved_frames, monk
     request = {**REQUEST, "model": model}
     assert [p["key"] for p in fields.catalog(request)["products"]] == ["tmp-2m"]
     saved = fields.grid({**request, "product": "tmp-2m"})
-    if model != "gdps":
+    if model not in {"gdps", hp.ICON_MODEL}:
         assert hf._INVENTORY_CACHE
     _offline(monkeypatch, error)
     assert not hf._INVENTORY_CACHE

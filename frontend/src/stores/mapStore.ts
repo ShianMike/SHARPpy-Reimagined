@@ -8,7 +8,7 @@
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import { RADAR_TILTABLE_PRODUCTS, type RadarTilt } from "../types/map";
+import { RADAR_TILTABLE_PRODUCTS, type RadarTilt, type WpcOutlookDayMode, type WpcWinterProduct } from "../types/map";
 import type { CameraSnapshot } from "../map/runtime/camera";
 import { useLiveTrackingStore } from "./liveTrackingStore";
 import {
@@ -77,6 +77,12 @@ export interface MapState {
   radarSite: string | null;
   /** The imagery channel the GOES layer renders from. */
   satelliteChannel: "infrared" | "visible";
+  /** Auto time-match or pinned Day 1-3 for the WPC ERO map overlay. */
+  wpcOutlookDay: WpcOutlookDayMode;
+  /** Auto time-match or pinned Day 1-3 for the WPC winter weather map overlay. */
+  wpcWinterDay: WpcOutlookDayMode;
+  /** WSSI component layer for the WPC winter weather map overlay. */
+  wpcWinterProduct: WpcWinterProduct;
   /** The total query span of the storm reports window, in seconds. */
   reportWindowS: number;
   /** The provider's hazard-filter key for the storm reports. */
@@ -104,6 +110,9 @@ export interface MapState {
   setRadarScope: (scope: "mosaic" | "site") => void;
   setRadarSite: (site: string | null) => void;
   setSatelliteChannel: (channel: "infrared" | "visible") => void;
+  setWpcOutlookDay: (day: WpcOutlookDayMode) => void;
+  setWpcWinterDay: (day: WpcOutlookDayMode) => void;
+  setWpcWinterProduct: (product: WpcWinterProduct) => void;
   setReportWindowS: (windowS: number) => void;
   setReportFilter: (filter: string) => void;
   setAvailabilityTime: (time: string | null) => void;
@@ -113,8 +122,15 @@ export interface MapState {
   requestFocus: (stationId: string, position?: FocusRequest["position"]) => void;
 }
 
-function extraPanel(): PanelState {
+function modelViewerLayers(): Record<LayerId, LayerState> {
   const layers = defaultLayerStates();
+  layers.roads.visible = false;
+  layers.rivers.visible = false;
+  return layers;
+}
+
+function extraPanel(): PanelState {
+  const layers = modelViewerLayers();
   // A panel opened to compare fields shows its field from the start.
   layers["model-field"] = { ...layers["model-field"], visible: true };
   return { productKey: null, layers, ...DEFAULT_REPORT_SETTINGS };
@@ -181,7 +197,7 @@ export const useMapStore = create<MapState>()(
   subscribeWithSelector((set) => ({
     view: "map",
     livePanels: Array.from({ length: MAX_PANELS }, livePanel),
-    layers: defaultLayerStates(),
+    layers: modelViewerLayers(),
     productKey: null,
     panels: [extraPanel(), extraPanel(), extraPanel()],
     panelLayout: 1,
@@ -193,35 +209,24 @@ export const useMapStore = create<MapState>()(
     radarScope: "mosaic",
     radarSite: null,
     satelliteChannel: "infrared",
+    wpcOutlookDay: "auto",
+    wpcWinterDay: "auto",
+    wpcWinterProduct: "winter-overall",
     ...DEFAULT_REPORT_SETTINGS,
     availabilityTime: null,
     layerPanelCollapsed: false,
     layerPanelGroup: "weather",
     cameraSnapshot: null,
     focusRequest: null,
-    setLayerVisible: (id, visible) => {
-      set((state) => patchLayer(state, id, (layer) => ({ ...layer, visible })));
-    },
-    setLayerOpacity: (id, opacity) => {
-      set((state) => patchLayer(state, id, (layer) => ({ ...layer, opacity: clampOpacity(opacity) })));
-    },
-    setFieldSmoothing: (smoothing) => {
-      set((state) => patchLayer(state, "model-field", (layer) => ({ ...layer, smoothing })));
-    },
+    setLayerVisible: (id, visible) => { set((state) => patchLayer(state, id, (layer) => ({ ...layer, visible }))); },
+    setLayerOpacity: (id, opacity) => { set((state) => patchLayer(state, id, (layer) => ({ ...layer, opacity: clampOpacity(opacity) }))); },
+    setFieldSmoothing: (smoothing) => { set((state) => patchLayer(state, "model-field", (layer) => ({ ...layer, smoothing }))); },
     setProduct: (key) => {
-      set((state) =>
-        state.activePanel === 0
-          ? { productKey: key }
-          : { panels: state.panels.map((panel, i) => (i === state.activePanel - 1 ? { ...panel, productKey: key } : panel)) },
-      );
+      set((state) => state.activePanel === 0 ? { productKey: key } : { panels: state.panels.map((panel, i) => (i === state.activePanel - 1 ? { ...panel, productKey: key } : panel)) });
     },
-    setPanelLayout: (layout) => {
-      set((state) => ({ panelLayout: layout, activePanel: state.activePanel < layout ? state.activePanel : 0 }));
-    },
+    setPanelLayout: (layout) => { set((state) => ({ panelLayout: layout, activePanel: state.activePanel < layout ? state.activePanel : 0 })); },
     setProjection: (projection) => { set((state) => state.view === "live" ? state : { projection }); },
-    setActivePanel: (panel) => {
-      set((state) => (panel >= 0 && panel < state.panelLayout ? { activePanel: panel } : {}));
-    },
+    setActivePanel: (panel) => { set((state) => (panel >= 0 && panel < state.panelLayout ? { activePanel: panel } : {})); },
     moveLayer: (id, direction) => {
       set((state) => {
         const layers = panelLayers(state, state.activePanel);
@@ -236,8 +241,7 @@ export const useMapStore = create<MapState>()(
     },
     setRadarTilt: (radarTilt) => { set((state) => patchWeather(state, { radarTilt })); },
     setRadarScope: (scope) => {
-      // The two scopes publish different products; the mosaic's key is not a
-      // site's key, so switching clears the choice and each scope takes its own default.
+      // Switching clears product choice so each scope takes its own default.
       const state = useMapStore.getState();
       if (state.view === "live" && panelWeather(state).radarScope !== scope) {
         useLiveTrackingStore.getState().tick();
@@ -255,27 +259,16 @@ export const useMapStore = create<MapState>()(
       }
       set((state) => patchWeather(state, { radarSite: site }));
     },
-    setSatelliteChannel: (channel) => {
-      set((state) => patchWeather(state, { satelliteChannel: channel }));
-    },
-    setReportWindowS: (windowS) => {
-      set((state) => patchReports(state, { reportWindowS: windowS }));
-    },
-    setReportFilter: (filter) => {
-      set((state) => patchReports(state, { reportFilter: filter }));
-    },
-    setAvailabilityTime: (time) => {
-      set({ availabilityTime: time });
-    },
-    setLayerPanelCollapsed: (collapsed) => {
-      set({ layerPanelCollapsed: collapsed });
-    },
-    setLayerPanelGroup: (layerPanelGroup) => {
-      set({ layerPanelGroup });
-    },
-    setCameraSnapshot: (snapshot) => {
-      set({ cameraSnapshot: { center: [snapshot.center[0], snapshot.center[1]], zoom: snapshot.zoom } });
-    },
+    setSatelliteChannel: (channel) => { set((state) => patchWeather(state, { satelliteChannel: channel })); },
+    setWpcOutlookDay: (wpcOutlookDay) => { set({ wpcOutlookDay }); },
+    setWpcWinterDay: (wpcWinterDay) => { set({ wpcWinterDay }); },
+    setWpcWinterProduct: (wpcWinterProduct) => { set({ wpcWinterProduct }); },
+    setReportWindowS: (windowS) => { set((state) => patchReports(state, { reportWindowS: windowS })); },
+    setReportFilter: (filter) => { set((state) => patchReports(state, { reportFilter: filter })); },
+    setAvailabilityTime: (availabilityTime) => { set({ availabilityTime }); },
+    setLayerPanelCollapsed: (layerPanelCollapsed) => { set({ layerPanelCollapsed }); },
+    setLayerPanelGroup: (layerPanelGroup) => { set({ layerPanelGroup }); },
+    setCameraSnapshot: (snapshot) => { set({ cameraSnapshot: { center: [snapshot.center[0], snapshot.center[1]], zoom: snapshot.zoom } }); },
     requestFocus: (stationId, position) => {
       set((state) => ({ focusRequest: { stationId, seq: (state.focusRequest?.seq ?? 0) + 1, ...(position === undefined ? {} : { position }) } }));
     },

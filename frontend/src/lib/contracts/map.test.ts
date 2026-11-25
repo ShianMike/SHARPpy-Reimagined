@@ -12,7 +12,7 @@ import satelliteShrf from "@contracts/public/map/satellite.shrf?url&inline";
 import { describe, expect, it } from "vitest";
 import { encodeShrf, parseFieldFrame, parseRadarFrame, parseRadarSiteFrame, parseSatelliteFrame, parseShrf } from "./frames";
 import { ContractError } from "./guards";
-import { parseAvailabilityReport, parseMapCatalog, parsePlaceLabels, parseRadarSiteCatalog, parseSpcOutlook } from "./map";
+import { parseAvailabilityReport, parseMapCatalog, parsePlaceLabels, parseRadarSiteCatalog, parseSpcOutlook, parseWpcOutlook } from "./map";
 import { parseCachedHours } from "./storage";
 
 /** The bytes of a `?url&inline` data URL. */
@@ -236,5 +236,23 @@ describe("map contracts", () => {
     }],
   ])("rejects %s", (_name, parse) => {
     expect(parse).toThrow(ContractError);
+  });
+
+  it("parses optional discussion summaries on SPC and WPC outlooks and rejects malformed ones", () => {
+    const discussion = {
+      headline: "THERE IS A SLIGHT RISK OF SEVERE WEATHER",
+      summary: "Scattered severe thunderstorms are expected.",
+      sections: [{ heading: "Synopsis", body: "An upper trough advances east across the Plains." }],
+      issued: "2026-10-04T12:50:00Z",
+      sourceUrl: "https://www.spc.noaa.gov/products/outlook/day1otlk.html",
+    };
+    const withDisc = edit(outlookCat, (c) => { (c.outlook as Record<string, unknown>).discussion = discussion; });
+    expect(parseSpcOutlook(withDisc).outlook?.discussion).toEqual(discussion);
+    const wpc = edit(withDisc, (c) => { c.product = "ero"; });
+    expect(parseWpcOutlook(wpc).product).toBe("ero");
+    expect(() => parseWpcOutlook(withDisc)).toThrow(ContractError);
+    expect(() => parseSpcOutlook(edit(withDisc, (c) => {
+      ((c.outlook as Record<string, unknown>).discussion as Record<string, unknown>).sections = [{ heading: "", body: "x" }];
+    }))).toThrow(ContractError);
   });
 });

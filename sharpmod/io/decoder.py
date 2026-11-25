@@ -232,6 +232,8 @@ def _sanitize_profile_rows(prof):
     rows with finite pressure/height and convert any remaining non-finite cell
     to SHARPpy's missing-value sentinel.
     """
+    import sharpmod_rs
+
     if not hasattr(prof, "pres") or not hasattr(prof, "hght"):
         return
 
@@ -241,10 +243,10 @@ def _sanitize_profile_rows(prof):
     if pres.ndim != 1 or hght.ndim != 1 or len(pres) != len(hght):
         return
 
-    pres_values = np.asarray(pres.filled(np.nan), dtype=float)
-    hght_values = np.asarray(hght.filled(np.nan), dtype=float)
-    keep = np.isfinite(pres_values) & np.isfinite(hght_values)
-    if keep.size == 0 or not np.any(keep):
+    pres_values = np.ascontiguousarray(pres.filled(np.nan), dtype=float)
+    hght_values = np.ascontiguousarray(hght.filled(np.nan), dtype=float)
+    keep = sharpmod_rs.sanitize_profile_keep_mask(pres_values, hght_values)
+    if keep is None:
         return
 
     for name in (
@@ -266,8 +268,8 @@ def _sanitize_profile_rows(prof):
         marr = np.ma.asarray(arr, dtype=float)
         if marr.ndim != 1 or len(marr) != len(keep):
             continue
-        values = np.asarray(marr.filled(missing), dtype=float)[keep]
-        values[~np.isfinite(values)] = missing
+        filled = np.ascontiguousarray(marr.filled(missing), dtype=float)
+        values = sharpmod_rs.clean_column(filled, keep, missing)
         setattr(prof, name, np.ma.masked_values(values, missing))
 
 
@@ -282,6 +284,8 @@ def _max_spc_profile_levels():
 
 def _thin_profile_rows(prof):
     """Downsample extremely dense SPC profiles before SHARPpy widget plotting."""
+    import sharpmod_rs
+
     max_levels = _max_spc_profile_levels()
     pres = getattr(prof, "pres", None)
     if pres is None:
@@ -293,7 +297,7 @@ def _thin_profile_rows(prof):
     if count <= max_levels:
         return
 
-    indexes = np.unique(np.rint(np.linspace(0, count - 1, max_levels)).astype(int))
+    indexes = np.asarray(sharpmod_rs.thin_profile_indices(count, max_levels), dtype=int)
 
     for name in (
         "pres",

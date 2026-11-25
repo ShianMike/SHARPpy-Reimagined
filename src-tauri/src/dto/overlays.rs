@@ -36,6 +36,29 @@ pub struct OutlookArea {
     rename_all(serialize = "camelCase", deserialize = "snake_case"),
     deny_unknown_fields
 )]
+pub struct DiscussionSection {
+    pub heading: String,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    rename_all(serialize = "camelCase", deserialize = "snake_case"),
+    deny_unknown_fields
+)]
+pub struct OutlookDiscussion {
+    pub headline: String,
+    pub summary: String,
+    pub sections: Vec<DiscussionSection>,
+    pub issued: Option<String>,
+    pub source_url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    rename_all(serialize = "camelCase", deserialize = "snake_case"),
+    deny_unknown_fields
+)]
 pub struct Outlook {
     pub title: String,
     pub subtitle: String,
@@ -49,6 +72,8 @@ pub struct Outlook {
     /// The highest risk tier's coverage for a latest-issuance request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub affected_states: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discussion: Option<OutlookDiscussion>,
     pub areas: Vec<OutlookArea>,
 }
 
@@ -76,6 +101,18 @@ impl SpcOutlook {
             }
             for state in states {
                 check_text("affected state", state, 1, 32)?;
+            }
+        }
+        if let Some(discussion) = &outlook.discussion {
+            check_text("discussion headline", &discussion.headline, 0, 600)?;
+            check_text("discussion summary", &discussion.summary, 0, 1_500)?;
+            check_text("discussion source url", &discussion.source_url, 1, 500)?;
+            if discussion.sections.len() > 24 {
+                return Err("too many discussion sections".into());
+            }
+            for section in &discussion.sections {
+                check_text("section heading", &section.heading, 1, 200)?;
+                check_text("section body", &section.body, 1, 12_000)?;
             }
         }
         if outlook.areas.len() > MAX_AREAS {

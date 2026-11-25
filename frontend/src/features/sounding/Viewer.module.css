@@ -116,7 +116,6 @@
 .editOverlay circle { fill: var(--map-background); stroke: var(--workspace-orange-text); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .editOverlay circle[data-edited="true"] { fill: var(--accent-subtle); stroke-width: var(--focus-ring-width); stroke-dasharray: var(--space-1) var(--hairline); }
 .editOverlay circle:hover, .editOverlay circle[data-selected="true"] { fill: var(--workspace-orange-text); stroke: var(--slider-thumb); }
-.rendering { position: absolute; left: 50%; top: var(--space-3); transform: translateX(-50%); padding: var(--space-2) var(--space-4); background: var(--surface-1); box-shadow: var(--shadow-floating); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--font-size-small); }
 .failure { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-5); pointer-events: none; }
 .failure[data-retained="true"] { align-items: flex-end; }
 .failure > [role="alert"] { width: min(100%, var(--notice-max-w)); max-height: 100%; overflow: auto; pointer-events: auto; }

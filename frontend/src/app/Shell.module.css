@@ -76,3 +76,4 @@
 .workspace[data-workspace="overview"] { height: auto; width: min(var(--overview-w), calc(100% - var(--dock-offset) - var(--chrome-inset))); }
 .workspace[data-workspace="settings"] { width: min(var(--dialog-w), calc(100% - var(--dock-offset) - var(--chrome-inset))); height: min(var(--floating-panel-h), calc(100% - 2 * var(--chrome-inset))); }
 .workspace[data-workspace="status"] { height: min(var(--floating-panel-h), calc(100% - 2 * var(--chrome-inset))); }
+.workspaceLoading { flex: 1; display: grid; place-items: center; gap: var(--space-2); align-content: center; justify-items: center; color: var(--text-secondary); font-size: var(--font-size-small); }

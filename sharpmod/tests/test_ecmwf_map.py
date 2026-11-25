@@ -22,7 +22,7 @@ def test_supported_products_and_native_forecast_steps(model):
     keys = {product["key"] for product in catalog["products"]}
     assert len(keys) == 21
     assert {"tmp-2m", "rh-2m", "snod", "mucape", "prate-frzr", "hgt-wind-200"} <= keys
-    assert not keys & {"refc", "ltng", "sbcape", "mlcape", "stp", "shear-0-1km", "uh-0-3km", "uh-2-5km-1h", "uh-2-5km-3h"}
+    assert not keys & {"refc", "ltng", "sbcape", "mlcape", "stp", "shear-0-1km", "uh-0-3km", "uh-0-3km-run", "uh-2-5km-1h", "uh-2-5km-3h", "uh-2-5km-run"}
     assert catalog["default_product"] == "tmp-2m"
     assert [catalog["max_forecast_hours"][h] for h in (0, 6, 12, 18)] == [360, 144, 360, 144]
     for hour in (0, 144, 150, 360):
@@ -152,6 +152,7 @@ def test_shared_scalar_contour_and_wind_pipeline_uses_global_grid(tmp_path, monk
             "gfs": ("GFS", "/gfs."),
             "aigfs": ("AIGFS", "/aigfs/"),
             "gdps": ("MSC Datamart", "/model_gdps/"),
+            hp.ICON_MODEL: ("DWD", "opendata.dwd.de/weather/nwp/v1/m/icon/"),
         }.get(model, ("ECMWF", "/ifs/"))
         assert attribution in scalar["attribution"]
         assert source in scalar["source_url"]

@@ -10,7 +10,6 @@ from types import SimpleNamespace
 from typing import Callable
 from typing import Mapping
 from typing import Sequence
-import math
 from sharpmod.analysis import box_analysis as _api
 
 
@@ -242,77 +241,81 @@ def _fast_effective_stp_cin(prof, convective) -> float | None:
 
     The complete ``ConvectiveProfile`` eagerly evaluates every severe, winter,
     fire, and analogue product. STP needs only the parcel workspace already
-    produced by the fast tier plus a few effective-layer wind integrations.
-    This follows SHARPpy's own ``get_kinematics``/``get_severe`` equations and
-    therefore retains numerical parity while avoiding unrelated work.
+    produced by the fast tier plus effective-layer wind integrations computed
+    in ``sharpmod_rs.fast_effective_stp_cin``.
     """
     existing = _api._finite(getattr(prof, "stp_cin", None))
     if existing is not None:
         return existing
     try:
-        from sharppy.sharptab import interp as sp_interp
-        from sharppy.sharptab import params as sp_params
-        from sharppy.sharptab import profile as sp_profile
-        from sharppy.sharptab import utils as sp_utils
-        from sharppy.sharptab import winds as sp_winds
+        import numpy as np
+        import sharpmod_rs
 
-        source = prof
-        if not hasattr(source, "sfc"):
-            source = sp_profile.BasicProfile.copy(source)
+        pres_raw = getattr(prof, "pres", None)
+        hght_raw = getattr(prof, "hght", None)
+        if pres_raw is None or hght_raw is None:
+            return None
+        pres = np.ascontiguousarray(
+            np.ma.filled(np.ma.asanyarray(pres_raw, dtype=float), -9999.0),
+            dtype=float,
+        )
+        hght = np.ascontiguousarray(
+            np.ma.filled(np.ma.asanyarray(hght_raw, dtype=float), -9999.0),
+            dtype=float,
+        )
+        u_raw = getattr(prof, "u", None)
+        v_raw = getattr(prof, "v", None)
+        if u_raw is not None and v_raw is not None:
+            wind_a = np.ascontiguousarray(
+                np.ma.filled(np.ma.asanyarray(u_raw, dtype=float), -9999.0),
+                dtype=float,
+            )
+            wind_b = np.ascontiguousarray(
+                np.ma.filled(np.ma.asanyarray(v_raw, dtype=float), -9999.0),
+                dtype=float,
+            )
+            winds_are_components = True
+        else:
+            wdir_raw = getattr(prof, "wdir", None)
+            wspd_raw = getattr(prof, "wspd", None)
+            if wdir_raw is None or wspd_raw is None:
+                return None
+            wind_a = np.ascontiguousarray(
+                np.ma.filled(np.ma.asanyarray(wdir_raw, dtype=float), -9999.0),
+                dtype=float,
+            )
+            wind_b = np.ascontiguousarray(
+                np.ma.filled(np.ma.asanyarray(wspd_raw, dtype=float), -9999.0),
+                dtype=float,
+            )
+            winds_are_components = False
+
+        sfc_raw = getattr(prof, "sfc", None)
+        sfc = None if sfc_raw is None else int(sfc_raw)
         effective_bottom = float(convective.effective_bottom_pressure)
         effective_top = float(convective.effective_top_pressure)
-        if not math.isfinite(effective_bottom) or not math.isfinite(effective_top):
-            return 0.0
-
         mu = convective.most_unstable.diagnostics
         mixed = convective.mixed_layer.diagnostics
-        required = (
-            mu.cape,
-            mu.cin,
-            mu.el_height,
-            mixed.cape,
-            mixed.cin,
-            mixed.lcl_height,
-        )
-        if not all(math.isfinite(float(value)) for value in required):
-            return None
-        mu_parcel = SimpleNamespace(
-            bplus=float(mu.cape),
-            bminus=float(mu.cin),
-            elhght=float(mu.el_height),
-        )
-        motion = sp_params.bunkers_storm_motion(
-            source, mupcl=mu_parcel, pbot=effective_bottom
-        )
-        bottom_agl = sp_interp.to_agl(source, sp_interp.hght(source, effective_bottom))
-        top_agl = sp_interp.to_agl(source, sp_interp.hght(source, effective_top))
-        depth = (float(mu.el_height) - float(bottom_agl)) / 2.0
-        shear_top = sp_interp.pres(
-            source, sp_interp.to_msl(source, float(bottom_agl) + depth)
-        )
-        shear = sp_winds.wind_shear(source, pbot=effective_bottom, ptop=shear_top)
-        bulk_shear = sp_utils.mag(*shear)
+        latitude = _api._finite(getattr(prof, "latitude", None)) or 0.0
 
-        latitude = _api._finite(getattr(source, "latitude", None)) or 0.0
-        motion_offset = 2 if latitude < 0.0 else 0
-        helicity = sp_winds.helicity(
-            source,
-            float(bottom_agl),
-            float(top_agl),
-            stu=motion[motion_offset],
-            stv=motion[motion_offset + 1],
-        )[0]
-        if latitude < 0.0:
-            helicity = -helicity
-        value = sp_params.stp_cin(
-            float(mixed.cape),
-            helicity,
-            sp_utils.KTS2MS(bulk_shear),
-            float(mixed.lcl_height),
-            float(mixed.cin),
+        value = sharpmod_rs.fast_effective_stp_cin(
+            pres,
+            hght,
+            wind_a,
+            wind_b,
+            winds_are_components=winds_are_components,
+            sfc=sfc,
+            missing=-9999.0,
+            effective_bottom=effective_bottom,
+            effective_top=effective_top,
+            mu_cape=float(mu.cape),
+            mu_cin=float(mu.cin),
+            mu_el_height=float(mu.el_height),
+            ml_cape=float(mixed.cape),
+            ml_cin=float(mixed.cin),
+            ml_lcl_height=float(mixed.lcl_height),
+            latitude=latitude,
         )
-        if latitude < 0.0:
-            value = -value
         return _api._finite(value)
     except Exception:  # noqa: BLE001 - a missing summary value is non-fatal
         return None

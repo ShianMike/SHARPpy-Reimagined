@@ -19,16 +19,17 @@ REQUEST = {"model": "nam", "run_time": "2026-10-27T00:00:00Z", "forecast_hour": 
 
 def test_nam_only_offers_supported_nest_parameters_with_native_record_addresses():
     products = {product.key: product for product in hp.available_products("nam")}
-    nest = {product.key for product in hp.available_products("nam-3km-conus")}
-    assert products.keys() == nest - {"uh-0-3km", "uh-2-5km-1h", "uh-2-5km-3h"}
-    assert len(products) == 34
+    nest = {product.key: product for product in hp.available_products("nam-3km-conus")}
+    assert products.keys() == nest.keys() - {"uh-0-3km", "uh-0-3km-run", "uh-2-5km-1h", "uh-2-5km-3h", "uh-2-5km-run"}
+    assert len(products) == 37
+    assert {"refd-1km", "sbcin", "lcl"} <= products.keys()
     catalog = fields.catalog({"model": "nam"})
     assert catalog["field_model"] == "nam"
     assert {product["key"] for product in catalog["products"]} == products.keys()
     assert [catalog["max_forecast_hours"][h] for h in (0, 6, 12, 18)] == [84] * 4
     assert catalog["field_bounds"] == fields._bounds(NAM_GRID.bounds())
     for product in products.values():
-        assert product.palette is hp.PRODUCTS[product.key].palette
+        assert product.palette == nest[product.key].palette
         for spec in product.all_fields:
             expected = "prs" if re.fullmatch(r"\d+ mb", spec.level) \
                 or spec.variable in {"VUCSH", "VVCSH"} else "sfc"
@@ -41,7 +42,8 @@ def test_nam_map_limits_and_unavailable_parameters_are_rejected():
     assert fields._request({**REQUEST, "product": "refc", "forecast_hour": 84})[-1] == 84
     for change in ({"forecast_hour": 1}, {"forecast_hour": 85},
                    {"run_time": "2026-10-27T01:00:00Z"},
-                   {"product": "uh-0-3km"}, {"product": "uh-2-5km-1h"}, {"product": "uh-2-5km-3h"}):
+                   {"product": "uh-0-3km"}, {"product": "uh-0-3km-run"},
+                   {"product": "uh-2-5km-1h"}, {"product": "uh-2-5km-3h"}, {"product": "uh-2-5km-run"}):
         with pytest.raises(BridgeError):
             fields._request({**REQUEST, "product": "refc", **change})
 

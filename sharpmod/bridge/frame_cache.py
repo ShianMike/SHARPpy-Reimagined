@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import gzip
-import json
-import zlib
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -17,7 +14,7 @@ def path(kind: str, model: str, product: str, run: datetime, hour: int,
     # Version the derived representation separately from the provider's raw data.
     version = 2 if (
         (kind == "grid" and not legacy)
-        or (kind == "contours" and product == "mslp")
+        or (kind == "contours" and (product == "mslp" or (product.startswith("hgt-wind-") and not legacy)))
     ) else 1
     return hrrr_field.disk_cache_root() / (
         f"{kind}-v{version}_{model}_{product}_{run:%Y%m%d%H}_f{hour:03d}_{size[0]}x{size[1]}.json.gz"
@@ -25,26 +22,20 @@ def path(kind: str, model: str, product: str, run: datetime, hour: int,
 
 
 def read(target: Path) -> dict[str, Any] | None:
+    import sharpmod_rs
     from sharpmod.providers import hrrr_field
 
     data = hrrr_field._disk_read(target)
     if data is not None:
-        try:
-            value = json.loads(gzip.decompress(data))
-            if isinstance(value, dict):
-                return value
-        except (OSError, ValueError, EOFError, zlib.error):
-            pass  # An interrupted or corrupt cache must be replaceable by a fresh download.
+        return sharpmod_rs.frame_cache_read_gzip(data)
     return None
 
 
 def write(target: Path, value: dict[str, Any]) -> dict[str, Any]:
+    import sharpmod_rs
     from sharpmod.providers import hrrr_field
 
-    hrrr_field._disk_write(target, gzip.compress(
-        json.dumps(value, separators=(",", ":"), allow_nan=False).encode(),
-        compresslevel=1, mtime=0,
-    ))
+    hrrr_field._disk_write(target, sharpmod_rs.frame_cache_compress_gzip(value))
     return value
 
 
@@ -59,25 +50,27 @@ def cached_hours(params):
         raise p.invalid("products must contain 1 to 4 product keys")
     if not isinstance(hours, list) or not 1 <= len(hours) <= 385:
         raise p.invalid("hours must contain 1 to 385 forecast hours")
-    selections = [fields._request({"model": params["model"], "product": product,
-                                   "run_time": params["run_time"], "forecast_hour": 0}, require_interval=False)
+    selections = [fields._resolve_request({"model": params["model"], "product": product,
+                                           "run_time": params["run_time"], "forecast_hour": 0}, require_interval=False)
                   for product in products]
-    hours = [fields._request({"model": params["model"], "product": products[0],
-                              "run_time": params["run_time"], "forecast_hour": hour}, require_interval=False)[-1]
+    hours = [fields._resolve_request({"model": params["model"], "product": products[0],
+                                      "run_time": params["run_time"], "forecast_hour": hour}, require_interval=False)[-1]
              for hour in hours]
-    first_hour = max(product.max_hours for _, product, _, _ in selections)
+    first_hour = max(product.max_hours for _, product, _, _, _ in selections)
     hrrr_field._prune_disk_cache()
     present = {target for target, size, ready in storage._files(hrrr_field.disk_cache_root(), "*.json.gz") if size > 0 and ready}
     result = []
     for hour in sorted(set(hours)):
         if hour < first_hour:
             continue
-        needed = [(
-                      path(kind, model, product.key, run, hour, fields.FRAME),
-                      path(kind, model, product.key, run, hour, fields.FRAME, legacy=True),
-                  )
-                  for model, product, run, _ in selections
-                  for kind in (["grid", "contours"] if product.contour is not None or product.wind else ["grid"])]
+        needed = [
+            (
+                path(kind, model, requested_key if kind == "grid" else product.key, run, hour, fields.FRAME),
+                path(kind, model, requested_key if kind == "grid" else product.key, run, hour, fields.FRAME, legacy=True),
+            )
+            for model, product, requested_key, run, _ in selections
+            for kind in (["grid", "contours"] if product.contour is not None or product.wind else ["grid"])
+        ]
         if all(current in present or legacy in present for current, legacy in needed):
             result.append(hour)
     return result

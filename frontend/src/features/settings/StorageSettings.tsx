@@ -12,7 +12,7 @@ import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
 const LABELS = {
   models: { title: "Forecast downloads", description: "Model data used to open forecast soundings." },
   maps: { title: "Map images", description: "Forecast frames, wind barbs and contours." },
-  outlooks: { title: "SPC outlooks", description: "Downloaded severe weather outlooks." },
+  outlooks: { title: "SPC & WPC outlooks", description: "Downloaded severe weather and excessive rainfall outlooks." },
   radar: { title: "Radar data", description: "Level II volumes, single-site radar and mosaic frames." },
   satellite: { title: "Satellite imagery", description: "Downloaded GOES imagery for Live Tracking." },
   observations: { title: "Surface observations", description: "Downloaded station readings and weather plots." },

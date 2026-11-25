@@ -20,7 +20,10 @@ pub const MAX_PRODUCTS: usize = 128;
 pub const MAX_STOPS: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(
+    rename_all(serialize = "camelCase", deserialize = "snake_case"),
+    deny_unknown_fields
+)]
 pub struct Palette {
     /// `[value, "#rrggbb"]` in the product's display units, ascending.
     pub stops: Vec<(f64, String)>,
@@ -30,6 +33,8 @@ pub struct Palette {
     pub floor: Option<f64>,
     pub ceiling: Option<f64>,
     pub ticks: Vec<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ptype_labels: Option<[String; 4]>,
 }
 
 /// One product's contour-line spec, as the catalogue carries it.
@@ -43,6 +48,17 @@ pub struct ProductContour {
     pub label: String,
     pub colour: String,
     pub width: f64,
+}
+
+/// One selectable ensemble/field variant exposed by a product.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    rename_all(serialize = "camelCase", deserialize = "snake_case"),
+    deny_unknown_fields
+)]
+pub struct FieldVariant {
+    pub key: String,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,6 +75,10 @@ pub struct FieldProduct {
     pub caveat: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minimum_forecast_hour: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forecast_hours: Option<Vec<u32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variants: Option<Vec<FieldVariant>>,
     pub palette: Palette,
     pub contour: Option<ProductContour>,
     pub wind: bool,
@@ -128,6 +148,11 @@ impl Palette {
         if !ascending || !finite || !self.stops.iter().all(|(_, c)| colour_ok(c)) {
             return Err("palette stops must ascend, be finite, and be #rrggbb".into());
         }
+        if let Some(labels) = &self.ptype_labels {
+            for label in labels {
+                check_text("precipitation type label", label, 1, 40)?;
+            }
+        }
         check_text("units", &self.units, 0, 40)
     }
 }
@@ -152,6 +177,36 @@ impl MapCatalog {
                 return Err(format!(
                     "products[{i}]: minimum forecast hour is out of range"
                 ));
+            }
+            if product.forecast_hours.as_ref().is_some_and(|hours| {
+                let minimum = product.minimum_forecast_hour.unwrap_or(0);
+                hours.is_empty()
+                    || hours.iter().any(|hour| !(minimum..=384).contains(hour))
+                    || hours.windows(2).any(|pair| pair[0] >= pair[1])
+            }) {
+                return Err(format!(
+                    "products[{i}]: expected an increasing forecast-hour schedule"
+                ));
+            }
+            if let Some(variants) = &product.variants {
+                if variants.len() < 2 {
+                    return Err(format!(
+                        "products[{i}]: variants must have at least two entries"
+                    ));
+                }
+                let mut seen = std::collections::HashSet::with_capacity(variants.len());
+                for variant in variants {
+                    check_text("variant key", &variant.key, 1, 40)?;
+                    check_text("variant label", &variant.label, 1, 80)?;
+                    if !seen.insert(&variant.key) {
+                        return Err(format!("products[{i}]: duplicate variant key"));
+                    }
+                }
+                if !variants.iter().any(|variant| variant.key == product.key) {
+                    return Err(format!(
+                        "products[{i}]: variants must include the product's default key"
+                    ));
+                }
             }
             product
                 .palette

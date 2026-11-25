@@ -6,6 +6,7 @@
   "permissions": [
     "allow-get-backend-health",
     "allow-check-for-updates",
+    "allow-star-github-repository",
     "allow-get-station-catalog",
     "allow-restart-backend",
     "allow-cancel-request",
@@ -31,6 +32,7 @@
     "allow-get-weather-field",
     "allow-get-cached-forecast-hours",
     "allow-get-spc-outlook",
+    "allow-get-wpc-outlook",
     "allow-build-forecast-drawing",
     "allow-get-radar-frame",
     "allow-get-radar-site-frame",

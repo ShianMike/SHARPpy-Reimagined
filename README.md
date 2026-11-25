@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.9.0
+# SHARPpy Reimagined · v3.10.0
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,25 +10,25 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v3100---2026-11-25)
 
 If SHARPpy Reimagined helps your weather analysis, select **Star** at the top of this GitHub page to support the project.
 
 </div>
 
-## What's new in 3.9.0
+## What's new in 3.10.0
 
-- **Draw Forecast.** Draw, move, and reshape connected risk contours. Reuse
-  categorical outlines for tornado, hail, or wind and export PNGs with the
-  outlook day, author, and unofficial-forecast notice.
-- **Model Viewer and Live Tracking.** Model fields shade more smoothly,
-  worldwide METAR markers stay visible through zoom changes, and active
-  Spotter Network markers show public details in the local app.
-- **Soundings.** Recover saved sessions, read clearer Skew-T annotations, and
-  animate more models from the selected forecast run with a shared wind axis.
-- **Faster exports and storage checks.** Lossless WebP exports take less
-  browser processing, and Storage can count cached files without reading
-  their weather data.
+- **More forecast models.** Explore DWD ICON Global and Canadian HRDPS maps.
+  Find NAM and NAM 3 km CONUS in the archive, with runs through 3 November 2026
+  at 06 UTC.
+- **REFS ensemble guidance.** Open the Ensemble category in Model Viewer to
+  find REFS Mean and all five members. REFS Mean also includes SPC tornado,
+  hail, and damaging-wind probabilities under Guidance.
+- **Outlook briefings and exports.** View NOAA excessive rainfall and winter
+  outlooks alongside the convective briefing. Forecast exports show the app
+  version and group REFS rain, snow, freezing rain, and mix scales in one column.
+- **Soundings and playback.** Switch between Sources and Sounding controls in
+  the sidebar. Model Viewer and Live Tracking support 5× and 6× playback.
 
 ## Sounding and forecast tools
 
@@ -49,8 +49,8 @@ If SHARPpy Reimagined helps your weather analysis, select **Star** at the top of
 ## Weather analysis
 
 - **Model Viewer:** compare forecast fields in one, two or four synchronized
-  maps. Models are grouped into CONUS, Global and Regional, with RAP and RDPS
-  under Regional. Parameter choices follow the selected run's published fields.
+  maps. Models are grouped into CONUS, Global, Regional, and Ensemble.
+  Parameter choices follow the selected run's published fields.
 - **More model coverage:** explore supported GFS, ECMWF, ECMWF 9km, RRFS and REFS
   parameters. GDPS provides point soundings; AIGFS provides map analysis only.
 - **Live Tracking:** follow radar, satellite imagery, surface observations,
@@ -74,10 +74,21 @@ can restore profiles, edits and history after reopening the app.
 
 ## Screenshots
 
-A Winter sounding from the Barrow, Alaska observed profile.
-Open the image to inspect its full resolution.
+Select any v3.10.0 screenshot to view it at full resolution.
 
-[![Winter sounding with Skew-T, hodograph, precipitation source and low-level diagnostics](docs/images/v3.8.0/winter-sounding.png)](docs/images/v3.8.0/winter-sounding.png)
+[![Overview showing the SPC convective risk and forecast discussion over a REFS precipitation map](docs/images/v3.10.0/overview.png)](docs/images/v3.10.0/overview.png)
+
+*Overview with the SPC convective outlook, forecast discussion, and workspace shortcuts.*
+
+| Model Viewer · REFS Mean parameters | Model Viewer · REFS Mean precipitation (F043) |
+| --- | --- |
+| [![Searchable parameter picker over a 500 mb wind map with labeled height contours](docs/images/v3.10.0/refs-mean-parameter-picker.png)](docs/images/v3.10.0/refs-mean-parameter-picker.png) | [![REFS Mean F043 one-hour precipitation map with separate scales for rain, snow, freezing rain, and mix](docs/images/v3.10.0/refs-mean-precipitation-f043.png)](docs/images/v3.10.0/refs-mean-precipitation-f043.png) |
+
+| Live Tracking · KBYX radar | Soundings · HRRR Severe profile |
+| --- | --- |
+| [![KBYX base reflectivity over the Florida Keys at a 0.5-degree radar tilt](docs/images/v3.10.0/live-tracking-radar.png)](docs/images/v3.10.0/live-tracking-radar.png) | [![Severe sounding with Skew-T, hodograph, and parcel and export controls for an HRRR profile near Deerfield Beach](docs/images/v3.10.0/severe-sounding-controls.png)](docs/images/v3.10.0/severe-sounding-controls.png) |
+
+See also the [Winter sounding from an observed profile at Barrow, Alaska](docs/images/v3.8.0/winter-sounding.png).
 
 ## Get started
 
@@ -114,6 +125,7 @@ For a live browser preview, run `npm run dev:browser` in `frontend/` and open
 - [Sounding parameter guide](docs/sounding_parameter_guide.md)
 - [Installation and optional dependencies](installation.txt)
 - [Frontend development](docs/frontend/ARCHITECTURE.md)
+- [Optional Cloudflare edge for the hosted web app](docs/CLOUDFLARE_EDGE.md)
 - [Rust backend and Python fallback](docs/RUST_BACKEND.md)
 - [Contributing and release checks](CONTRIBUTING.md)
 

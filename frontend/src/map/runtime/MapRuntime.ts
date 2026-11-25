@@ -214,7 +214,9 @@ export class MapRuntime implements RuntimeEventTarget {
       const next = document.documentElement.dataset.theme;
       if (next === theme || this.map === null || this.tokens === null) return;
       theme = next;
+      this.tokens = readCanvasTokens(documentTokenReader());
       this.styleReady = false;
+      this.scene?.setTokens(this.tokens);
       this.scene?.setWeatherBeforeId(undefined);
       this.map.setStyle(basemapStyle(this.tokens), { diff: false });
     });

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
 import { useForecastStore } from "../../stores/forecastStore";
 import { renderWithBackend } from "../../test/backendHarness";
+import { NAM_ARCHIVE_NOTICE } from "../sounding/soundingQueries";
 import { ForecastControls } from "./ForecastControls";
 
 const initial = useForecastStore.getState();
@@ -26,31 +27,77 @@ it("opens the selected model's region and keeps selection visible while browsing
   useForecastStore.getState().setModel("ecmwf-ifs-9km");
   const dialog = await openModels();
   expect(within(dialog).getByRole<HTMLInputElement>("radio", { name: "Global" }).checked).toBe(true);
-  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(5);
+  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(6);
   expect(within(dialog).getByRole("button", { name: "Choose AIGFS" }).textContent).toContain("Maps only");
-  expect(within(dialog).getByRole("button", { name: "Choose ECMWF 9km" }).textContent).toContain("Selected");
-  expect(dialog.querySelectorAll("svg")).toHaveLength(2);
+  expect(within(dialog).getByRole("button", { name: "Choose ECMWF 9km", pressed: true })).toBeTruthy();
   expect(within(dialog).getByRole("button", { name: "Move popup" }).querySelector("svg")).not.toBeNull();
   expect(within(dialog).getByRole("button", { name: "Close forecast setup" }).querySelector("svg")).not.toBeNull();
   await userEvent.click(within(dialog).getByRole("radio", { name: "CONUS" }));
-  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(7);
+  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(4);
   expect(dialog.querySelector("footer")?.textContent).toContain("ECMWF 9km");
   expect(useForecastStore.getState().modelKey).toBe("ecmwf-ifs-9km");
 });
 
-it("opens RAP in Regional and excludes retired NAM models from CONUS", async () => {
+it("groups the REFS mean and members under Ensemble and reopens on the selection", async () => {
+  const dialog = await openModels();
+  expect(within(dialog).queryByRole("button", { name: "Choose REFSm1" })).toBeNull();
+  const search = within(dialog).getByRole("searchbox", { name: "Search models" });
+  await userEvent.type(search, "ensemble");
+  const group = within(dialog).getByRole("group", { name: "Ensemble" });
+  expect(within(group).getAllByRole("button").map((button) => button.getAttribute("aria-label")))
+    .toEqual(["Choose REFS Mean", "Choose REFSm1", "Choose REFSm2", "Choose REFSm3", "Choose REFSm4", "Choose REFSm5"]);
+  const mean = within(group).getByRole("button", { name: "Choose REFS Mean" });
+  expect(mean.textContent).toContain("Maps only");
+  await userEvent.click(mean);
+  expect(useForecastStore.getState().modelKey).toBe("refs");
+  await userEvent.click(screen.getByRole("button", { name: "Choose model" }));
+  const reopened = screen.getByRole("dialog", { name: "Forecast model" });
+  expect(within(reopened).getByRole<HTMLInputElement>("radio", { name: "Ensemble" }).checked).toBe(true);
+  expect(within(reopened).getByRole("button", { name: "Choose REFS Mean" }).getAttribute("aria-pressed")).toBe("true");
+});
+
+it("opens RAP in Regional and labels the NAM archives in CONUS", async () => {
   useForecastStore.getState().setModel("rap");
   const dialog = await openModels();
   expect(within(dialog).getByRole<HTMLInputElement>("radio", { name: "Regional" }).checked).toBe(true);
-  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(2);
-  expect(within(dialog).getByRole("button", { name: "Choose RAP" }).textContent).toContain("Selected");
+  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(3);
+  expect(within(dialog).getByRole("button", { name: "Choose RAP", pressed: true })).toBeTruthy();
+  expect(within(dialog).getByRole("button", { name: "Choose HRDPS" }).textContent).toContain("Maps only");
+  expect(within(dialog).queryByText(NAM_ARCHIVE_NOTICE)).toBeNull();
+  expect(within(dialog).queryByText("Archive", { exact: true })).toBeNull();
   await userEvent.click(within(dialog).getByRole("radio", { name: "CONUS" }));
-  expect(within(dialog).queryByRole("button", { name: "Choose NAM" })).toBeNull();
   expect(within(dialog).queryByRole("button", { name: "Choose RAP" })).toBeNull();
-  expect(within(dialog).queryByRole("button", { name: "Choose NAM 3km CONUS" })).toBeNull();
+  const conus = within(dialog).getByRole("group", { name: "CONUS" });
+  for (const name of ["Choose NAM", "Choose NAM 3km CONUS"]) {
+    const choice = within(conus).getByRole("button", { name, description: NAM_ARCHIVE_NOTICE });
+    expect(within(choice).getByText("Archive", { exact: true })).toBeTruthy();
+  }
+  expect(within(conus).getAllByText("Archive", { exact: true })).toHaveLength(2);
+  expect(within(dialog).getByText(NAM_ARCHIVE_NOTICE)).toBeTruthy();
 });
 
-it.each([["ECMWF", "openmeteo-ecmwf-ifs025"], ["GDPS", "gdps"], ["AIGFS", "aigfs"]])("switches regions and selects %s without extra confirmation", async (label, key) => {
+it.each(["nam", "nam-3km-conus"])("shows the last archived run and explains unavailable %s cycles", async (modelKey) => {
+  useForecastStore.getState().setModel(modelKey);
+  renderWithBackend(<ForecastControls />, createTransport());
+  const trigger = await screen.findByRole<HTMLButtonElement>("button", { name: "Choose run" });
+  await waitFor(() => { expect(trigger.disabled).toBe(false); });
+  await userEvent.click(trigger);
+
+  const dialog = within(screen.getByRole("dialog", { name: "Model run" }));
+  expect(dialog.getByText(NAM_ARCHIVE_NOTICE)).toBeTruthy();
+  const date = dialog.getByRole("button", { name: "Run date · UTC", description: NAM_ARCHIVE_NOTICE });
+  expect(date.textContent).toContain("3 Nov 2026");
+  const unavailable = dialog.getByRole<HTMLButtonElement>("button", { name: "Run 11-03 12Z" });
+  expect(unavailable.disabled).toBe(true);
+  expect(unavailable.title).toBe("Cycle unavailable");
+  expect(dialog.getByRole<HTMLButtonElement>("button", { name: "Run 11-03 06Z", pressed: true }).disabled).toBe(false);
+  const latest = dialog.getByRole("button", { name: "Use latest archived run" });
+  expect(latest.textContent).toContain("11-03 06Z");
+  await userEvent.click(latest);
+  expect(useForecastStore.getState().runTime).toBe("2026-11-03T06:00:00Z");
+});
+
+it.each([["ICON", "openmeteo-icon-global"], ["ECMWF", "openmeteo-ecmwf-ifs025"], ["GDPS", "gdps"], ["AIGFS", "aigfs"]])("switches regions and selects %s without extra confirmation", async (label, key) => {
   const dialog = await openModels();
   await userEvent.click(within(dialog).getByRole("radio", { name: "CONUS" }));
   await userEvent.click(within(dialog).getByRole("radio", { name: "Global" }));
@@ -77,7 +124,14 @@ it("searches across regions and makes an empty search easy to clear", async () =
   expect(within(dialog).getByText("No models found.")).toBeTruthy();
   await userEvent.click(within(dialog).getByRole("radio", { name: "Global" }));
   expect(search.value).toBe("");
-  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(5);
+  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(6);
+  expect(within(dialog).queryByText(NAM_ARCHIVE_NOTICE)).toBeNull();
+  await userEvent.type(search, "nam");
+  const conus = within(dialog).getByRole("group", { name: "CONUS" });
+  expect(within(conus).getAllByRole("button").map((button) => button.getAttribute("aria-label")))
+    .toEqual(["Choose NAM", "Choose NAM 3km CONUS"]);
+  expect(within(conus).getAllByText("Archive", { exact: true })).toHaveLength(2);
+  expect(within(dialog).getByText(NAM_ARCHIVE_NOTICE)).toBeTruthy();
 });
 
 it("preserves the selected run and hour when reselecting the current model", async () => {

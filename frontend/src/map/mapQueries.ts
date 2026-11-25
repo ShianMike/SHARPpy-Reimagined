@@ -11,12 +11,12 @@ import { useLiveTrackingStore } from "../stores/liveTrackingStore";
 import { panelWeather, useMapStore } from "../stores/mapStore";
 import { useSoundingStore } from "../stores/soundingStore";
 import { releaseTime } from "../features/sounding/soundingTime";
-import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type OutlookDay, type OutlookProductKey, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
+import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
 import { nearestRadarSite } from "./nearestSite";
+import { SPC_REFRESH_MS, useLatestSpcOutlook, useLatestWpcOutlook, useWpcOutlook, wpcOutlookQueryOptions } from "./outlookQueries";
 import { panelRadar } from "./panelRadar";
 
 const OUTLOOK_STALE_MS = 10 * 60_000;
-const SPC_REFRESH_MS = 5 * 60_000;
 const AVAILABILITY_STALE_MS = 10 * 60_000;
 /** Used until the first radar frame states its own update interval. */
 const RADAR_DEFAULT_REFRESH_MS = 120_000;
@@ -27,6 +27,7 @@ function radarRefreshMs(frame: RadarFrame | undefined): number {
 }
 
 export { useMapCatalog } from "./catalogQuery";
+export { useLatestSpcOutlook, useLatestWpcOutlook, useWpcOutlook, wpcOutlookQueryOptions };
 
 export interface FrameRequest {
   model: string;
@@ -101,20 +102,6 @@ export function outlookQueryOptions(client: BackendClient, product: typeof OUTLO
     staleTime: SPC_REFRESH_MS,
     gcTime: Number.POSITIVE_INFINITY,
   };
-}
-
-/** Keep each day's latest issuance separate from the map's time-based outlooks. */
-export function useLatestSpcOutlook(day: OutlookDay, product: OutlookProductKey): UseQueryResult<SpcOutlook> {
-  const client = useBackendClient();
-  return useQuery({
-    ...BASE_QUERY_OPTIONS,
-    queryKey: ["spc-latest", day, product],
-    queryFn: ({ signal }) => client.getSpcOutlook(product, `${new Date(Date.now()).toISOString().slice(0, 19)}Z`, signal, day),
-    staleTime: SPC_REFRESH_MS,
-    gcTime: 3 * SPC_REFRESH_MS,
-    refetchInterval: SPC_REFRESH_MS,
-    refetchOnWindowFocus: "always",
-  });
 }
 
 /** The four outlook products in OUTLOOK_KEYS order; `enabled[i]` turns each on. */

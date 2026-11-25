@@ -323,6 +323,8 @@ def vorticity_generation_parameter(prof):
 
 
 def _vgp_impl(prof):
+    import sharpmod_rs
+
     pbot = _sfc_pres(prof)
     ptop = interp.pres_at_hght_agl(prof, _VGP_TOP_AGL)
     if is_missing(pbot) or is_missing(ptop):
@@ -340,16 +342,10 @@ def _vgp_impl(prof):
         return MISSING
     sbpcl = parcels.parcel(prof, "surface")
     cape = _sfc_cape(*arrays) if sbpcl is None else sbpcl.cape
-    if cape is None or not np.isfinite(cape) or cape < 0.0:
+    if cape is None:
         return MISSING
-    if cape == 0.0:
-        return 0.0
-
-    shear_s = float(winds.kts2ms(shear_kt)) / _VGP_TOP_AGL
-    value = math.sqrt(cape) * shear_s
-    if not np.isfinite(value):
-        return MISSING
-    return float(value)
+    value = sharpmod_rs.derived_vgp(float(cape), shear_kt)
+    return MISSING if value is None else value
 
 
 # ===========================================================================
@@ -576,51 +572,30 @@ def _surface_relative_vorticity(prof):
     return value
 
 
-def _thetae_at_hght_agl(prof, h_agl):
-    """Equivalent potential temperature at ``h_agl`` metres AGL."""
-    p = interp.pres_at_hght_agl(prof, h_agl)
-    t = interp.temp_at_hght_agl(prof, h_agl)
-    td = interp.dwpt_at_hght_agl(prof, h_agl)
-    if is_missing(p) or is_missing(t) or is_missing(td):
-        return None
-    try:
-        from sharppy.sharptab import thermo as sp_thermo
-        value = sp_thermo.thetae(float(p), float(t), float(td))
-    except Exception:
-        return None
-    return _finite_or_none(value)
-
-
-def _omeg_at_hght_agl(prof, h_agl):
-    """Omega (Pa/s) at ``h_agl`` metres AGL."""
-    omeg = _get_field(prof, "omeg")
-    if omeg is None:
-        return None
-    omeg = ma.masked_where(ma.asarray(omeg, dtype=float) <= -9000.0, omeg)
-    if ma.getmaskarray(omeg).all():
-        return None
-    value = interp.interp_hght_agl(prof, omeg, h_agl)
-    return _finite_or_none(value)
-
-
 def _max_thetae_vertical_velocity(prof):
     """Return MOSHE MAXTEVV in K Pa km^-1 s^-1, or ``None``."""
-    values = []
-    for top in _MOSHE_LAYER_TOPS_AGL:
-        bottom = top - (_MOSHE_LAYER_DEPTH_KM * 1000.0)
-        thetae_bottom = _thetae_at_hght_agl(prof, bottom)
-        thetae_top = _thetae_at_hght_agl(prof, top)
-        omega_top = _omeg_at_hght_agl(prof, top)
-        if thetae_bottom is None or thetae_top is None or omega_top is None:
-            continue
-        thetae_decrease = (thetae_bottom - thetae_top) / _MOSHE_LAYER_DEPTH_KM
-        upward_motion = -omega_top
-        value = thetae_decrease * upward_motion
-        if np.isfinite(value):
-            values.append(float(value))
-    if not values:
+    import sharpmod_rs
+
+    pres = _get_field(prof, "pres")
+    hght = _get_field(prof, "hght")
+    tmpc = _get_field(prof, "tmpc")
+    dwpc = _get_field(prof, "dwpc")
+    omeg = _get_field(prof, "omeg")
+    if pres is None or hght is None or tmpc is None or dwpc is None or omeg is None:
         return None
-    return max(values)
+    n = int(pres.size)
+    if n == 0 or not (hght.size == tmpc.size == dwpc.size == omeg.size == n):
+        return None
+    fill = lambda arr: np.ascontiguousarray(ma.asarray(arr).filled(-9999.0), dtype=float)
+    return sharpmod_rs.max_thetae_vertical_velocity(
+        fill(pres),
+        fill(hght),
+        fill(tmpc),
+        fill(dwpc),
+        fill(omeg),
+        sfc=_sfc_index(prof),
+        missing=-9999.0,
+    )
 
 
 def wet_bulb_zero_height(prof):
@@ -731,6 +706,7 @@ def hail_possibility_index(prof):
 
 
 def _hail_possibility_index_impl(prof):
+    import sharpmod_rs
     from . import params as sm_params
 
     # Hail-growth-zone CAPE (-10 -> -30 degrees C). Returns MISSING when the
@@ -744,16 +720,8 @@ def _hail_possibility_index_impl(prof):
     if wbz_agl is None:
         return MISSING
 
-    melt_factor = 1.0 - max(0.0, wbz_agl - _HPI_WBZ_CEILING) / _HPI_WBZ_CEILING
-    if melt_factor < 0.0:
-        melt_factor = 0.0
-    elif melt_factor > 1.0:
-        melt_factor = 1.0
-
-    value = (hgz_cape / _HPI_CAPE_NORM) * melt_factor
-    if not np.isfinite(value):
-        return MISSING
-    return float(value)
+    value = sharpmod_rs.derived_hpi(hgz_cape, wbz_agl)
+    return MISSING if value is None else value
 
 
 # ---------------------------------------------------------------------------
@@ -788,6 +756,24 @@ def peskov_index(prof):
 
 
 def _peskov_index_impl(prof):
+    import sharpmod_rs
+
+    arrays = _profile_columns(prof)
+    sbpcl = parcels.parcel(prof, "surface")
+    if arrays is not None and sbpcl is not None:
+        sbcape = _finite_or_none(sbpcl.cape)
+        if sbcape is None:
+            return MISSING
+        pres, _hght, tmpc, dwpc, _wdir, _wspd = arrays
+        value = sharpmod_rs.derived_peskov_profile(
+            np.ascontiguousarray(pres, dtype=float),
+            np.ascontiguousarray(tmpc, dtype=float),
+            np.ascontiguousarray(dwpc, dtype=float),
+            sbcape,
+            missing=-9999.0,
+        )
+        return MISSING if value is None else value
+
     sp = _oracle_profile(prof)
     if sp is None:
         return MISSING
@@ -801,13 +787,11 @@ def _peskov_index_impl(prof):
         return MISSING
 
     # Surface-based CAPE ("energy of instability").
-    sbpcl = parcels.parcel(prof, "surface")
-    if sbpcl is None:
-        sbcape = _finite_or_none(
-            getattr(sp_params.parcelx(sp, flag=1), "bplus", None),
-        )
-    else:
-        sbcape = _finite_or_none(sbpcl.cape)
+    sbcape = _finite_or_none(
+        getattr(sp_params.parcelx(sp, flag=1), "bplus", None)
+        if sbpcl is None
+        else sbpcl.cape
+    )
     if sbcape is None:
         return MISSING
 
@@ -816,12 +800,9 @@ def _peskov_index_impl(prof):
     td700 = _finite_or_none(sp_interp.dwpt(sp, _PESKOV_DD_PRES))
     if t700 is None or td700 is None:
         return MISSING
-    dd700 = t700 - td700
 
-    value = kidx + (sbcape / _PESKOV_CAPE_NORM) - (dd700 / _PESKOV_DD_NORM)
-    if not np.isfinite(value):
-        return MISSING
-    return float(value)
+    value = sharpmod_rs.derived_peskov(kidx, sbcape, t700, td700)
+    return MISSING if value is None else value
 
 
 # ---------------------------------------------------------------------------

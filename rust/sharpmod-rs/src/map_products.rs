@@ -1,5 +1,8 @@
 //! Native additions to the shared forecast map product catalogue.
 
+mod convection;
+mod hrdps;
+mod icon;
 mod palettes;
 mod regional;
 
@@ -14,8 +17,8 @@ use pyo3::{
 };
 
 use palettes::{
-    ehi_stops, isotach_stops, DEEP_SHEAR_MAX_KT, EHI_FLOOR, EHI_TICKS, ISOTACH_MIN_KT,
-    WIND_850_MAX_KT,
+    ehi_stops, isotach_stops, lcl_stops, DEEP_SHEAR_MAX_KT, EHI_FLOOR, EHI_TICKS, ISOTACH_MIN_KT,
+    LCL_TICKS, LOW_LEVEL_WIND_MAX_KT, WIND_500_MAX_KT,
 };
 
 fn record_for_model(model: &str) -> Option<&'static str> {
@@ -60,6 +63,65 @@ fn derive_mean_sea_level_pressure<'py>(
     pressure_to_hpa(py, values.extract()?)
 }
 
+fn derive_from_fields(
+    py: Python<'_>,
+    fields: &Bound<'_, PyDict>,
+    diagnostic: &str,
+    names: &[&str],
+) -> PyResult<Py<PyAny>> {
+    let mut values = Vec::with_capacity(names.len());
+    for &name in names {
+        values.push(
+            fields
+                .get_item(name)?
+                .ok_or_else(|| PyKeyError::new_err(format!("decoded field {name} is missing")))?
+                .extract()?,
+        );
+    }
+    crate::map_diagnostic_bindings::derive_map_diagnostic(py, diagnostic, values)
+}
+
+#[pyfunction]
+fn derive_refs_member_scp(py: Python<'_>, fields: &Bound<'_, PyDict>) -> PyResult<Py<PyAny>> {
+    derive_from_fields(py, fields, "scp", &["sbcape", "srh03", "ushr06", "vshr06"])
+}
+
+#[pyfunction]
+fn derive_refs_member_stp(py: Python<'_>, fields: &Bound<'_, PyDict>) -> PyResult<Py<PyAny>> {
+    derive_from_fields(
+        py,
+        fields,
+        "stp-surface-lcl",
+        &[
+            "sbcape", "tmp2m", "dpt2m", "srh01", "ushr06", "vshr06", "sbcin",
+        ],
+    )
+}
+
+#[pyfunction]
+pub(crate) fn derive_refs_member_lcl(
+    py: Python<'_>,
+    fields: &Bound<'_, PyDict>,
+) -> PyResult<Py<PyAny>> {
+    derive_from_fields(py, fields, "surface-lcl", &["tmp2m", "dpt2m"])
+}
+
+#[pyfunction]
+pub(crate) fn derive_refs_member_ehi_0_1km(
+    py: Python<'_>,
+    fields: &Bound<'_, PyDict>,
+) -> PyResult<Py<PyAny>> {
+    derive_from_fields(py, fields, "ehi", &["sbcape", "srh01"])
+}
+
+#[pyfunction]
+pub(crate) fn derive_refs_member_ehi_0_3km(
+    py: Python<'_>,
+    fields: &Bound<'_, PyDict>,
+) -> PyResult<Py<PyAny>> {
+    derive_from_fields(py, fields, "ehi", &["sbcape", "srh03"])
+}
+
 #[pyfunction]
 #[pyo3(signature = (model, products=None))]
 fn map_pressure_products(
@@ -77,16 +139,16 @@ fn map_pressure_products(
             let entry = product.bind(py);
             let key = entry.getattr("key")?.extract::<String>()?;
             let (stops, ticks, floor) = match key.as_str() {
-                "hgt-wind-850" | "shear-0-6km" => {
-                    // Both tables reuse the upper wind colors from the provider catalogue.
+                "hgt-wind-500" | "hgt-wind-700" | "hgt-wind-850" | "shear-0-6km" => {
+                    // These products use the shared wind colours at different thresholds.
                     let source = PyModule::import(py, "sharpmod.providers.hrrr_products")?
                         .getattr("PALETTE_ISOTACH_KT")?
                         .getattr("stops")?
                         .extract()?;
-                    let (max_kt, source_step) = if key == "hgt-wind-850" {
-                        (WIND_850_MAX_KT, 2.0)
-                    } else {
-                        (DEEP_SHEAR_MAX_KT, 1.0)
+                    let (max_kt, source_step) = match key.as_str() {
+                        "hgt-wind-500" => (WIND_500_MAX_KT, 1.0),
+                        "shear-0-6km" => (DEEP_SHEAR_MAX_KT, 1.0),
+                        _ => (LOW_LEVEL_WIND_MAX_KT, 2.0),
                     };
                     (
                         PyTuple::new(py, isotach_stops(source, max_kt, source_step))?,
@@ -114,6 +176,18 @@ fn map_pressure_products(
     }
     products.push(pressure_product(py, variable, None)?);
     Ok(products)
+}
+
+pub(crate) fn pressure_contour<'py>(
+    catalogue: &Bound<'py, PyModule>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = catalogue.py();
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("convert", wrap_pyfunction!(pressure_to_hpa, py)?)?;
+    kwargs.set_item("label", "hPa")?;
+    catalogue
+        .getattr("ContourSpec")?
+        .call(("mslp", 4.0), Some(&kwargs))
 }
 
 fn pressure_product(
@@ -148,12 +222,6 @@ fn pressure_product(
             )?
         }
     };
-    let contour_kwargs = PyDict::new(py);
-    contour_kwargs.set_item("convert", wrap_pyfunction!(pressure_to_hpa, py)?)?;
-    contour_kwargs.set_item("label", "hPa")?;
-    let contour = catalogue
-        .getattr("ContourSpec")?
-        .call(("mslp", 4.0), Some(&contour_kwargs))?;
     let kwargs = PyDict::new(py);
     kwargs.set_item("key", "mslp")?;
     kwargs.set_item("label", "Mean Sea-level Pressure")?;
@@ -165,7 +233,7 @@ fn pressure_product(
         wrap_pyfunction!(derive_mean_sea_level_pressure, py)?,
     )?;
     kwargs.set_item("palette", palette)?;
-    kwargs.set_item("contour", contour)?;
+    kwargs.set_item("contour", pressure_contour(&catalogue)?)?;
     kwargs.set_item(
         "description",
         "Mean sea-level pressure in hPa, with isobars every 4 hPa.",
@@ -187,21 +255,278 @@ fn map_product_catalogue(
     model: &str,
     products: Vec<Py<PyAny>>,
 ) -> PyResult<Vec<Py<PyAny>>> {
+    let mut products = catalogue_for_model(py, model, products)?;
+    convection::extend_catalogue(py, model, &mut products)?;
+    Ok(products)
+}
+
+fn catalogue_for_model(
+    py: Python<'_>,
+    model: &str,
+    products: Vec<Py<PyAny>>,
+) -> PyResult<Vec<Py<PyAny>>> {
     if model == "hrrr" {
         return Ok(products);
     }
     if model == "gdps" {
         return gdps_catalogue(py);
     }
+    if model == "hrdps" {
+        return hrdps::catalogue(py);
+    }
+    if model == "openmeteo-icon-global" {
+        return icon::catalogue(py);
+    }
+    if model == "refs" {
+        return crate::model_map_fields::refs::catalogue(py);
+    }
     if matches!(model, "rap" | "rdps") {
         return regional::catalogue(py, model);
     }
     let is_gfs = model == "gfs";
-    let mut result = Vec::with_capacity(products.len() + 2);
+    let refs_member = model.starts_with("refs-");
+    let refs_helpers = if refs_member {
+        Some((
+            PyModule::import(py, "sharpmod.providers.hrrr_products")?,
+            PyModule::import(py, "dataclasses")?.getattr("replace")?,
+        ))
+    } else {
+        None
+    };
+    let mut result = Vec::with_capacity(products.len() + 9);
     for product in products {
-        let key = product.bind(py).getattr("key")?.extract::<String>()?;
+        let entry = product.bind(py);
+        let key = entry.getattr("key")?.extract::<String>()?;
         if key == "mslp" || (is_gfs && key == "refc") {
             continue;
+        }
+        if let Some((catalogue, replace)) = &refs_helpers {
+            if key == "apcp" {
+                for (qpf_key, label, max_hours, description, caveat) in [
+                    (
+                        "qpf-1h",
+                        "1-h QPF",
+                        1u32,
+                        "Accumulated liquid-equivalent precipitation over the hour ending at the selected forecast time, in inches.",
+                        "Uses native 1-hour APCP accumulations from the selected run; available from F001.",
+                    ),
+                    (
+                        "qpf-6h",
+                        "6-h QPF",
+                        6u32,
+                        "Accumulated liquid-equivalent precipitation over the 6 hours ending at the selected forecast time, in inches.",
+                        "Computed by summing native hourly APCP accumulations over the trailing 6-hour window; available from F006.",
+                    ),
+                    (
+                        "qpf-12h",
+                        "12-h QPF",
+                        12u32,
+                        "Accumulated liquid-equivalent precipitation over the 12 hours ending at the selected forecast time, in inches.",
+                        "Computed by summing native hourly APCP accumulations over the trailing 12-hour window; available from F012.",
+                    ),
+                    (
+                        "qpf-24h",
+                        "24-h QPF",
+                        24u32,
+                        "Accumulated liquid-equivalent precipitation over the 24 hours ending at the selected forecast time, in inches.",
+                        "Computed by summing native hourly APCP accumulations over the trailing 24-hour window; available from F024.",
+                    ),
+                ] {
+                    let updates = PyDict::new(py);
+                    updates.set_item("key", qpf_key)?;
+                    updates.set_item("label", label)?;
+                    updates.set_item("chip", label)?;
+                    updates.set_item("max_hours", max_hours)?;
+                    updates.set_item("description", description)?;
+                    updates.set_item("caveat", caveat)?;
+                    result.push(replace.call((entry,), Some(&updates))?.unbind());
+                }
+                let updates = PyDict::new(py);
+                updates.set_item("label", "Total QPF")?;
+                updates.set_item("chip", "Total QPF")?;
+                result.push(replace.call((entry,), Some(&updates))?.unbind());
+                continue;
+            }
+            if key == "pwat" {
+                let asnow = catalogue.getattr("FieldSpec")?.call1((
+                    "asnow",
+                    "sfc",
+                    "ASNOW",
+                    "surface",
+                    "0-* acc fcst",
+                ))?;
+                let snow_updates = PyDict::new(py);
+                snow_updates.set_item("key", "snow-1h")?;
+                snow_updates.set_item("label", "1-h Snowfall")?;
+                snow_updates.set_item("chip", "1-h Snow")?;
+                snow_updates.set_item("category", "Winter Weather")?;
+                snow_updates.set_item("fields", (asnow,))?;
+                snow_updates.set_item(
+                    "derive",
+                    catalogue
+                        .getattr("_single")?
+                        .call1(("asnow", catalogue.getattr("m_to_in")?))?,
+                )?;
+                snow_updates.set_item("palette", catalogue.getattr("PALETTE_SNOW_DEPTH")?)?;
+                snow_updates.set_item("max_hours", 1u32)?;
+                snow_updates.set_item(
+                    "description",
+                    "Accumulated snowfall over the hour ending at the selected forecast time, in inches.",
+                )?;
+                snow_updates.set_item(
+                    "caveat",
+                    "Computed from consecutive cumulative ASNOW fields (0-* acc fcst) in the reduced REFS member stream; available from F001.",
+                )?;
+                let snow_1h = replace.call((entry,), Some(&snow_updates))?.unbind();
+                result.push(product);
+                result.push(snow_1h);
+                continue;
+            }
+            if key == "sbcape" {
+                let sbcin_updates = PyDict::new(py);
+                sbcin_updates.set_item("key", "sbcin")?;
+                sbcin_updates.set_item("label", "Surface-Based CIN")?;
+                sbcin_updates.set_item("chip", "SBCIN")?;
+                sbcin_updates.set_item("category", "Instability")?;
+                sbcin_updates.set_item("fields", (catalogue.getattr("F_SBCIN")?,))?;
+                sbcin_updates
+                    .set_item("derive", catalogue.getattr("_single")?.call1(("sbcin",))?)?;
+                sbcin_updates.set_item("palette", catalogue.getattr("PALETTE_CIN")?)?;
+                sbcin_updates.set_item(
+                    "description",
+                    "Convective inhibition for a parcel lifted from the surface.",
+                )?;
+                sbcin_updates.set_item("caveat", "")?;
+                let sbcin = replace.call((entry,), Some(&sbcin_updates))?.unbind();
+
+                let palette_kwargs = PyDict::new(py);
+                palette_kwargs.set_item("stepped", true)?;
+                palette_kwargs.set_item("floor", py.None())?;
+                palette_kwargs.set_item("ticks", PyTuple::new(py, LCL_TICKS)?)?;
+                let lcl_palette = catalogue
+                    .getattr("Palette")?
+                    .call((PyTuple::new(py, lcl_stops())?, "m"), Some(&palette_kwargs))?;
+                let lcl_updates = PyDict::new(py);
+                lcl_updates.set_item("key", "lcl")?;
+                lcl_updates.set_item("label", "Surface-Based LCL Height")?;
+                lcl_updates.set_item("chip", "SBLCL")?;
+                lcl_updates.set_item("category", "Instability")?;
+                lcl_updates.set_item(
+                    "fields",
+                    (catalogue.getattr("F_TMP2M")?, catalogue.getattr("F_DPT2M")?),
+                )?;
+                lcl_updates.set_item("derive", wrap_pyfunction!(derive_refs_member_lcl, py)?)?;
+                lcl_updates.set_item("palette", lcl_palette)?;
+                lcl_updates.set_item(
+                    "description",
+                    "Lifting condensation level height above ground for a surface-based parcel, in metres.",
+                )?;
+                lcl_updates.set_item(
+                    "caveat",
+                    "Derived from 2-m temperature and dewpoint depression (125 m/K) from the reduced REFS member stream.",
+                )?;
+                let lcl = replace.call((entry,), Some(&lcl_updates))?.unbind();
+
+                result.push(product);
+                result.push(sbcin);
+                result.push(lcl);
+                continue;
+            }
+            if key == "ehi-0-1km" {
+                let updates = PyDict::new(py);
+                updates.set_item("label", "Energy Helicity Index (EHI): 0-1 km AGL")?;
+                updates.set_item(
+                    "fields",
+                    (
+                        catalogue.getattr("F_SBCAPE")?,
+                        catalogue.getattr("F_SRH01")?,
+                    ),
+                )?;
+                updates.set_item(
+                    "derive",
+                    wrap_pyfunction!(derive_refs_member_ehi_0_1km, py)?,
+                )?;
+                updates.set_item(
+                    "description",
+                    "Surface-based CAPE times 0-1 km SRH, scaled by 160000.",
+                )?;
+                updates.set_item(
+                    "caveat",
+                    "Uses surface-based CAPE and 0-1 km SRH from the reduced REFS member stream.",
+                )?;
+                result.push(replace.call((entry,), Some(&updates))?.unbind());
+                continue;
+            }
+            if key == "ehi-0-3km" {
+                let updates = PyDict::new(py);
+                updates.set_item("label", "Energy Helicity Index (EHI): 0-3 km AGL")?;
+                updates.set_item(
+                    "fields",
+                    (
+                        catalogue.getattr("F_SBCAPE")?,
+                        catalogue.getattr("F_SRH03")?,
+                    ),
+                )?;
+                updates.set_item(
+                    "derive",
+                    wrap_pyfunction!(derive_refs_member_ehi_0_3km, py)?,
+                )?;
+                updates.set_item(
+                    "description",
+                    "Surface-based CAPE times 0-3 km SRH, scaled by 160000.",
+                )?;
+                updates.set_item(
+                    "caveat",
+                    "Uses surface-based CAPE and 0-3 km SRH from the reduced REFS member stream.",
+                )?;
+                result.push(replace.call((entry,), Some(&updates))?.unbind());
+                continue;
+            }
+            if key == "scp" {
+                let updates = PyDict::new(py);
+                updates.set_item(
+                    "fields",
+                    (
+                        catalogue.getattr("F_SBCAPE")?,
+                        catalogue.getattr("F_SRH03")?,
+                        catalogue.getattr("F_USHR06")?,
+                        catalogue.getattr("F_VSHR06")?,
+                    ),
+                )?;
+                updates.set_item("derive", wrap_pyfunction!(derive_refs_member_scp, py)?)?;
+                updates.set_item(
+                    "description",
+                    "Surface-based CAPE, 0-3 km SRH and 0-6 km shear combined into a fixed-layer supercell composite.",
+                )?;
+                updates.set_item(
+                    "caveat",
+                    "Fixed-layer form using surface-based CAPE, 0-3 km SRH, and 0-6 km bulk shear from the reduced REFS member stream.",
+                )?;
+                result.push(replace.call((entry,), Some(&updates))?.unbind());
+                continue;
+            }
+            if key == "stp" {
+                let updates = PyDict::new(py);
+                updates.set_item(
+                    "fields",
+                    (
+                        catalogue.getattr("F_SBCAPE")?,
+                        catalogue.getattr("F_SBCIN")?,
+                        catalogue.getattr("F_TMP2M")?,
+                        catalogue.getattr("F_DPT2M")?,
+                        catalogue.getattr("F_SRH01")?,
+                        catalogue.getattr("F_USHR06")?,
+                        catalogue.getattr("F_VSHR06")?,
+                    ),
+                )?;
+                updates.set_item("derive", wrap_pyfunction!(derive_refs_member_stp, py)?)?;
+                updates.set_item(
+                    "caveat",
+                    "Fixed-layer form using surface-based CAPE and CIN, 2-m LCL height, 0-1 km SRH, and 0-6 km bulk shear from the reduced REFS member stream.",
+                )?;
+                result.push(replace.call((entry,), Some(&updates))?.unbind());
+                continue;
+            }
         }
         result.push(product);
     }

@@ -1,6 +1,6 @@
 [package]
 name = "sharpmod-weather"
-version = "3.9.0"
+version = "3.10.0"
 edition = "2021"
 rust-version = "1.88"
 publish = false
@@ -14,7 +14,7 @@ bzip2 = "=0.6.1"
 csv = "=1.4.0"
 flate2 = "=1.1.10"
 geographiclib-rs = { version = "=0.2.7", default-features = false }
-hdf5-reader = { version = "=0.12.1", default-features = false }
+hdf5-reader = { version = "=0.13.0", default-features = false }
 i_overlay = "=4.0.7"
 log = "0.4.34"
 image-webp = "=0.2.4"
@@ -22,7 +22,7 @@ png = "=0.18.1"
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider", "system-proxy"] }
 rustls = { version = "=0.23.46", default-features = false, features = ["ring"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
 time = { version = "0.3.55", features = ["parsing", "formatting"] }
 tokio = { version = "1.53.3", features = ["sync", "time", "macros", "rt-multi-thread"] }
 

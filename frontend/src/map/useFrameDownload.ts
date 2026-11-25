@@ -5,7 +5,7 @@ import { useBackendClient } from "../lib/backend/BackendProvider";
 import { useForecastStore } from "../stores/forecastStore";
 import { contourQueryOptions } from "./contourQueries";
 import { fieldQueryOptions, useMapCatalog } from "./mapQueries";
-import { useDrawnProducts } from "./panelField";
+import { useDrawnFields } from "./panelField";
 import { queryFrame } from "./queryFrame";
 import { forecastHourMemory, idleForecastHourMemory } from "./forecastHourMemory";
 
@@ -16,7 +16,7 @@ const NO_HOURS: readonly number[] = [];
 /** Load the entire selected run through the normal field and disk caches. */
 export function useFrameDownload(watchHours = true) {
   const context = useForecastContext();
-  const drawnProducts = useDrawnProducts();
+  const drawnProducts = useDrawnFields();
   const catalogQuery = useMapCatalog();
   const checkingProducts = catalogQuery.isPending || catalogQuery.isPlaceholderData;
   const client = useBackendClient();
@@ -28,8 +28,8 @@ export function useFrameDownload(watchHours = true) {
   const run = context?.run;
   const forecastHours = context?.hours ?? NO_HOURS;
   const scope = JSON.stringify([model, run, forecastHours]);
-  const nextKey = JSON.stringify([scope, drawnProducts.map((p) =>
-    `${p.key}/${String(p.minimumForecastHour)}/${String(p.contour !== null || p.wind)}`).sort()]);
+  const nextKey = JSON.stringify([scope, drawnProducts.map(({ product, key }) =>
+    `${key}/${String(product.minimumForecastHour)}/${String(product.contour !== null || product.wind)}`).sort()]);
   const [selection, setSelection] = useState({ scope, key: nextKey, products: drawnProducts, hours: forecastHours });
   if (selection.scope !== scope || !checkingProducts && selection.key !== nextKey) {
     setSelection({ scope, key: nextKey, products: drawnProducts, hours: forecastHours });
@@ -37,14 +37,14 @@ export function useFrameDownload(watchHours = true) {
   // Checking another hour must not replace the active queue's verified selection.
   const key = checkingProducts && selection.scope === scope ? selection.key : nextKey;
   const products = checkingProducts && selection.scope === scope ? selection.products : drawnProducts;
-  const minimumForecastHour = Math.max(0, ...products.map((product) => product.minimumForecastHour));
+  const minimumForecastHour = Math.max(0, ...products.map(({ product }) => product.minimumForecastHour));
   const hours = context?.hours.filter((hour) => hour >= minimumForecastHour) ?? [];
   const current = status?.key === key ? status : null;
   const total = hours.length;
   const loaded = (current?.done ?? 0) - (current?.failed.length ?? 0);
   const running = current?.running === true;
   const saved = useQuery({ queryKey: ["forecast-cache", key],
-    queryFn: () => client.getCachedForecastHours(context?.model.key ?? "hrrr", products.map((product) => product.key), context?.run ?? "", hours),
+    queryFn: () => client.getCachedForecastHours(context?.model.key ?? "hrrr", products.map((entry) => entry.key), context?.run ?? "", hours),
     enabled: context !== null && products.length > 0, retry: false, refetchInterval: running ? 1500 : 30_000 });
   const cached = saved.data ?? [];
   const started = current !== null || cached.length > 0;
@@ -72,11 +72,12 @@ export function useFrameDownload(watchHours = true) {
   const { refetch } = saved;
   useEffect(() => { if (done >= 0 && !running) void refetch(); }, [running, done, refetch]);
 
-  const loadHour = (hour: number, staleTime: number, signal: AbortSignal) => Promise.allSettled(context === null ? [] : products.flatMap((product) => {
-    const request = { model: context.model.key, product: product.key, runTime: context.run, forecastHour: hour };
+  const loadHour = (hour: number, staleTime: number, signal: AbortSignal) => Promise.allSettled(context === null ? [] : products.flatMap(({ product, key: productKey }) => {
+    const request = { model: context.model.key, product: productKey, runTime: context.run, forecastHour: hour };
+    const contourRequest = { model: context.model.key, product: product.key, runTime: context.run, forecastHour: hour };
     return [
       queryFrame(queryClient, { ...fieldQueryOptions(client, queryClient, request), staleTime }, signal),
-      ...(product.contour !== null || product.wind ? [queryFrame(queryClient, { ...contourQueryOptions(client, queryClient, request), staleTime }, signal)] : []),
+      ...(product.contour !== null || product.wind ? [queryFrame(queryClient, { ...contourQueryOptions(client, queryClient, contourRequest), staleTime }, signal)] : []),
     ];
   }));
 
@@ -89,7 +90,7 @@ export function useFrameDownload(watchHours = true) {
       await queryClient.invalidateQueries({ refetchType: "none", predicate: (query) => {
         const [kind, product, run, frameHour, model] = query.queryKey;
         return (kind === "fields" || kind === "contours") && run === context.run && frameHour === hour && model === context.model.key
-          && products.some((item) => item.key === product) && query.state.status === "error";
+          && products.some((item) => item.key === product || item.product.key === product) && query.state.status === "error";
       } });
       const results = await loadHour(hour, Number.POSITIVE_INFINITY, job.signal);
       if (job.signal.aborted) return;

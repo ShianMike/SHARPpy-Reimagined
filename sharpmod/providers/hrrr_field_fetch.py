@@ -50,6 +50,18 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
         return sharpmod_rs.download_rdps_map_fields(
             product, run, fxx, timeout, should_cancel, _api._RANGE_WORKERS,
         )
+    if model == "hrdps":
+        import sharpmod_rs
+
+        return sharpmod_rs.download_hrdps_map_fields(
+            product, run, fxx, timeout, should_cancel, _api._RANGE_WORKERS,
+        )
+    if model == _api.ICON_MODEL:
+        import sharpmod_rs
+
+        return sharpmod_rs.download_icon_map_fields(
+            product, run, fxx, timeout, should_cancel, _api._RANGE_WORKERS,
+        )
     native = opener is _NATIVE_OPENER
     if native:
         import sharpmod_rs
@@ -68,6 +80,9 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     eccodes = _api._load_eccodes()
     decoded: dict[str, np.ndarray] = {}
     nam_total = model in {"nam", "nam-3km-conus"} and product.key == "apcp"
+    hourly_sum = product.key.startswith("qpf-")
+    hourly_diff = product.key == "snow-1h"
+    window = fxx if product.key in {"uh-0-3km-run", "uh-2-5km-run"} else product.max_hours
 
     # Plan every range across both files first, so they can all go out together
     # rather than one file's requests waiting on the other's.
@@ -75,15 +90,21 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     # NAM products reset their accumulated totals; sum disjoint three-hour intervals.
     if nam_total:
         sources = tuple((SOURCE_SURFACE, hour) for hour in (*range(3, fxx, 3), fxx))
-    elif product.max_hours:
-        sources = tuple((SOURCE_SURFACE, hour) for hour in range(fxx - product.max_hours + 1, fxx + 1))
+    elif hourly_diff:
+        sources = ((SOURCE_SURFACE, 1),) if fxx == 1 else ((SOURCE_SURFACE, fxx - 1), (SOURCE_SURFACE, fxx))
+    elif window:
+        sources = tuple((SOURCE_SURFACE, hour) for hour in range(fxx - window + 1, fxx + 1))
     else:
         sources = ((SOURCE_SURFACE, fxx), (SOURCE_PRESSURE, fxx))
     for source, hour in sources:
         specs = [spec for spec in product.all_fields if spec.source == source]
         if nam_total:
             specs = [replace(spec, forecast=f"{(hour - 1) // 3 * 3}-{hour} hour acc fcst") for spec in specs]
-        if product.max_hours:
+        elif hourly_diff:
+            pass
+        elif hourly_sum and window:
+            specs = [replace(spec, forecast=f"{hour - 1}-{hour} hour acc fcst") for spec in specs]
+        elif window:
             specs = [replace(spec, forecast=f"{hour - 1}-{hour} hour max fcst") for spec in specs]
         if not specs:
             continue
@@ -166,9 +187,15 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
                 raise _api.HrrrFieldUnavailable(f"{model} returned an incomplete GRIB byte range")
             values = _api.decode_message(payload[begin:finish], eccodes,
                                          field_index=row.field_index, model=model)
-            if nam_total and name in decoded:
+            if hourly_diff and name in decoded:
+                decoded[name] = np.where(
+                    np.isnan(decoded[name]) | np.isnan(values),
+                    np.nan,
+                    np.maximum(values - decoded[name], 0.0),
+                )
+            elif (nam_total or hourly_sum) and name in decoded:
                 decoded[name] += values
-            elif product.max_hours and name in decoded:
+            elif window and name in decoded:
                 np.maximum(decoded[name], values, out=decoded[name])
             else:
                 decoded[name] = values

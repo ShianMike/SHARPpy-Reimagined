@@ -4,7 +4,7 @@ import { fieldQueryOptions, type FrameRequest } from "../../map/mapQueries";
 import { mapCatalogQueryOptions } from "../../map/catalogQuery";
 import { contourQueryOptions } from "../../map/contourQueries";
 import { forecastOverlayLoads } from "../../map/forecastOverlayLoads";
-import { fieldAuxiliaries } from "../../map/panelField";
+import { fieldAuxiliaries, productOf } from "../../map/panelField";
 import { prepareFieldImage } from "../../map/fieldImages";
 import { buildLut } from "../../map/field/colourize";
 import { trackForecastDrawingCapture } from "../../map/forecastDrawing/forecastDrawingCapture";
@@ -20,12 +20,14 @@ import { composeForecast, type ForecastComposition } from "./forecastComposition
 export interface ForecastExportOptions extends ForecastComposition {
     context: ForecastContext;
     panel: number;
+    productKey?: string;
     hours: readonly number[];
     delay: number;
     format?: "gif" | "png" | "webp";
     panels?: readonly {
         panel: number;
         product: FieldProduct;
+        productKey?: string;
     }[];
 }
 export interface ExportProgress {
@@ -39,7 +41,7 @@ export function forecastExportFilename(options: ForecastExportOptions): string {
     const label = (hour: number) => `f${String(hour).padStart(3, "0")}`;
     const hours = options.format === "png" ? label(options.hours[0] ?? 0) : `${label(options.hours[0] ?? 0)}-${label(options.hours.at(-1) ?? 0)}`;
     const count = options.panels?.length ?? 1;
-    const product = count > 1 ? `layout-${String(count)}` : options.product.key;
+    const product = count > 1 ? `layout-${String(count)}` : (options.productKey ?? options.product.key);
     return `sharppy-${options.context.model.key}-${product}-${run}-${hours}.${options.format ?? "gif"}`.replace(/[^a-zA-Z0-9._-]/g, "-");
 }
 /** All selected panels and hours exist as lossless PNGs before encoding begins. */
@@ -50,7 +52,7 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
         throw new Error("Select at least two forecast hours.");
     if (!animated && options.hours.length !== 1)
         throw new Error("Select one forecast hour for a PNG.");
-    const panels = options.panels ?? [{ panel: options.panel, product: options.product }];
+    const panels = options.panels ?? [{ panel: options.panel, product: options.product, ...(options.productKey === undefined ? {} : { productKey: options.productKey }) }];
     if (![1, 2, 4].includes(panels.length))
         throw new Error("Choose one panel or a complete two- or four-panel layout.");
     const sources = panels.map(part => {
@@ -75,17 +77,18 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
         }
     };
     const load = async (part: typeof panels[number], hour: number, loadSignal: AbortSignal, keepUntil?: AbortSignal) => {
-        const request: FrameRequest = { model: options.context.model.key, product: part.product.key, runTime: options.run, forecastHour: hour };
+        const requestKey = part.productKey ?? part.product.key;
+        const request: FrameRequest = { model: options.context.model.key, product: requestKey, runTime: options.run, forecastHour: hour };
         const catalog = await queryFrame(queryClient, mapCatalogQueryOptions(client, request.model, request.runTime, hour), loadSignal, { keepUntil });
-        const product = catalog.products.find(p => p.key === part.product.key);
-        if (catalog.fieldModel !== request.model || product === undefined || hour < product.minimumForecastHour)
+        const product = productOf(catalog, requestKey, part.panel);
+        if (catalog.fieldModel !== request.model || product === null || hour < product.minimumForecastHour)
             throw new Error(`Panel ${String(part.panel + 1)} does not offer ${part.product.label} at F${String(hour).padStart(3, "0")}.`);
         const pressureAvailable = catalog.products.some(product => product.key === "mslp");
         if (panelLayers(originalMap, part.panel).isobars.visible && !pressureAvailable)
             throw new Error(`Panel ${String(part.panel + 1)} cannot load its enabled isobars at F${String(hour).padStart(3, "0")}.`);
         const [frame] = await Promise.all([
             queryFrame(queryClient, fieldQueryOptions(client, queryClient, request), loadSignal, { keepUntil }),
-            ...(fieldAuxiliaries(product) ? [queryFrame(queryClient, contourQueryOptions(client, queryClient, request), loadSignal, { keepUntil })] : []),
+            ...(fieldAuxiliaries(product) ? [queryFrame(queryClient, contourQueryOptions(client, queryClient, { ...request, product: product.key }), loadSignal, { keepUntil })] : []),
             ...forecastOverlayLoads(client, queryClient, originalMap, part.panel, request, pressureAvailable, loadSignal, keepUntil),
         ]);
         return { request, frame };

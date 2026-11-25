@@ -19,6 +19,7 @@ import { SourceSelect } from "./SourceFields";
 import { useSoundingView } from "./useSoundingView";
 import { useSoundingLocator } from "./useSoundingLocator";
 import { replaceValues } from "./viewHistory";
+import { SoundingRenderStatus, type SoundingRenderPhase } from "./SoundingRenderStatus";
 import styles from "./Viewer.module.css";
 
 export function SoundingImage({ soundingId, choice, title, timeControl, navigation, controlsTarget, timeIndex = 0 }: { soundingId: string; choice: RenderChoice; title: string; timeControl?: ReactNode; navigation?: ReactNode; controlsTarget?: HTMLDivElement | null; timeIndex?: number }): ReactNode {
@@ -50,6 +51,8 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
     return convertUnit(v.value, v.unit, unit).toFixed(1) + " " + unit;
   }).join(", ")}`) : [], [data?.points, units, editing]);
   const unavailable = busy || image.isError;
+  const statusPhase: SoundingRenderPhase | null = busy ? (data === undefined ? "initial" : edit.isPending ? "recalculating" : "updating")
+    : data !== undefined && locatorImage.pending ? "refining" : null;
   const allHeightCharts = (state.options.panel ?? data?.selection.panel) === "HEIGHT CHARTS";
   const allHeightChoice = data?.options.find((group) => group.key === "panel")?.choices.find((option) => option.key === "HEIGHT CHARTS");
   const levelIndex = inspected?.image === data?.image ? inspected?.index ?? 0 : 0;
@@ -283,7 +286,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
           </div> : null}
         </div>
       </div>
-      {busy ? <div className={styles.rendering} data-motion="fade" role="status">{data === undefined ? "Rendering sounding image…" : edit.isPending ? "Recalculating profile…" : "Rendering updated sounding…"}</div> : null}
+      {statusPhase === null ? null : <SoundingRenderStatus phase={statusPhase} overImage={data !== undefined} />}
       {image.isError || edit.isError ? <div className={styles.failure} data-retained={data !== undefined}><SoundingErrorNotice error={edit.error ?? image.error} operation="render_sounding_view" onRetry={() => { if (edit.variables) edit.mutate(edit.variables); else void image.refetch(); }} busy={busy} testId="render-error" /></div> : null}
     </div>
     {!inspecting ? null : <>

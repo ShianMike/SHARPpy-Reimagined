@@ -221,23 +221,31 @@ it("lays out details across the date line and excludes far-side detail candidate
   expect(wider.find((layer) => layer.id === SURFACE_MARKERS_LAYER_ID)?.props.data).toBe(plots);
 });
 
-it("retains regional status glyphs and stacks their details above Live Tracking alerts", () => {
+it("retains global surface markers at low zoom and stacks details above Live Tracking alerts when zoomed in", () => {
   useAppStore.getState().setActiveWorkspace("live");
   useMapStore.getState().setLayerVisible("surface-plots", true);
   useMapStore.getState().setLayerVisible("warnings", true);
   const { scene, render } = setup();
   const plots = regionalPlots.map((plot, index) => ({ ...plot, longitude: -110 + index, latitude: 35 }));
   scene.setData({ surfacePlots: plots, alerts: parseWeatherAlerts(alertFixture).alerts });
+  let zoom = 3;
   const map = {
     getBounds: () => ({ getWest: () => -111, getEast: () => -104, getSouth: () => 34, getNorth: () => 36 }),
     getCanvas: () => ({ clientWidth: 800, clientHeight: 600 }),
-    getZoom: () => 3, getBearing: () => 0, getPitch: () => 0,
+    getZoom: () => zoom, getBearing: () => 0, getPitch: () => 0,
     project: ([lon]: [number, number]) => ({ x: 100 + (lon + 110) * 120, y: 150 }),
   } as unknown as MapLibreMap;
+  const lowZoom = render(map);
+  const lowIds = lowZoom.map((layer) => layer.id);
+  expect(lowIds.indexOf("warnings")).toBeGreaterThanOrEqual(0);
+  expect(lowIds.indexOf(SURFACE_MARKERS_LAYER_ID)).toBeGreaterThan(lowIds.indexOf("warnings"));
+  expect(marks(lowZoom)).toHaveLength(0);
+
+  zoom = 5;
   const layers = render(map);
   const ids = layers.map((layer) => layer.id);
-  expect(ids).not.toContain(SURFACE_MARKERS_LAYER_ID);
   expect(ids.indexOf("warnings")).toBeGreaterThanOrEqual(0);
+  expect(ids.indexOf(SURFACE_MARKERS_LAYER_ID)).toBeGreaterThan(ids.indexOf("warnings"));
   expect(ids.indexOf(SURFACE_LAYER_ID)).toBeGreaterThan(ids.indexOf("warnings"));
   expect(new Set(marks(layers).map(({ plot }) => plot))).toEqual(new Set(plots));
   const glyphs = (id: string) => marks(layers).filter(({ plot }) => plot.id === id).map(({ mark }) => mark.text);

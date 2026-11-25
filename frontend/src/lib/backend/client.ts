@@ -3,18 +3,11 @@ import type { BackendHealth, BridgeStatus, StationCatalog } from "../../types/co
 import { ContractError } from "../contracts/guards";
 import { parseBackendHealth, parseBridgeStatus } from "../contracts/health";
 import { parseModelStatus } from "../contracts/modelStatus";
-import {
-  parseModelCatalog,
-  parsePng,
-  parseSoundingAnalysis,
-  parseSoundingSummary,
-  parseSoundingProgress,
-  parseWrfFile,
-} from "../contracts/soundings";
+import { parseModelCatalog, parsePng, parseSoundingAnalysis, parseSoundingProgress, parseSoundingSummary, parseWrfFile } from "../contracts/soundings";
 import { parseContourLines } from "../contracts/contours";
 import { parseForecastDrawing } from "../contracts/forecastDrawing";
 import { parseFieldFrame, parseRadarFrame, parseRadarSiteFrame, parseSatelliteFrame } from "../contracts/frames";
-import { parseAvailabilityReport, parseMapCatalog, parsePlaceLabels, parseRadarSiteCatalog, parseRadarTilts, parseSpcOutlook } from "../contracts/map";
+import { parseAvailabilityReport, parseMapCatalog, parsePlaceLabels, parseRadarSiteCatalog, parseRadarTilts, parseSpcOutlook, parseWpcOutlook } from "../contracts/map";
 import { parseReportOptions, parseStormReports } from "../contracts/reports";
 import { parseLatestSurfacePlots, parseSurfacePlots } from "../contracts/surface";
 import { parseSpotterPositions } from "../contracts/spotters";
@@ -23,18 +16,15 @@ import type { WeatherAlerts } from "../../types/weatherAlerts";
 import { parseStationCatalog } from "../contracts/stations";
 import { parseThresholdEvaluation, thresholdArgs } from "../contracts/thresholds";
 import { parseThresholdCsv, parseThresholdMetrics } from "../contracts/thresholdCatalog";
-import type { AvailabilityReport, ContourLines, FieldFrame, MapCatalog, OutlookDay, OutlookProductKey, PlaceLabels, RadarFrame, RadarSiteCatalog, RadarSiteFrame, RadarTilts, ReportOptions, SatelliteFrame, SatelliteChannel, SpcOutlook, StormReports } from "../../types/map";
+import type {
+  AvailabilityReport, ContourLines, FieldFrame, MapCatalog, OutlookDay, OutlookProductKey, PlaceLabels,
+  RadarFrame, RadarSiteCatalog, RadarSiteFrame, RadarTilts, ReportOptions, SatelliteChannel, SatelliteFrame,
+  SpcOutlook, StormReports, WpcOutlook, WpcProduct,
+} from "../../types/map";
 import type { ForecastDrawingResult, ForecastPolygon, ForecastProduct } from "../../types/forecastDrawing";
 import type { SurfacePlots } from "../../types/surface";
-import type {
-  ThresholdCsv,
-  ThresholdEvaluation,
-  ThresholdEvaluationRequest,
-  ThresholdMetrics,
-} from "../../types/thresholds";
-import type {
-  ImageMode, ModelCatalog, ModelStatus, OpenSoundingRequest, RenderChoice, SoundingAnalysis, SoundingSummary, SoundingProgress, SoundingColorStyle, WrfFile,
-} from "../../types/soundings";
+import type { ThresholdCsv, ThresholdEvaluation, ThresholdEvaluationRequest, ThresholdMetrics } from "../../types/thresholds";
+import type { ImageMode, ModelCatalog, ModelStatus, OpenSoundingRequest, RenderChoice, SoundingAnalysis, SoundingSummary, SoundingProgress, SoundingColorStyle, WrfFile } from "../../types/soundings";
 import { MARKS, markOnce } from "../metrics";
 import type { CacheClearResult, CacheTarget, StorageUsage } from "../../types/storage";
 import { parseCachedHours, parseCacheClearResult, parseStorageUsage } from "../contracts/storage";
@@ -149,6 +139,10 @@ export class BackendClient {
 
   getSpcOutlook(product: OutlookProductKey, validTime: string, signal?: AbortSignal, day?: OutlookDay): Promise<SpcOutlook> {
     return this.request("get_spc_outlook", parseSpcOutlook, { product, validTime, ...(day === undefined ? {} : { day }) }, signal);
+  }
+
+  getWpcOutlook(validTime: string, signal?: AbortSignal, day?: OutlookDay, product: WpcProduct = "ero"): Promise<WpcOutlook> {
+    return this.request("get_wpc_outlook", parseWpcOutlook, { validTime, ...(day === undefined ? {} : { day }), ...(product === "ero" ? {} : { product }) }, signal);
   }
 
   buildForecastDrawing(product: ForecastProduct, polygons: readonly ForecastPolygon[], signal?: AbortSignal): Promise<ForecastDrawingResult> {

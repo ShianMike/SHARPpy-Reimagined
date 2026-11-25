@@ -69,13 +69,13 @@ describe("SoundingWorkspace", () => {
     await userEvent.upload(screen.getByLabelText("File", { selector: "input" }), file);
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     await screen.findByTestId("sounding-image");
-    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Sounding time (UTC)" }));
     expect(screen.getAllByRole("option")).toHaveLength(49);
     await userEvent.keyboard("{End}{Enter}");
     await waitFor(() => { expect(transport.calls.some((call) => call.command === "render_sounding_view" && (call.args as { view?: ViewRequest }).view?.timeIndex === 48)).toBe(true); });
     expect(screen.getByTestId("sounding-viewer").getAttribute("aria-description")).toContain("time 49 of 49");
-    await userEvent.click(screen.getByRole("button", { name: "Show sounding sources" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Sources" }));
     const list = within(screen.getByTestId("open-soundings"));
     expect(list.getByText("06-27 06Z").getAttribute("datetime")).toBe("2026-06-27T06:00:00Z");
   });
@@ -87,7 +87,7 @@ describe("SoundingWorkspace", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Station" }), "72357");
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     await screen.findByTestId("sounding-image");
-    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
     await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
     const formatted = formatUnit.mock.calls.length;
     expect(formatted).toBeGreaterThan(0);
@@ -115,7 +115,7 @@ describe("SoundingWorkspace", () => {
     workspace.view.unmount();
     renderWithBackend(<SoundingWorkspace />, transport);
     await screen.findByTestId("sounding-image");
-    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
     expect(screen.getByRole("combobox", { name: "Undo history" }).textContent).toContain("1 edited level");
     expect(transport.calls.filter((call) => call.command === "render_sounding_view").every((call) => (call.args as Record<string, unknown>).imageMode === "uhd")).toBe(true);
   });
@@ -179,7 +179,7 @@ describe("SoundingWorkspace", () => {
     expect(String(request.request.time)).toMatch(/^\d{4}-\d\d-\d\dT(00|12):00:00Z$/u);
     expect(screen.getByTestId("sounding-title").textContent).toBe("72357 (example data)");
     expect(within(screen.getByTestId("open-soundings")).getAllByRole("listitem")).toHaveLength(1);
-    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
     expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("details")).toBeNull();
     expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("header")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "ML" }));

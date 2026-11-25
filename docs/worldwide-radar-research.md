@@ -240,8 +240,8 @@ licence metadata during this check. Per-item availability and units must be
 read from and checked against the actual file; one response advertised
 inconsistent unit metadata for DBZH.
 
-The implementation uses pure-Rust `hdf5-reader` 0.12.1, which declares Rust
-1.81 and supports bounded reads; the project's minimum is 1.88. The alternative
+The implementation uses pure-Rust `hdf5-reader` 0.13.0, which declares Rust
+1.85 and supports bounded reads; the project's minimum is 1.88. The alternative
 `hdf5-no-c` 0.1.1 failed on the Hurum sample's 4-byte HDF5 offsets. These are
 sample-specific results, not a comprehensive comparison. Sweeps with more than
 254 distinct finite values store a compressed 16-bit gate lookup alongside the

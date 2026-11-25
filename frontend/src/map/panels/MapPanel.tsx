@@ -59,7 +59,8 @@ function PanelChip({ panel, layout, field }: { panel: number; layout: PanelLayou
   const active = useMapStore((state) => state.activePanel === panel);
   const context = useForecastContext();
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
-  const name = field.product?.label ?? "Model field";
+  const name = field.product === null ? "Model field"
+    : field.variant === null ? field.product.label : `${field.product.shortLabel} · ${field.variant.label}`;
   const status = fieldStatus(field);
   if (layout === 1) {
     return null;
@@ -94,7 +95,7 @@ function PanelChip({ panel, layout, field }: { panel: number; layout: PanelLayou
           : null}
       </div>
       <Popover id={`panel-${String(panel)}-parameters`} open={anchor !== null} movable unframed anchor={anchor} onClose={() => { setAnchor(null); }} role="dialog" label="Parameters" initialFocus="first" align="start" width="content" className={pickerStyles.parameterPicker}>
-        {field.catalog.data === undefined ? null : <ParameterPicker products={field.catalog.data.products} selected={field.product?.key ?? null} anchor={anchor} onClose={() => { setAnchor(null); }} />}
+        {field.catalog.data === undefined ? null : <ParameterPicker products={field.catalog.data.products} selected={field.variant?.key ?? field.product?.key ?? null} anchor={anchor} onClose={() => { setAnchor(null); }} />}
       </Popover>
     </>
   );

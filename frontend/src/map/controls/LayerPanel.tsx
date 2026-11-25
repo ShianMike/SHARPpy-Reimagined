@@ -19,6 +19,7 @@ import { FieldControls } from "./FieldControls";
 import { LayerRow } from "./LayerRow";
 import { WeatherLegend } from "./WeatherLegend";
 import { DomainStatus, OutlookStatus, PlaceStatus, RadarControls, SatelliteControls } from "./OverlayControls";
+import { WpcOutlookControls } from "./WpcOutlookControls";
 import { ReportControls } from "./ReportControls";
 import { SurfacePlotControls } from "./SurfacePlotControls";
 import { SpotterNetworkStatus } from "./SpotterNetworkStatus";
@@ -68,6 +69,10 @@ function WeatherExtra({ id, panel }: { id: OrderableLayerId; panel: number }): R
       return <SurfacePlotControls />;
     case "spotter-network":
       return <SpotterNetworkStatus />;
+    case "wpc-ero":
+      return <WpcOutlookControls panel={panel} kind="ero" />;
+    case "wpc-winter":
+      return <WpcOutlookControls panel={panel} kind="winter" />;
     default:
       return <OutlookStatus panel={panel} product={id.slice("spc-".length) as "cat" | "torn" | "wind" | "hail"} />;
   }
@@ -95,6 +100,8 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
     ORDERABLE.has(id) && layerInView(id, live ? "live" : "map") && (id !== "spotter-network" || showSpotters));
   const active = topFirst.filter((id) => states[id].visible);
   const available = topFirst.filter((id) => !states[id].visible);
+  const mapDetailLayers = MAP_LAYERS.filter((layer) => layerInView(layer.id, live ? "live" : "map") && (!live || layer.id !== "model-domain"));
+  const enabledMapDetails = mapDetailLayers.filter((layer) => states[layer.id].visible).length;
   const selectedId = expandedWeather?.panel === panel && active.includes(expandedWeather.id) ? expandedWeather.id : null;
   const selectedLayer = selectedId === null ? undefined : descriptor(selectedId);
   const closeEditor = (id: OrderableLayerId): void => {
@@ -143,7 +150,7 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
           {active.map((id, index) => {
             const layer = descriptor(id);
             return layer === undefined ? null : (
-                <LayerRow key={id} layer={layer} state={states[id]} order={{ id, fromTop: index, count: active.length }}
+                <LayerRow key={id} variant="stack" layer={layer} state={states[id]} order={{ id, fromTop: index, count: active.length }}
                   disclosure={{ targetId: editorId, expanded: selectedId === id, onChange: (expanded) => {
                     const trigger = document.activeElement;
                     setExpandedWeather((current) => expanded ? { panel, id } : current?.panel === panel && current.id === id ? null : current);
@@ -156,14 +163,19 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
             <h3 className={styles.group}>Add layers <span>{available.length} available</span></h3>
             <div className={styles.layerList}>{available.map((id) => {
               const layer = descriptor(id);
-              return layer === undefined ? null : <LayerRow key={id} layer={layer} state={states[id]} />;
+              return layer === undefined ? null : <LayerRow key={id} variant="stack" layer={layer} state={states[id]} />;
             })}{available.length === 0 ? <p className={styles.hint}>All weather layers are on the map.</p> : null}</div>
           </section>
           </div>
           <section id={editorId} className={styles.layerEditor} aria-label="Layer settings">
-            {selectedLayer === undefined || selectedId === null ? <div className={styles.editorEmpty}><Settings2 className="icon" aria-hidden="true" /><h3>Choose a layer</h3><p>Select an on-map layer to adjust its settings.</p></div> : <>
+            {selectedLayer === undefined || selectedId === null ? <div className={styles.editorEmpty}>
+              <span className={styles.editorEmptyIcon} aria-hidden="true"><Settings2 className="icon" /></span>
+              <h3>Choose a layer</h3>
+              <p>Select an on-map layer to adjust its settings.</p>
+            </div> : <>
               <header className={styles.editorHeading}>
                 <Action className={styles.editorBack} onClick={() => { closeEditor(selectedId); }}><ArrowLeft className="icon-sm" aria-hidden="true" />Layers</Action>
+                <span className={styles.editorDot} aria-hidden="true" />
                 <h3 id={`${editorId}-heading`} tabIndex={-1}>{selectedLayer.label}</h3>
                 <IconAction className={styles.editorClose} icon={X} size="sm" label="Close layer settings" onClick={() => { closeEditor(selectedId); }} />
               </header>
@@ -184,9 +196,9 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
                 onClick={() => { useMapStore.getState().setProjection(value); }}>{value === "globe" ? "Globe" : "Flat map"}</button>)}
             </div>}
           </div>
-          <h3 className={styles.group}>Map details</h3>
-          <div className={styles.mapDetails}>{MAP_LAYERS.filter((layer) => layerInView(layer.id, live ? "live" : "map") && (!live || layer.id !== "model-domain")).map((layer) => (
-            <LayerRow key={layer.id} layer={layer} state={states[layer.id]}>
+          <h3 className={styles.group}>Map details <span>{`${String(enabledMapDetails)} of ${String(mapDetailLayers.length)} on`}</span></h3>
+          <div className={styles.mapDetails}>{mapDetailLayers.map((layer) => (
+            <LayerRow key={layer.id} variant="card" layer={layer} state={states[layer.id]}>
               {MAP_EXTRA[layer.id] ?? null}
             </LayerRow>
           ))}</div>

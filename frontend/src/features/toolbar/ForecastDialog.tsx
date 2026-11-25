@@ -1,34 +1,43 @@
-import { CalendarDays, ChevronLeft, ChevronRight, GripHorizontal, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, GripHorizontal, Search, X } from "lucide-react";
 import { useId, useState, type CSSProperties, type ReactNode } from "react";
 import { useForecastStore } from "../../stores/forecastStore";
-import { Action, IconAction } from "../../ui/Controls";
+import { IconAction } from "../../ui/Controls";
 import type { useFrameDownload } from "../../map/useFrameDownload";
 import { ForecastDownloads } from "../timeline/ForecastDownloads";
 import type { ForecastContext } from "../forecast/useForecast";
+import type { ForecastModel } from "../../types/soundings";
 import { addHours, compactUtc, forecastLabel, formatUtc, releaseTime, resolveModelRun, utcDate } from "../sounding/soundingTime";
-import { MODEL_REGIONS, modelRegion } from "../sounding/soundingQueries";
+import { isNamArchive, MODEL_REGIONS, modelRegion, NAM_ARCHIVE_NOTICE } from "../sounding/soundingQueries";
 import styles from "./ForecastControls.module.css";
 import { RunCalendar } from "./RunCalendar";
 
 export type ForecastStep = "model" | "run" | "hour";
 export const FORECAST_TITLES = { model: "Forecast model", run: "Model run", hour: "Forecast hour" } as const;
+const MODEL_CATEGORIES = [...MODEL_REGIONS, "Ensemble"] as const;
+
+function modelCategory(model: ForecastModel): (typeof MODEL_CATEGORIES)[number] {
+  return model.key === "refs" || model.key.startsWith("refs-m") ? "Ensemble" : modelRegion(model);
+}
 
 export function ForecastDialog({ context, step, anchor, download, onClose }: {
   context: ForecastContext; step: ForecastStep; anchor: HTMLElement | null; download: ReturnType<typeof useFrameDownload>; onClose: () => void;
 }): ReactNode {
   const [query, setQuery] = useState("");
-  const [selectedRegion, setSelectedRegion] = useState(() => modelRegion(context.model));
-  const regionName = useId();
+  const [selectedCategory, setSelectedCategory] = useState(() => modelCategory(context.model));
+  const categoryName = useId();
+  const archiveNoticeId = useId();
   const [date, setDate] = useState(context.run.slice(0, 10));
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const archivedModel = isNamArchive(context.model.key);
+  const showRunNotice = archivedModel || !calendarOpen;
   const closeCalendar = (): void => { setCalendarOpen(false); document.getElementById("forecast-run-date")?.focus(); };
   const newestDate = (context.model.recentRuns[0] ?? context.model.suggestedRun).slice(0, 10);
   const day = releaseTime(date, 0);
   const validDate = day !== null && date >= "0001-01-01" && date <= newestDate;
   const searching = query.trim().length > 0;
   const models = context.models.filter((model) => searching
-    ? `${model.label} ${model.domain} ${modelRegion(model)}`.toLowerCase().includes(query.trim().toLowerCase())
-    : modelRegion(model) === selectedRegion);
+    ? `${model.label} ${model.domain} ${modelCategory(model)}`.toLowerCase().includes(query.trim().toLowerCase())
+    : modelCategory(model) === selectedCategory);
   const days = new Map<string, number[]>();
   const hourStates = new Map(download.hourStates.map(({ hour, state }) => [hour, state] as const));
   for (const hour of context.hours) {
@@ -44,42 +53,80 @@ export function ForecastDialog({ context, step, anchor, download, onClose }: {
   return <>
     <header className={styles.dialogHeader} data-popover-drag><IconAction icon={GripHorizontal} size="sm" label="Move popup" data-popover-move aria-description="Drag to move. Arrow keys move the popup; Home centers it on the screen." /><h2>{FORECAST_TITLES[step]}</h2>{step === "model" ? null : <span className={styles.badge}>{context.model.label}</span>}<IconAction icon={X} size="sm" label="Close forecast setup" onClick={done} /></header>
     {step === "model" ? <>
-      <fieldset className={styles.modelRegions} aria-label="Model region" data-selection-track="horizontal"
-        style={{ "--selection-index": MODEL_REGIONS.indexOf(selectedRegion) } as CSSProperties}>
-        {MODEL_REGIONS.map((region, index) => <label key={region} className={styles.regionChoice}>
-          <input type="radio" name={regionName} aria-label={region} checked={!searching && selectedRegion === region}
-            tabIndex={searching ? (index === 0 ? 0 : -1) : (selectedRegion === region ? 0 : -1)}
-            onChange={() => { setSelectedRegion(region); setQuery(""); }} />
-          <span>{region}</span><small aria-hidden="true">{context.models.filter((model) => modelRegion(model) === region).length}</small>
+      <fieldset className={styles.modelCategories} aria-label="Model category" data-selection-track="horizontal"
+        style={{ "--selection-index": MODEL_CATEGORIES.indexOf(selectedCategory), "--model-category-count": MODEL_CATEGORIES.length } as CSSProperties}>
+        {MODEL_CATEGORIES.map((category, index) => <label key={category} className={styles.categoryChoice}>
+          <input type="radio" name={categoryName} aria-label={category} checked={!searching && selectedCategory === category}
+            tabIndex={searching ? (index === 0 ? 0 : -1) : (selectedCategory === category ? 0 : -1)}
+            onChange={() => { setSelectedCategory(category); setQuery(""); }} />
+          <span>{category}</span><small aria-hidden="true">{context.models.filter((model) => modelCategory(model) === category).length}</small>
         </label>)}
       </fieldset>
-      <div className={styles.search}><input data-autofocus type="search" aria-label="Search models" placeholder="Search all models" value={query} onChange={(event) => { setQuery(event.target.value); }} />
-        {query.length > 0 ? <Action className={styles.headerAction} aria-label="Clear search" onClick={(event) => { setQuery(""); event.currentTarget.parentElement?.querySelector("input")?.focus(); }}>Clear</Action> : null}
+      <div className={styles.search}>
+        <Search className="icon-sm" aria-hidden="true" />
+        <input data-autofocus type="search" aria-label="Search models" placeholder="Search all models" value={query} onChange={(event) => { setQuery(event.target.value); }} />
+        {query.length > 0 ? <IconAction icon={X} size="sm" label="Clear search" onClick={(event) => {
+          setQuery("");
+          event.currentTarget.parentElement?.querySelector("input")?.focus();
+        }} /> : null}
       </div>
-      <div className={styles.listHeading}><span>{searching ? `${String(models.length)} results` : `${selectedRegion} models`}</span><span>Grid</span></div>
-      <div key={searching ? query : selectedRegion} className={styles.dialogBody}><div className={styles.modelChoices} data-motion={searching ? undefined : "fade"}>
-        {MODEL_REGIONS.map((region) => {
-          const members = models.filter((model) => modelRegion(model) === region);
-          return members.length === 0 ? null : <section key={region} role="group" aria-label={region} className={styles.modelGroup}>
-            {searching ? <h3>{region}<span>{members.length}</span></h3> : null}
-            {members.map((model) => <button key={model.key} aria-label={`Choose ${model.label}`} type="button" className={styles.modelChoice} aria-pressed={model.key === context.model.key} title={model.notes} onClick={() => {
-              if (model.key !== context.model.key) useForecastStore.getState().setModel(model.key);
-              done();
-            }}><span className={styles.modelIdentity}><strong>{model.label}{model.key === context.model.key ? <small>Selected</small> : null}</strong>{!model.soundingsAvailable ? <small>Maps only</small> : region === "Regional" ? <small>{model.domain}</small> : null}</span>
-              <span className={styles.modelResolution}>{model.gridSpacingKm === null ? "—" : `${String(model.gridSpacingKm)} km`}</span></button>)}
-          </section>;
-        })}
-      </div>{models.length === 0 ? <div className={styles.empty}><p>No models found.</p></div> : null}</div>
-      <footer className={styles.pickerFooter}><span>Selected <strong>{context.model.label}</strong></span><span>{modelRegion(context.model)}</span></footer>
+      {models.some((model) => isNamArchive(model.key))
+        ? <p id={archiveNoticeId} className={styles.archiveNotice}>{NAM_ARCHIVE_NOTICE}</p>
+        : null}
+      <div key={searching ? query : selectedCategory} className={styles.dialogBody}>
+        {models.length === 0 ? <div className={styles.empty}><p>No models found.</p></div> : <>
+          <div className={styles.listHeading}>
+            <span>{searching ? `${String(models.length)} ${models.length === 1 ? "result" : "results"}` : "Model"}</span>
+            <span>Grid spacing</span>
+          </div>
+          <div className={styles.modelChoices} data-motion={searching ? undefined : "fade"}>
+            {MODEL_CATEGORIES.map((category) => {
+              const members = models.filter((model) => modelCategory(model) === category);
+              if (category === "Ensemble") members.sort((left, right) => left.label.localeCompare(right.label));
+              return members.length === 0 ? null : <section key={category} role="group" aria-label={category} className={styles.modelGroup}>
+                {searching ? <h3>{category}<span>{members.length}</span></h3> : null}
+                {members.map((model) => {
+                  const archived = isNamArchive(model.key);
+                  return <button key={model.key} aria-label={`Choose ${model.label}`} aria-describedby={archived ? archiveNoticeId : undefined}
+                    type="button" className={styles.modelChoice} aria-pressed={model.key === context.model.key} title={model.notes} onClick={() => {
+                      if (model.key !== context.model.key) useForecastStore.getState().setModel(model.key);
+                      done();
+                    }}>
+                    <span className={styles.modelIdentity}>
+                      <span className={styles.modelTitle}>
+                        <strong>{model.label}</strong>
+                        {archived ? <span className={styles.badge}>Archive</span> : null}
+                      </span>
+                      {!model.soundingsAvailable ? <small>Maps only</small> : category === "Regional" ? <small>{model.domain}</small> : null}
+                    </span>
+                    <span className={styles.modelResolution}>{model.gridSpacingKm === null ? "—" : `${String(model.gridSpacingKm)} km`}</span>
+                  </button>;
+                })}
+              </section>;
+            })}
+          </div>
+        </>}
+      </div>
+      <footer className={styles.pickerFooter}><span>Selected <strong>{context.model.label}</strong></span><span>{modelCategory(context.model)}</span></footer>
     </> : step === "run" ? <>
       <div className={styles.dateSection}>
         <label className={styles.name} htmlFor="forecast-run-date">Run date · UTC</label>
         <div className={styles.dateRow}>
           <IconAction icon={ChevronLeft} size="sm" label="Previous run date" disabled={!validDate || date === "0001-01-01"} onClick={() => { if (day !== null) setDate(addHours(day, -24).slice(0, 10)); }} />
-          <button data-autofocus id="forecast-run-date" type="button" className={styles.dateButton} aria-label="Run date · UTC" aria-describedby={calendarOpen ? undefined : "archive-availability"} aria-expanded={calendarOpen} onClick={() => { setCalendarOpen(!calendarOpen); }}><CalendarDays className="icon-sm" aria-hidden="true" /><span>{day === null ? date : new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(day))}</span><small>UTC</small></button>
+          <button data-autofocus id="forecast-run-date" type="button" className={styles.dateButton} aria-label="Run date · UTC"
+            aria-describedby={showRunNotice ? archiveNoticeId : undefined} aria-expanded={calendarOpen} onClick={() => { setCalendarOpen(!calendarOpen); }}>
+            <CalendarDays className="icon-sm" aria-hidden="true" />
+            <span>{day === null ? date : new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(day))}</span>
+            <small>UTC</small>
+          </button>
           <IconAction icon={ChevronRight} size="sm" label="Next run date" disabled={!validDate || date >= newestDate} onClick={() => { if (day !== null) setDate(addHours(day, 24).slice(0, 10)); }} />
         </div>
-        {calendarOpen ? null : <button className={styles.latestRun} type="button" aria-label="Use latest suggested run" onClick={() => { chooseRun(context.model.suggestedRun); }}><span>Latest suggested</span><strong>{compactUtc(context.model.suggestedRun)}</strong><ChevronRight className="icon-sm" aria-hidden="true" /></button>}
+        {calendarOpen ? null : <button className={styles.latestRun} type="button"
+          aria-label={archivedModel ? "Use latest archived run" : "Use latest suggested run"} onClick={() => { chooseRun(context.model.suggestedRun); }}>
+          <span>{archivedModel ? "Latest archived run" : "Latest suggested"}</span>
+          <strong>{compactUtc(context.model.suggestedRun)}</strong>
+          <ChevronRight className="icon-sm" aria-hidden="true" />
+        </button>}
       </div>
       {calendarOpen ? null : <div className={styles.listHeading}><span>Cycle · UTC</span><span>Forecast range</span></div>}
       <div className={styles.dialogBody}>
@@ -88,14 +135,16 @@ export function ForecastDialog({ context, step, anchor, download, onClose }: {
         <div className={styles.runChoices}>{context.model.cycles.map((cycle) => {
           const run = releaseTime(date, cycle);
           const disabled = !validDate || run === null || resolveModelRun(context.model, run) !== run;
-          const publishing = run !== null && run > context.model.suggestedRun;
+          const publishing = !archivedModel && run !== null && run > context.model.suggestedRun;
           return <button type="button" key={cycle} aria-label={run === null ? `${String(cycle).padStart(2, "0")}Z cycle` : `Run ${compactUtc(run)}`} className={styles.choice} aria-pressed={run === context.run} disabled={disabled}
-            title={disabled ? "Cycle has not occurred" : publishing ? "May still be publishing" : formatUtc(run)} onClick={() => { if (run !== null) chooseRun(run); }}>
+            title={disabled ? (archivedModel ? "Cycle unavailable" : "Cycle has not occurred") : publishing ? "May still be publishing" : formatUtc(run)} onClick={() => { if (run !== null) chooseRun(run); }}>
             <strong>{String(cycle).padStart(2, "0")}Z</strong><small>{disabled ? "—" : publishing ? "Pending" : forecastLabel(context.model.maxForecastHours[cycle] ?? 0)}</small>
           </button>;
         })}</div></>}
       </div>
-      {calendarOpen ? null : <footer id="archive-availability" className={styles.pickerFooter}>Choose a cycle to load. Archive coverage varies by model and date; recent cycles may still be publishing.</footer>}
+      {showRunNotice ? <footer id={archiveNoticeId} className={styles.pickerFooter}>
+        {archivedModel ? NAM_ARCHIVE_NOTICE : "Choose a cycle to load. Archive coverage varies by model and date; recent cycles may still be publishing."}
+      </footer> : null}
     </> : <>
       <div className={styles.selectionSummary}><span><strong>{forecastLabel(context.hour)}</strong><small>Selected hour</small></span><span><strong>{formatUtc(context.validTime)}</strong><small>Valid · UTC</small></span></div>
       <div className={styles.dialogBody}>{[...days].map(([validDate, hours]) => <section className={styles.hourDay} key={validDate} aria-label={`Valid ${validDate}`}>

@@ -22,22 +22,22 @@ it("keeps Rivers scoped to the active panel when switching between Flat map and 
   await user.click(screen.getByRole("button", { name: "Map details" }));
   await user.click(screen.getByRole("button", { name: "Panel 2" }));
   const rivers = screen.getByRole("switch", { name: "Rivers" });
-  expect(rivers.getAttribute("aria-checked")).toBe("true");
+  expect(rivers.getAttribute("aria-checked")).toBe("false");
   await user.click(rivers);
-  expect(panelLayers(useMapStore.getState(), 1).rivers.visible).toBe(false);
+  expect(panelLayers(useMapStore.getState(), 1).rivers.visible).toBe(true);
 
   const globe = screen.getByRole("button", { name: "Globe" });
   await user.click(globe);
   expect(globe.getAttribute("aria-pressed")).toBe("true");
-  expect(rivers.getAttribute("aria-checked")).toBe("false");
+  expect(rivers.getAttribute("aria-checked")).toBe("true");
   await user.click(screen.getByRole("button", { name: "Panel 1" }));
-  expect(rivers.getAttribute("aria-checked")).toBe("true");
-  await user.click(screen.getByRole("button", { name: "Panel 2" }));
   expect(rivers.getAttribute("aria-checked")).toBe("false");
-  await user.click(rivers);
-  expect(panelLayers(useMapStore.getState(), 1).rivers.visible).toBe(true);
-  await user.click(screen.getByRole("button", { name: "Flat map" }));
+  await user.click(screen.getByRole("button", { name: "Panel 2" }));
   expect(rivers.getAttribute("aria-checked")).toBe("true");
+  await user.click(rivers);
+  expect(panelLayers(useMapStore.getState(), 1).rivers.visible).toBe(false);
+  await user.click(screen.getByRole("button", { name: "Flat map" }));
+  expect(rivers.getAttribute("aria-checked")).toBe("false");
   view.unmount();
   queryClient.clear();
 });
@@ -47,11 +47,11 @@ it("defaults missing Rivers preferences and persists and resets them per panel a
   repository.save({ ...DEFAULT_PREFERENCES, panelLayout: 2 });
   applyPreferences(repository.load());
   const riverVisibility = () => [0, 1].map((panel) => panelLayers(useMapStore.getState(), panel).rivers.visible);
-  expect(riverVisibility()).toEqual([true, true]);
+  expect(riverVisibility()).toEqual([false, false]);
 
   const stop = startPreferenceSync(repository);
   useMapStore.getState().setActivePanel(1);
-  useMapStore.getState().setLayerVisible("rivers", false);
+  useMapStore.getState().setLayerVisible("rivers", true);
   useMapStore.setState({ view: "live" });
   expect(riverVisibility()).toEqual([true, true]);
   useMapStore.getState().setActivePanel(0);
@@ -60,13 +60,13 @@ it("defaults missing Rivers preferences and persists and resets them per panel a
 
   useMapStore.setState(useMapStore.getInitialState(), true);
   applyPreferences(repository.load());
-  expect(riverVisibility()).toEqual([true, false]);
+  expect(riverVisibility()).toEqual([false, true]);
   useMapStore.setState({ view: "live" });
   expect(riverVisibility()).toEqual([false, true]);
   resetLayerSettings();
   expect(riverVisibility()).toEqual([true, true]);
   useMapStore.setState({ view: "map" });
-  expect(riverVisibility()).toEqual([true, false]);
+  expect(riverVisibility()).toEqual([false, true]);
   resetLayerSettings();
-  expect(riverVisibility()).toEqual([true, true]);
+  expect(riverVisibility()).toEqual([false, false]);
 });

@@ -139,7 +139,7 @@ it("addresses enabled live sources with the requested time and never requests a 
   const transport = transportWithRadar();
   const call = vi.spyOn(transport, "call");
   const time = new Date(now).toISOString();
-  const requests = liveRequests(new BackendClient(transport), useMapStore.getState(), null, null, time);
+  const requests = liveRequests(new BackendClient(transport), useMapStore.getState(), null, time);
   expect(requests.map((request) => request.queryKey)).toEqual([mapKeys.radar(null, time)]);
   await requests[0]?.queryFn();
   expect(call).toHaveBeenCalledWith("get_radar_frame", { validTime: time });
@@ -156,7 +156,7 @@ it("loads each panel's own radar and satellite settings while sharing identical 
   state.setActivePanel(2); state.setLayerVisible("radar", false); state.setLayerVisible("satellite", true);
   const saved = currentPreferences();
   const time = "2026-10-17T08:00:00Z";
-  const requests = liveRequests(new BackendClient(transportWithRadar()), useMapStore.getState(), "KOUN", null, time);
+  const requests = liveRequests(new BackendClient(transportWithRadar()), useMapStore.getState(), "KOUN", time);
   expect(requests.map((request) => request.queryKey)).toEqual([mapKeys.radar(null, time), mapKeys.radarSite("velocity", "KTLX", time, "2"), mapKeys.satellite("infrared", time)]);
   resetLayerSettings(); applyPreferences(saved);
   expect(useMapStore.getState().livePanels[1]).toMatchObject({ radarScope: "site", radarProduct: "velocity", radarSite: "KTLX", radarTilt: "2" });
@@ -228,14 +228,14 @@ it("shares reports across map workspaces while keeping outlooks in Model Viewer 
   const { view, queryClient } = renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
   expect(screen.queryByTestId("layer-row-radar")).toBeNull();
   expect(screen.getByTestId("layer-row-model-field")).toBeTruthy();
-  for (const id of ["spc-cat", "spc-hail", "spc-wind", "spc-torn", "storm-reports"]) expect(screen.getByTestId(`layer-row-${id}`)).toBeTruthy();
+  for (const id of ["spc-cat", "spc-hail", "spc-wind", "spc-torn", "wpc-ero", "storm-reports"]) expect(screen.getByTestId(`layer-row-${id}`)).toBeTruthy();
   for (const id of ["warnings", "watches"]) expect(screen.queryByTestId(`layer-row-${id}`)).toBeNull();
   view.unmount();
   useAppStore.getState().setActiveWorkspace("live");
   const live = renderWithBackend(<LayerPanel availabilities={new Set()} />, transportWithRadar());
   expect(await screen.findByTestId("layer-row-radar")).toBeTruthy();
   expect(screen.queryByTestId("layer-row-model-field")).toBeNull();
-  for (const id of ["spc-cat", "spc-hail", "spc-wind", "spc-torn"]) expect(screen.queryByTestId(`layer-row-${id}`)).toBeNull();
+  for (const id of ["spc-cat", "spc-hail", "spc-wind", "spc-torn", "wpc-ero"]) expect(screen.queryByTestId(`layer-row-${id}`)).toBeNull();
   for (const id of ["warnings", "watches", "storm-reports"]) expect(screen.getByTestId(`layer-row-${id}`)).toBeTruthy();
   expect(screen.queryByRole("group", { name: "Active map panel" })).toBeNull();
   live.view.unmount(); live.queryClient.clear(); queryClient.clear();
@@ -246,7 +246,7 @@ it("shares warning/watch and storm-report requests without fetching forecast out
   for (const id of ["radar", "spc-cat", "storm-reports", "warnings", "watches"] as const) useMapStore.getState().setLayerVisible(id, id !== "radar");
   const transport = createTransport();
   const call = vi.spyOn(transport, "call");
-  const requests = liveRequests(new BackendClient(transport), useMapStore.getState(), null, null, "2026-10-04T21:00:00Z");
+  const requests = liveRequests(new BackendClient(transport), useMapStore.getState(), null, "2026-10-04T21:00:00Z");
   expect(requests.map(({ queryKey }) => queryKey)).toEqual([
     mapKeys.alerts("2026-10-04T21:00:00Z"), mapKeys.reports("2026-10-04T21:00:00Z", 21600, "all"),
   ]);

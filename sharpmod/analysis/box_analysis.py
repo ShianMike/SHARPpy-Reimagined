@@ -766,41 +766,30 @@ def _column_from_profile(prof, field, log_ladder) -> list[float | None]:
     terrain or above its top becomes ``None`` rather than an extrapolated
     number: the absence is the information.
     """
-    from sharpmod import backends
+    import sharpmod_rs
 
     blank = [None] * int(log_ladder.size)
     try:
-        pres = np.ma.filled(np.ma.asarray(prof.pres, dtype=float), -9999.0)
-        raw = np.ma.filled(np.ma.asarray(getattr(prof, field), dtype=float), -9999.0)
-        # Drop sentinel rows before the logarithm: log10 of a negative sentinel
-        # would both warn and poison the interpolation, and this suite runs with
-        # warnings as errors.
-        usable = (pres > 0.0) & (raw > _MISSING_LIMIT)
-        if int(np.count_nonzero(usable)) < 2:
-            return blank
-        coordinate = np.log10(pres[usable])
+        pres = np.ascontiguousarray(
+            np.ma.filled(np.ma.asarray(prof.pres, dtype=float), -9999.0),
+            dtype=float,
+        )
+        raw = np.ascontiguousarray(
+            np.ma.filled(np.ma.asarray(getattr(prof, field), dtype=float), -9999.0),
+            dtype=float,
+        )
+        wspd = None
         if field == "wdir":
-            # Direction is circular: scalar interpolation between 350 and 10
-            # degrees points south.  Interpolate the matching wind components
-            # and reconstruct the angle so the path crosses north instead.
-            speed = np.ma.filled(
-                np.ma.asarray(getattr(prof, "wspd"), dtype=float), -9999.0
+            wspd = np.ascontiguousarray(
+                np.ma.filled(np.ma.asarray(getattr(prof, "wspd"), dtype=float), -9999.0),
+                dtype=float,
             )
-            usable &= speed > _MISSING_LIMIT
-            if int(np.count_nonzero(usable)) < 2:
-                return blank
-            coordinate = np.log10(pres[usable])
-            u, v = backends.wind_to_components(raw[usable], speed[usable])
-            interp_u = backends.interpolate_1d(log_ladder, coordinate, u)
-            interp_v = backends.interpolate_1d(log_ladder, coordinate, v)
-            interpolated, _speed = backends.components_to_wind(interp_u, interp_v)
-        else:
-            interpolated = backends.interpolate_1d(log_ladder, coordinate, raw[usable])
+        ladder = np.ascontiguousarray(log_ladder, dtype=float)
+        return sharpmod_rs.box_transect_column(
+            pres, raw, wspd, ladder, is_wdir=(field == "wdir")
+        )
     except Exception:
         return blank
-    return [
-        _finite(value) for value in np.atleast_1d(np.asarray(interpolated, dtype=float))
-    ]
 
 
 def transect_columns(prof) -> dict[str, tuple[float | None, ...]]:
@@ -815,6 +804,28 @@ def transect_columns(prof) -> dict[str, tuple[float | None, ...]]:
     why the *columns* are kept while the profiles that produced them are still
     thrown away.
     """
+    import sharpmod_rs
+
+    required = ("pres", "tmpc", "dwpc", "wspd", "wdir")
+    if all(getattr(prof, name, None) is not None for name in required):
+        try:
+            as_f64 = lambda arr: np.ascontiguousarray(
+                np.ma.filled(np.ma.asarray(arr, dtype=float), -9999.0),
+                dtype=float,
+            )
+            omeg_raw = getattr(prof, "omeg", None)
+            omeg = None if omeg_raw is None else as_f64(omeg_raw)
+            return sharpmod_rs.box_transect_columns(
+                as_f64(prof.pres),
+                as_f64(prof.tmpc),
+                as_f64(prof.dwpc),
+                as_f64(prof.wspd),
+                as_f64(prof.wdir),
+                omeg,
+                _DEFAULT_LOG_LADDER,
+            )
+        except Exception:
+            pass
     return {
         field: tuple(_column_from_profile(prof, field, _DEFAULT_LOG_LADDER))
         for field in TRANSECT_FIELDS

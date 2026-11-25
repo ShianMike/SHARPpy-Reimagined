@@ -202,7 +202,7 @@ pub(crate) fn draw_layer_bracket(
     let line = qt.getattr("SolidLine")?;
     let pen = pen_type.call1((color, if emphasize_label { 2.0 } else { 1.5 }, &line))?;
     painter.call_method1("setClipping", (true,))?;
-    painter.call_method1("setPen", (pen,))?;
+    painter.call_method1("setPen", (&pen,))?;
     painter.call_method1("setFont", (&font,))?;
     for coords in [
         (x - 10., bottom, x + 10., bottom),
@@ -219,21 +219,24 @@ pub(crate) fn draw_layer_bracket(
         .fold(0, |flags, item| flags | item);
     if emphasize_label {
         painter.call_method1("setClipping", (false,))?;
-        // Clear the grid around the glyphs while leaving the plot visible between them.
-        let ascent: f64 = metrics.call_method0("ascent")?.extract()?;
-        let glyphs = gui.getattr("QPainterPath")?.call0()?;
-        glyphs.call_method1(
-            "addText",
-            (
-                x - advance / 2.0,
-                top - (height + font_height) / 2.0 + ascent,
-                &font,
-                text,
-            ),
-        )?;
-        let halo = pen_type.call1((widget.getattr("bg_color")?, 2.5, line))?;
-        halo.call_method1("setJoinStyle", (qt.getattr("RoundJoin")?,))?;
-        painter.call_method1("strokePath", (glyphs, halo))?;
+        // Use the same text rasterization for the halo and label so their edges
+        // stay aligned on redraw. The plot stays visible between the glyphs.
+        let halo = pen_type.call1((widget.getattr("bg_color")?,))?;
+        painter.call_method1("setPen", (halo,))?;
+        for (dx, dy) in [
+            (-1.0, 0.0),
+            (1.0, 0.0),
+            (0.0, -1.0),
+            (0.0, 1.0),
+            (-1.0, -1.0),
+            (-1.0, 1.0),
+            (1.0, -1.0),
+            (1.0, 1.0),
+        ] {
+            let offset = rect.call_method1("translated", (dx, dy))?;
+            painter.call_method1("drawText", (offset, flags, text))?;
+        }
+        painter.call_method1("setPen", (pen,))?;
     }
     painter.call_method1("drawText", (rect, flags, text))?;
     if emphasize_label {

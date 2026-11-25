@@ -30,7 +30,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from sharpmod_rs import regional_map_grid
+from sharpmod_rs import hrdps_domain_bounds, hrdps_domain_outline, regional_map_grid
 
 from sharpmod import backends as _backends
 from sharpmod.providers import eccc_geomet
@@ -304,6 +304,13 @@ _CONFIGS = (
         fxx_values=_gfs_hours(),
         grid_spacing_km=27.8,
         notes="0.25-degree GFS pressure-level forecast grids"),
+    ModelConfig(
+        "refs", "REFS Mean", "refs", "mean",
+        cycles=RRFS_CYCLES, fxx_values=_hours(60)[1:], default_fxx=1,
+        domain="CONUS", domain_bounds=HRRR_DOMAIN, domain_outline=HRRR_OUTLINE,
+        grid_spacing_km=3.0,
+        notes="NOAA's 3-km CONUS ensemble mean, hourly from F001 to F060 via NOMADS.",
+        unavailable_reason="REFS mean supports map fields only"),
     *(ModelConfig(
         f"refs-m{member}", f"REFSm{member}", "rrfs", "prslevnomads",
         cycles=RRFS_CYCLES, fxx_values=_hours(60),
@@ -349,16 +356,13 @@ _CONFIGS = (
     # Herbie cannot load DWD's split native-level GRIB.
     ModelConfig(
         "openmeteo-icon-global",
-        openmeteo.CAPABILITIES["openmeteo-icon-global"].label,
+        "ICON Global",
         "openmeteo-icon-global", "open-meteo-point",
         cycles=openmeteo.CAPABILITIES["openmeteo-icon-global"].cycles,
         fxx_values=openmeteo.CAPABILITIES[
             "openmeteo-icon-global"].forecast_hours,
-        # Matches the adapter's own declared resolution ("11 km, 0.125 degree
-        # grid"), so area sampling cannot advertise a spacing that contradicts
-        # the label shown beside it.
-        grid_spacing_km=11.0,
-        notes=openmeteo.CAPABILITIES["openmeteo-icon-global"].notes),
+        grid_spacing_km=13.0,
+        notes="13 km DWD ICON Global maps and pressure-level point soundings via Open-Meteo."),
     ModelConfig(
         "openmeteo-ecmwf-ifs025",
         openmeteo.CAPABILITIES["openmeteo-ecmwf-ifs025"].label,
@@ -389,6 +393,16 @@ _CONFIGS = (
         grid_spacing_km=10.0,
         notes="Regional ECCC GeoMet pressure-level point values",
         domain_outline=eccc_geomet.get_capability("rdps").domain_outline),
+    ModelConfig(
+        "hrdps", "Canadian HRDPS 2.5 km", "hrdps", "datamart-map",
+        cycles=(0, 6, 12, 18),
+        fxx_values=_hours(48),
+        domain="Canada and Northern US",
+        domain_bounds=hrdps_domain_bounds(),
+        domain_outline=tuple(hrdps_domain_outline()),
+        grid_spacing_km=2.5,
+        notes="ECCC 2.5-km continental HRDPS maps via MSC Datamart, hourly to F048.",
+        unavailable_reason="HRDPS currently supports forecast maps."),
 )
 
 _ALIASES = {
@@ -443,6 +457,9 @@ _ALIASES = {
     "rdps": "rdps",
     "gem-regional": "rdps",
     "cmc-regional": "rdps",
+    "hrdps": "hrdps",
+    "gem-hrdps": "hrdps",
+    "cmc-hrdps": "hrdps",
 }
 
 _CONFIG_BY_KEY = {cfg.key: cfg for cfg in _CONFIGS}
@@ -458,10 +475,6 @@ UNSUPPORTED_MODELS = {
     "cmce": "CMC ensemble members are not exposed by the installed Herbie loader.",
     "mogreps-g": "MOGREPS-G is not exposed by the installed Herbie loader.",
     "sref": "SREF is not exposed by the installed Herbie loader.",
-    "hrdps": (
-        "HRDPS GeoMet does not currently expose a complete pressure-level "
-        "temperature/moisture/wind profile."
-    ),
 }
 
 

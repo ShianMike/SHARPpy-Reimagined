@@ -9,6 +9,7 @@ import { BoxInspector } from "../features/inspector/BoxInspector";
 import { useBoxSoundingStore } from "../stores/boxSoundingStore";
 import { useForecastDrawingStore } from "../stores/forecastDrawingStore";
 import { NavigationRail } from "../features/rail/NavigationRail";
+import { GitHubStarNotice } from "../features/github/GitHubStarNotice";
 import { UpdateNotice } from "../features/settings/UpdateNotice";
 import { WhatsNew } from "../features/settings/WhatsNew";
 import { TimelineRegion } from "../features/timeline/TimelineRegion";
@@ -170,7 +171,7 @@ export function Shell(): ReactNode {
             </div>
           </div>
           {panelWorkspace === null ? null : <Surface key={panelWorkspace.id} ref={workspacePanel} as="section" className={styles.workspace} data-motion="panel" data-workspace={panelWorkspace.id} data-testid="workspace-panel" aria-label={panelWorkspace.label} inert={isMap} aria-hidden={isMap} hidden={isMap}>
-            <Suspense fallback={<p role="status">Loading {panelWorkspace.label}…</p>}>
+            <Suspense fallback={<div className={styles.workspaceLoading} role="status"><LoaderCircle className="icon" data-loading="true" aria-hidden="true" /><span>Loading {panelWorkspace.label}…</span></div>}>
               <WorkspaceView workspace={panelWorkspace} />
             </Suspense>
           </Surface>}
@@ -180,6 +181,7 @@ export function Shell(): ReactNode {
             message={fullscreenError} actions={<><Action onClick={dismissFullscreenError}>Dismiss</Action>
               <Action tone="accent" disabled={fullscreenBusy} onClick={() => { void toggleFullscreen(); }}>Try fullscreen again</Action></>} />}
           <UpdateNotice />
+          <GitHubStarNotice />
         </div>
         {whatsNewOpen ? <WhatsNew /> : null}
         <VisuallyHidden role="status" aria-live="polite" data-testid={liveText === "" ? undefined : "catalogue-announcement"}>{liveText}</VisuallyHidden>

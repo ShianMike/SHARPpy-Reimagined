@@ -134,7 +134,7 @@ describe("Sounding local work protection", () => {
     if (hasEdits) useSoundingStore.getState().setView(summary.soundingId, edited);
     const { queryClient } = renderWithBackend(<SoundingWorkspace />, transport);
     await screen.findByTestId("sounding-image");
-    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
     await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
     await userEvent.keyboard("{Home}{Enter}");
@@ -144,7 +144,7 @@ describe("Sounding local work protection", () => {
     await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
     await waitFor(() => { expect(finish).toBeTypeOf("function"); });
     const cached = queryClient.getQueriesData({ queryKey: ["soundings", summary.soundingId, "view"] });
-    await userEvent.click(screen.getByRole("button", { name: "Show sounding sources" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Sources" }));
     await userEvent.click(screen.getByRole("button", { name: `Close ${summary.title}` }));
     if (hasEdits) await userEvent.click(screen.getByRole("button", { name: "Discard & close" }));
     await act(async () => { await finish?.(); });

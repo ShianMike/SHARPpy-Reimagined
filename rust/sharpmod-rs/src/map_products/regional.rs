@@ -44,7 +44,13 @@ pub fn catalogue(py: Python<'_>, model: &str) -> PyResult<Vec<Py<PyAny>>> {
         let key = entry.getattr("key")?.extract::<String>()?;
         if matches!(
             key.as_str(),
-            "ltng" | "stp" | "uh-0-3km" | "uh-2-5km-1h" | "uh-2-5km-3h"
+            "ltng"
+                | "stp"
+                | "uh-0-3km"
+                | "uh-0-3km-run"
+                | "uh-2-5km-1h"
+                | "uh-2-5km-3h"
+                | "uh-2-5km-run"
         ) {
             continue;
         }

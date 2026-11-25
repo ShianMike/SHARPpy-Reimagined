@@ -119,3 +119,50 @@ def test_cache_listing_skips_incomplete_intervals_without_rejecting_the_run(hour
     catalog = fields.catalog({"model": "hrrr"})
     product = next(p for p in catalog["products"] if p["key"] == keys[1])
     assert product["minimum_forecast_hour"] == hours
+
+
+@pytest.mark.parametrize(
+    ("key", "label", "chip", "level", "palette_ref"),
+    [
+        ("uh-0-3km-run", "Updraft Helicity: 0-3 km AGL (run max)", "0-3km UH Max", "3000-0 m above ground", "uh-0-3km"),
+        ("uh-2-5km-run", "Updraft Helicity: 2-5 km AGL (run max)", "2-5km UH Max", "5000-2000 m above ground", "uh-2-5km-1h"),
+    ],
+)
+def test_run_maximum_updraft_helicity_accumulates_from_hour_one(monkeypatch, key, label, chip, level, palette_ref):
+    product = hp.PRODUCTS[key]
+    assert product.label == label
+    assert product.short_label == chip
+    assert product.category == "Explicit Convective"
+    assert product.max_hours == 1
+    assert product.palette is hp.PRODUCTS[palette_ref].palette
+
+    monkeypatch.setattr(hf, "_INVENTORY_CACHE", {})
+    monkeypatch.setattr(hf, "_load_eccodes", lambda: None)
+    decoded = {
+        1: [12, 8, np.nan, 4],
+        2: [5, 42, 7, 15],
+        3: [18, 25, 9, np.nan],
+    }
+    monkeypatch.setattr(
+        hf,
+        "decode_message",
+        lambda data, *_args, **_kwargs: np.array([decoded[int(data.strip())]], dtype=np.float32),
+    )
+    downloaded = []
+
+    def opener(url, _timeout, _limit, byte_range=None):
+        hour = int(re.search(r"wrfsfcf(\d+)", url)[1])
+        if byte_range is None:
+            return (
+                f"1:0:d=2026102800:MXUPHL:{level}:{hour - 1}-{hour} hour max fcst:\n"
+                f"2:16:d=2026102800:TMP:2 m above ground:{hour} hour fcst:\n"
+            ).encode()
+        assert byte_range == (0, 15)
+        downloaded.append(hour)
+        return str(hour).encode().ljust(16)
+
+    result = hf._download_fields(product, RUN, 3, opener=opener, timeout=1, should_cancel=None)
+    assert sorted(downloaded) == [1, 2, 3]
+    np.testing.assert_array_equal(product.derive(result), [[18, 42, np.nan, np.nan]])
+    with pytest.raises(hf.HrrrFieldUnavailable, match="complete forecast hours"):
+        hf._download_fields(product, RUN, 0, opener=opener, timeout=1, should_cancel=None)

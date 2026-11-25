@@ -16,9 +16,7 @@ next to it, which is worse than not showing one.
 
 from __future__ import annotations
 
-import numpy as np
-
-from sharpmod.sharptab.constants import MISSING, is_missing
+from sharpmod.sharptab.constants import MISSING
 
 __all__ = ["KNOTS_TO_MS", "VENDORED_MISSING", "ventilation_rate"]
 
@@ -72,34 +70,7 @@ def ventilation_rate(mixing_height_m, transport_wind_kt):
     asserting one here would be inventing an authority this function does not
     have. The number is reported and the reader applies their own thresholds.
     """
-    height = _finite_non_negative(mixing_height_m)
-    speed = _finite_non_negative(transport_wind_kt)
-    if height is None or speed is None:
-        return MISSING
-    return height * speed * KNOTS_TO_MS
+    import sharpmod_rs
 
-
-def _finite_non_negative(value):
-    """Return ``value`` as a finite non-negative float, or ``None``.
-
-    Masked entries, either project's missing sentinel, NaN, infinity and
-    negatives all collapse to ``None``. A negative depth or wind speed is not a
-    small ventilation rate, it is an absent one, and the whole reason to be strict
-    here is that both factors are multiplied: a sentinel that survives becomes a
-    large number rather than an obviously wrong one.
-    """
-    if value is None or value is np.ma.masked:
-        return None
-    if getattr(value, "mask", False) is True:
-        return None
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    if not np.isfinite(number) or is_missing(number):
-        return None
-    # Checked by name as well as by sign. The sign test alone would already
-    # reject the vendored sentinel, but only by accident of it being negative.
-    if number == VENDORED_MISSING or number < 0.0:
-        return None
-    return number
+    value = sharpmod_rs.fire_ventilation_rate(mixing_height_m, transport_wind_kt)
+    return MISSING if value is None else value

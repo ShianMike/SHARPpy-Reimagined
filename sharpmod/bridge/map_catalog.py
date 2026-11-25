@@ -17,6 +17,7 @@ def _palette(palette: Any) -> dict[str, Any]:
         "floor": None if palette.floor is None else float(palette.floor),
         "ceiling": None if palette.ceiling is None else float(palette.ceiling),
         "ticks": [float(tick) for tick in palette.tick_values()],
+        **({"ptype_labels": list(palette.ptype_labels)} if palette.ptype_labels is not None else {}),
     }
 
 
@@ -53,14 +54,23 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
     is_ecmwf = model in hrrr_products.ECMWF_MODELS
     is_global = model in hrrr_products.GLOBAL_MODELS
     is_hrw = model in hrrr_products.HRW_MODELS
-    model_label = "ECMWF 9km" if model == "ecmwf-ifs-9km" else "ECMWF" if is_ecmwf else model.upper()
+    model_label = ("ICON" if model == hrrr_products.ICON_MODEL else "ECMWF 9km" if model == "ecmwf-ifs-9km"
+                   else "ECMWF" if is_ecmwf else model.upper())
     if not products:
         raise BridgeError("FIELD_UNAVAILABLE", f"{model_label} maps require the bundled Rust backend.", False)
     selected = "run_time" in params or "forecast_hour" in params
+    forecast_hours_by_product = {}
     if selected:
-        run, hour = _request({**params, "model": model, "product": "tmp-2m"})[-2:]
-        products = tuple(product for product in products if hour >= product.max_hours)
-    if (is_global or is_hrw or model in {"rap", "rdps"}) and selected:
+        run, hour = _request(
+            {**params, "model": model, "product": products[0].key}, require_interval=False,
+        )[-2:]
+        if model == "refs":
+            import sharpmod_rs
+
+            forecast_hours_by_product = sharpmod_rs.grefs_forecast_hours(run)
+        products = tuple(product for product in products
+                         if hour >= product.max_hours or product.key in forecast_hours_by_product)
+    if (is_global or is_hrw or model in {"rap", "rdps", "hrdps", "refs"}) and selected:
         supported, failure = products, None
         try:
             if model == "gdps":
@@ -73,6 +83,22 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
                 import sharpmod_rs
 
                 products = tuple(sharpmod_rs.available_rdps_map_products(
+                    products, run, hour, hrrr_field._remote_limits()[0],
+                ))
+            elif model == "hrdps":
+                import sharpmod_rs
+
+                products = tuple(sharpmod_rs.available_hrdps_map_products(
+                    products, run, hour, hrrr_field._remote_limits()[0],
+                ))
+            elif model == hrrr_products.ICON_MODEL:
+                import sharpmod_rs
+
+                products = tuple(sharpmod_rs.available_icon_map_products(
+                    products, run, hour, hrrr_field._remote_limits()[0],
+                ))
+            elif model == "refs":
+                products = tuple(sharpmod_rs.available_refs_map_products(
                     products, run, hour, hrrr_field._remote_limits()[0],
                 ))
             elif is_global:
@@ -93,7 +119,7 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
             if failure is not None:
                 raise _field_error("FIELD_FETCH_FAILED", f"{model_label} field availability could not be checked", failure, True) from None
             raise BridgeError("FIELD_UNAVAILABLE", f"No supported {model_label} fields are published for this run and hour. Choose an earlier run or retry later.", False)
-    if is_global or is_hrw or model in {"rap", "rdps"}:
+    if is_global or is_hrw or model in {"rap", "rdps", "hrdps"}:
         from sharpmod.tools.model_extract import cycle_hours, forecast_hours
         cycles = cycle_hours(model)
         limits = [max(forecast_hours(model, cycle_hour=cycle)) if cycle in cycles else 0 for cycle in range(24)]
@@ -101,7 +127,7 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
         limits = [(hrrr_field.max_forecast_hour(cycle) if model == "hrrr"
                    else (84 if model in {"rrfs-a", "nam"} else 60) if cycle % 6 == 0 else 0)
                   for cycle in range(24)]
-    default = "tmp-2m" if is_global or model == "rdps" else hrrr_products.DEFAULT_PRODUCT
+    default = "tmp-2m" if is_global or model in {"rdps", "hrdps"} else hrrr_products.DEFAULT_PRODUCT
 
     return {
         "field_model": model,
@@ -118,6 +144,10 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
                 "description": product.description,
                 "caveat": product.caveat,
                 **({"minimum_forecast_hour": product.max_hours} if product.max_hours else {}),
+                **({"forecast_hours": forecast_hours_by_product[product.key]}
+                   if product.key in forecast_hours_by_product else {}),
+                **({"variants": [{"key": vkey, "label": vlabel} for vkey, vlabel in product.variants]}
+                   if getattr(product, "variants", ()) else {}),
                 "palette": _palette(product.palette),
                 "wind": product.wind,
                 "contour": (

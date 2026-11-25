@@ -20,7 +20,7 @@ const OPERATIONS = new Set<string>([
   "get_storage_usage", "clear_cache", "cancel_request", "get_backend_health", "get_station_catalog", "restart_backend",
   "get_model_catalog", "get_model_status", "open_sounding", "get_sounding_progress", "inspect_wrf", "get_sounding_analysis", "get_sounding_snapshot", "restore_sounding_snapshot",
   "get_threshold_metrics", "evaluate_threshold", "export_threshold_csv", "render_sounding", "render_sounding_view",
-  "get_map_catalog", "get_weather_field", "get_cached_forecast_hours", "get_spc_outlook", "get_weather_alerts", "get_radar_frame",
+  "get_map_catalog", "get_weather_field", "get_cached_forecast_hours", "get_spc_outlook", "get_wpc_outlook", "get_weather_alerts", "get_radar_frame",
   "build_forecast_drawing",
   "get_radar_site_frame", "get_radar_sites", "get_radar_tilts", "get_satellite_frame", "get_storm_reports", "get_report_options",
   "get_field_contours", "get_surface_plots", "get_latest_surface_plots", "get_spotter_positions", "get_place_labels", "get_station_availability", "start_backend", "bridge-status-changed",
@@ -41,6 +41,7 @@ const PROVIDERS: Readonly<Record<string, string>> = {
   NEXRAD: "NOAA/NWS NEXRAD",
   GOES: "NOAA/NESDIS GOES",
   SPC: "NOAA/NWS Storm Prediction Center",
+  WPC: "NOAA/NWS Weather Prediction Center",
   local: "Local file",
   Frontend: "Frontend",
   Updater: "Updater",
@@ -62,6 +63,7 @@ const PROVIDER_ALIASES: Readonly<Record<string, string>> = {
   "NOAA/NEXRAD Level II · NSF Unidata": "NEXRAD",
   "NOAA/NESDIS GOES · NOAA Open Data Dissemination": "GOES",
   "NOAA/NWS Storm Prediction Center": "SPC",
+  "NOAA/NWS Weather Prediction Center": "WPC",
 };
 const REQUEST_RECOVERY = "Check your connection, then retry. If the provider is unavailable, try again later.";
 const RESTART_RECOVERY = "Restart the backend from the connection status control, then retry.";

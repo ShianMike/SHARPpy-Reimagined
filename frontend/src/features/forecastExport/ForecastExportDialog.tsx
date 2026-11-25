@@ -9,7 +9,7 @@ import { useAppStore } from "../../stores/appStore";
 import { useForecastDrawingStore } from "../../stores/forecastDrawingStore";
 import { useMapStore, panelLayers, panelProduct } from "../../stores/mapStore";
 import { useMapCatalog } from "../../map/catalogQuery";
-import { productOf } from "../../map/panelField";
+import { productOf, variantKeyOf } from "../../map/panelField";
 import { useForecastStore } from "../../stores/forecastStore";
 import { useUiStore } from "../../stores/uiStore";
 import { FORECAST_EXPORT_DELAYS, FORECAST_EXPORT_SIZES } from "../../stores/forecastExportSettings";
@@ -39,9 +39,11 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
   const setSettings = useUiStore(state => state.setForecastExport);
   const { width, delay } = settings;
   const scope = map.panelLayout > 1 ? settings.scope : "panel";
-  const parts = scope === "layout" ? Array.from({ length: map.panelLayout }, (_, index) => ({
-    panel: index, product: productOf(catalog, panelProduct(map, index), index) ?? undefined,
-  })) : [{ panel, product }];
+  const parts = scope === "layout" ? Array.from({ length: map.panelLayout }, (_, index) => {
+    const chosen = panelProduct(map, index);
+    const resolved = productOf(catalog, chosen, index) ?? undefined;
+    return { panel: index, product: resolved, ...(resolved === undefined ? {} : { productKey: variantKeyOf(resolved, chosen) }) };
+  }) : [{ panel, product, productKey: variantKeyOf(product, panelProduct(map, panel)) }];
   const available = parts.every((part) => part.product !== undefined && panelLayers(map, part.panel)["model-field"].visible);
   const hours = context.hours.filter((hour) => parts.every((part) => part.product !== undefined && hour >= part.product.minimumForecastHour));
   const [selected, setSelected] = useState(() => hours.slice(Math.max(0, hours.indexOf(context.hour)), Math.max(0, hours.indexOf(context.hour)) + 12));
@@ -74,9 +76,9 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
     controller.current = job;
     if (includesDrawing) useUiStore.getState().setForecastDrawingDetails(details);
     setBusy(true); setError(""); setResult(null); setProgress(null); setCopy(null); setActiveFormat(format);
-    const options: ForecastExportOptions = { context, product, panel, model: context.model.label, run: context.run,
+    const options: ForecastExportOptions = { context, product, productKey: variantKeyOf(product, panelProduct(map, panel)), panel, model: context.model.label, run: context.run,
       hours: format === "png" ? [context.hour] : selectedHours, width, height, delay, units, format,
-      panels: parts.flatMap((part) => part.product === undefined ? [] : [{ panel: part.panel, product: part.product }]) };
+      panels: parts.flatMap((part) => part.product === undefined ? [] : [{ panel: part.panel, product: part.product, ...(part.productKey === undefined ? {} : { productKey: part.productKey }) }]) };
     // Fixture builds may observe the existing callbacks without adding work to production exports.
     const benchmark = import.meta.env.MODE === "fixture" && format === "gif" ? window.__SHARPPY_GIF_BENCHMARK__ : undefined;
     benchmark?.start(options);

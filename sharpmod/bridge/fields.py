@@ -47,7 +47,7 @@ def _quantize(values: Any) -> tuple[bytes, float, float, float]:
     return sharpmod_rs.quantize_map_field(values)
 
 
-def _request(params: dict[str, Any], *, require_interval: bool = True):
+def _resolve_request(params: dict[str, Any], *, require_interval: bool = True):
     """Validate the same model/product/run selection for fields and contours."""
     p.keys(params, ("product", "run_time", "forecast_hour"), ("model",))
     from sharpmod.providers import hrrr_field, hrrr_products
@@ -55,7 +55,14 @@ def _request(params: dict[str, Any], *, require_interval: bool = True):
     if model not in hrrr_products.FIELD_MODELS:
         raise p.invalid(f"model {model!r} has no map fields")
     key = p.text(params, "product", 1, 40)
-    product = next((item for item in hrrr_products.available_products(model) if item.key == key), None)
+    product = next(
+        (
+            item
+            for item in hrrr_products.available_products(model)
+            if item.key == key or any(vkey == key for vkey, _ in getattr(item, "variants", ()))
+        ),
+        None,
+    )
     if product is None:
         raise p.invalid(f"product {key!r} is not a {model} field product")
     run = p.time(params, "run_time")
@@ -68,25 +75,27 @@ def _request(params: dict[str, Any], *, require_interval: bool = True):
         raise BridgeError("FIELD_UNAVAILABLE", f"{model} publishes 00, 06, 12 and 18Z runs.", False)
     if model in hrrr_products.HRW_MODELS and run.hour not in (0, 12):
         raise BridgeError("FIELD_UNAVAILABLE", "HRW publishes only 00 and 12Z runs.", False)
-    if model in {"rap", "rdps"}:
+    if model in {"rap", "rdps", "hrdps"}:
         from sharpmod.tools.model_extract import forecast_hours
         if hour not in forecast_hours(model, cycle_hour=run.hour):
             raise BridgeError("FIELD_UNAVAILABLE", f"{model.upper()} does not publish this forecast hour for the selected run.", False)
-        return model, product, run, hour
+        return model, product, key, run, hour
     if model == "aigfs":
         if hour % 6:
             raise BridgeError("FIELD_UNAVAILABLE", "AIGFS publishes six-hour steps through F384.", False)
-        return model, product, run, hour
+        return model, product, key, run, hour
     if model in hrrr_products.GLOBAL_MODELS:
         from sharpmod.tools.model_extract import cycle_hours, forecast_hours
-        if ((model == "gdps" and run.hour not in cycle_hours(model))
+        if ((model in {"gdps", hrrr_products.ICON_MODEL} and run.hour not in cycle_hours(model))
                 or hour not in forecast_hours(model, cycle_hour=run.hour)):
             if model == "gdps":
                 raise BridgeError("FIELD_UNAVAILABLE", "GDPS maps use 00 and 12Z runs with three-hour steps through F240.", False)
             if model == "gfs":
                 raise BridgeError("FIELD_UNAVAILABLE", "GFS publishes hourly steps through F120, then three-hour steps through F384.", False)
+            if model == hrrr_products.ICON_MODEL:
+                raise BridgeError("FIELD_UNAVAILABLE", "ICON uses 00/06/12/18Z runs, hourly through F078 and every three hours after. The 06/18Z runs stop at F120, and the 00/12Z runs stop at F180.", False)
             raise BridgeError("FIELD_UNAVAILABLE", "ECMWF publishes three-hour steps through F144, then six-hour steps; 06/18Z runs stop at F144.", False)
-        return model, product, run, hour
+        return model, product, key, run, hour
     limit = (hrrr_field.max_forecast_hour(run.hour) if model == "hrrr"
              else 48 if model in {"hrw-wrf-arw", "hrw-wrf-nssl"}
              else 84 if model in {"rrfs-a", "nam"} else 60)
@@ -96,22 +105,28 @@ def _request(params: dict[str, Any], *, require_interval: bool = True):
         )
     if model == "nam" and hour % 3:
         raise BridgeError("FIELD_UNAVAILABLE", "NAM map fields publish every three forecast hours.", False)
+    return model, product, key, run, hour
+
+
+def _request(params: dict[str, Any], *, require_interval: bool = True):
+    model, product, _key, run, hour = _resolve_request(params, require_interval=require_interval)
     return model, product, run, hour
 
 
 def grid(params: dict[str, Any]) -> dict[str, Any]:
     """One selected model product/run/hour, as a lat/lon grid of values."""
     from sharpmod.bridge.frame_cache import path, read
-    model, product, run, hour = _request(params)
-    return read(path("grid", model, product.key, run, hour, FRAME)) or _acquire(model, product, run, hour)[0]
+    model, product, requested_key, run, hour = _resolve_request(params)
+    return read(path("grid", model, requested_key, run, hour, FRAME)) or _acquire(model, product, run, hour, requested_key)[0]
 
 
-def _acquire(model, product, run, hour):
+def _acquire(model, product, run, hour, requested_key=None):
     """Produce compact raster and auxiliary outputs from one cold acquisition."""
     from sharpmod.bridge import frame_cache
 
     cancellation.check()
-    target = frame_cache.path("grid", model, product.key, run, hour, FRAME)
+    grid_key = requested_key or product.key
+    target = frame_cache.path("grid", model, grid_key, run, hour, FRAME)
     auxiliary = frame_cache.path("contours", model, product.key, run, hour, FRAME)
     key = (str(target),)
     with _FLIGHT_LOCK:
@@ -138,14 +153,15 @@ def _acquire(model, product, run, hour):
                 with _FLIGHT_LOCK:
                     return all(event is not None and event.is_set() for event in consumers)
             try:
-                cached, lines = _produce(model, product, run, hour, target, stopped)
+                cached, lines = _produce(model, product, grid_key, run, hour, target, stopped)
             except BridgeError as error:
-                legacy = frame_cache.path("grid", model, product.key, run, hour, FRAME, legacy=True)
+                legacy = frame_cache.path("grid", model, grid_key, run, hour, FRAME, legacy=True)
                 cached = cached or frame_cache.read(legacy)
                 if cached is None:
                     raise
                 if lines is None:
-                    lines = error
+                    previous = frame_cache.path("contours", model, product.key, run, hour, FRAME, legacy=True)
+                    lines = (frame_cache.read(previous) if previous != auxiliary else None) or error
         result = (cached, lines)
         flight.set_result(result)
         return result
@@ -160,44 +176,64 @@ def _acquire(model, product, run, hour):
                 _FLIGHTS.pop(key, None)
 
 
-def _produce(model, product, run, hour, target, stopped):
+def _produce(model, product, grid_key, run, hour, target, stopped):
     import numpy as np
     import sharpmod_rs
     from sharpmod.providers import hrrr_field
     from sharpmod.bridge import contours, frame_cache
     bounds = hrrr_field.field_bounds(model)
-    what = f"{model.upper()} {product.label}, {run:%Y-%m-%d %H}Z run, F{hour:03d}"
-    cache_key = f"{model}:{product.key}"
-    values = hrrr_field.cached_derived(cache_key, run, hour, FRAME)
+    model_label = "ICON" if model == hrrr_field.ICON_MODEL else model.upper()
+    what = f"{model_label} {product.label}, {run:%Y-%m-%d %H}Z run, F{hour:03d}"
+    cache_key = f"{model}:{grid_key}"
+    guidance = product.category == "Guidance"
+    refs_zarr = model == "refs" and product.key in {
+        "qpf-1h-ptype", "qpf-3h", "qpf-6h", "qpf-24h", "qpf-48h",
+        "snow-1h",
+        "sbcape", "mucape", "srh-0-1km", "ehi-0-1km", "ehi-0-3km", "scp", "stp",
+        "refc-4h", "refc-24h", "wind-10m-4h", "wind-10m-24h",
+    }
+    values = None if guidance else hrrr_field.cached_derived(cache_key, run, hour, FRAME)
+    source_url = None
+    decoded = None
     needs_auxiliary = product.contour is not None or product.wind
     lines = None
     if values is None or needs_auxiliary:
         timeout, _limit = hrrr_field._remote_limits()
         try:
-            decoded = hrrr_field._download_fields(
-                product,
-                run,
-                hour,
-                opener=hrrr_field._default_opener,
-                timeout=timeout,
-                should_cancel=stopped,
-                model=model,
-            )
-            if stopped():
-                raise cancellation.Cancelled()
-            missing = [item.name for item in product.fields if item.name not in decoded
-                       and item.name != getattr(product.contour, "name", None)]
-            if missing:
-                raise hrrr_field.HrrrFieldError(f"decoded fields are missing: {', '.join(missing)}")
-            field = np.asarray(product.derive(decoded), dtype=np.float32)
-            if field.shape != hrrr_field.field_grid(model).shape:
-                raise hrrr_field.HrrrFieldError(f"derived a {field.shape} grid")
-            interpolate = product.palette.units != "flag"
-            if interpolate and model in hrrr_field.GLOBAL_MODELS:
-                values = sharpmod_rs.reproject_global_map_field(field, FRAME, bounds)
+            if guidance:
+                values, source_url = sharpmod_rs.grefs_map_field(
+                    product.key, run, hour, bounds, timeout, stopped,
+                )
             else:
-                mapping = hrrr_field.index_map(FRAME, bounds, model=model, interpolate=interpolate)
-                values = hrrr_field.reproject(field, mapping)
+                if refs_zarr:
+                    decoded, source_url = sharpmod_rs.refs_zarr_map_fields(
+                        grid_key, run, hour, timeout, stopped,
+                    )
+                else:
+                    decoded = hrrr_field._download_fields(
+                        product,
+                        run,
+                        hour,
+                        opener=hrrr_field._default_opener,
+                        timeout=timeout,
+                        should_cancel=stopped,
+                        model=model,
+                    )
+                if stopped():
+                    raise cancellation.Cancelled()
+                missing = [item.name for item in product.fields if item.name not in decoded
+                           and item.name != getattr(product.contour, "name", None)]
+                if missing:
+                    raise hrrr_field.HrrrFieldError(f"decoded fields are missing: {', '.join(missing)}")
+                field = np.asarray(product.derive(decoded), dtype=np.float32)
+                if field.shape != hrrr_field.field_grid(model).shape:
+                    raise hrrr_field.HrrrFieldError(f"derived a {field.shape} grid")
+                interpolate = product.palette.units != "flag" and not product.key.endswith("-ptype")
+                if interpolate and model in hrrr_field.GLOBAL_MODELS:
+                    values = sharpmod_rs.reproject_global_map_field(field, FRAME, bounds)
+                else:
+                    mapping = hrrr_field.index_map(FRAME, bounds, model=model, interpolate=interpolate)
+                    values = hrrr_field.reproject(field, mapping)
         except DownloadCancelled:
             raise cancellation.Cancelled() from None
         except hrrr_field.HrrrFieldUnavailable as exc:
@@ -212,13 +248,16 @@ def _produce(model, product, run, hour, target, stopped):
             raise _field_error(
                 "FIELD_FETCH_FAILED", f"{what} could not be read", exc, False
             ) from None
-        hrrr_field.remember_derived(cache_key, run, hour, FRAME, values)
+        if not guidance:
+            hrrr_field.remember_derived(cache_key, run, hour, FRAME, values)
     data, scale, low, high = _quantize(np.asarray(values, dtype=np.float32))
     if stopped():
         raise cancellation.Cancelled()
     height, width = values.shape
+    if model == hrrr_field.ICON_MODEL:
+        source_url = sharpmod_rs.icon_map_url(run, hour, product.fields[0].name)
     result = frame_cache.write(target, {
-        "product": product.key,
+        "product": grid_key,
         "run_time": p.iso(run),
         "forecast_hour": hour,
         "valid_time": p.iso(run + timedelta(hours=hour)),
@@ -231,12 +270,16 @@ def _produce(model, product, run, hour, target, stopped):
         "nodata": NODATA,
         "value_min": low,
         "value_max": high,
-        "source_url": hrrr_field.grib_url(run, hour, product.sources[0], model),
-        "attribution": ("ECMWF IFS via ECMWF Open Data (CC BY 4.0)" if model in hrrr_field.ECMWF_MODELS
+        "source_url": source_url or hrrr_field.grib_url(run, hour, product.sources[0], model),
+        "attribution": ("NOAA Storm Prediction Center GREFS via NOMADS" if guidance
+                        else "NOAA Storm Prediction Center REFS" if refs_zarr
+                        else "ECMWF IFS via ECMWF Open Data (CC BY 4.0)" if model in hrrr_field.ECMWF_MODELS
+                        else "Deutscher Wetterdienst (DWD) ICON Global" if model == hrrr_field.ICON_MODEL
                         else "NOAA/NCEP GFS via AWS Open Data" if model == "gfs"
-                        else "Environment and Climate Change Canada via MSC Datamart" if model in {"gdps", "rdps"}
+                        else "Environment and Climate Change Canada via MSC Datamart" if model in {"gdps", "rdps", "hrdps"}
                         else "NOAA/NCEP RAP via AWS Open Data" if model == "rap"
                         else "NOAA/NCEP AIGFS via NOMADS" if model == "aigfs"
+                        else "NOAA/NCEP REFS ensemble mean via NOMADS" if model == "refs"
                         else hrrr_field.ATTRIBUTION if model == "hrrr"
                         else "NOAA/NCEP NAM via AWS Open Data" if model in {"nam", "nam-3km-conus"}
                         else "NOAA/NCEP HiResW via NOMADS" if model in hrrr_field.HRW_MODELS

@@ -1,7 +1,7 @@
 import type { TextureSource } from "@deck.gl/core";
 import type { FieldFrame, Palette } from "../types/map";
 import { parseColour } from "./canvasTokens";
-import { buildLut, cellColours, LUT_SIZE, paletteRange } from "./field/colourize";
+import { buildLut, cellColours, isPtypePalette, LUT_SIZE, paletteRange } from "./field/colourize";
 import type { FieldImage } from "./layers/registry";
 
 interface ColouredField { palette: Palette; image: FieldImage; pixels?: ImageData }
@@ -102,7 +102,7 @@ export function smoothFieldProps({ frame, palette }: FieldImage): FieldSamplingP
 /** Prepare just this frame and sampling mode; publish no partial image after cancellation. */
 export async function prepareFieldImage(frame: FieldFrame, palette: Palette, smoothing: boolean, signal: AbortSignal): Promise<void> {
   signal.throwIfAborted();
-  const smooth = smoothing && palette.units !== "flag";
+  const smooth = smoothing && palette.units !== "flag" && !isPtypePalette(palette);
   const entry = fieldEntry(frame, palette);
   const chunks = fieldPixels(frame, smooth ? null : palette);
   while ((smooth ? grids.get(frame) : entry.pixels) === undefined) {

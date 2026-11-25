@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { copyForecastGif, getDesktopPlatform, openUpdateReleases } from "./tauriTransport";
+import { copyForecastGif, getDesktopPlatform, openUpdateReleases, starGitHubRepository } from "./tauriTransport";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -28,4 +28,22 @@ it("propagates native clipboard errors", async () => {
   const error = new Error("clipboard unavailable");
   vi.stubGlobal("__TAURI_INTERNALS__", { invoke: vi.fn().mockRejectedValue(error) });
   await expect(copyForecastGif(new Uint8Array([1]))).rejects.toBe(error);
+});
+
+it("invokes star_github_repository and validates its typed outcome", async () => {
+  const invoke = vi.fn()
+    .mockResolvedValueOnce({ status: "starred", url: "https://github.com/ShianMike/SHARPpy-Reimagined" })
+    .mockResolvedValueOnce({ status: "openedBrowser", url: "https://github.com/ShianMike/SHARPpy-Reimagined" })
+    .mockResolvedValueOnce({ status: "bad", url: 123 });
+  vi.stubGlobal("__TAURI_INTERNALS__", { invoke });
+  await expect(starGitHubRepository()).resolves.toEqual({
+    status: "starred",
+    url: "https://github.com/ShianMike/SHARPpy-Reimagined",
+  });
+  await expect(starGitHubRepository()).resolves.toEqual({
+    status: "openedBrowser",
+    url: "https://github.com/ShianMike/SHARPpy-Reimagined",
+  });
+  await expect(starGitHubRepository()).rejects.toThrow("Invalid response payload");
+  expect(invoke).toHaveBeenNthCalledWith(1, "star_github_repository", {}, undefined);
 });

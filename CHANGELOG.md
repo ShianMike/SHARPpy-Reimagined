@@ -137,6 +137,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Install the existing Zarr codec in Rust CI so the REFS Blosc decoding test
+  runs in the standalone test environment.
 - Show separate Rain, Snow, Freezing rain, and Mix color tables with weather
   icons for REFS Mean 1-h QPF. Stack the tables in a single column in forecast
   exports. The interactive scale reports amounts in inches.

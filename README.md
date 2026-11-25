@@ -74,10 +74,21 @@ can restore profiles, edits and history after reopening the app.
 
 ## Screenshots
 
-A Winter sounding from the Barrow, Alaska observed profile.
-Open the image to inspect its full resolution.
+Select any v3.10.0 screenshot to view it at full resolution.
 
-[![Winter sounding with Skew-T, hodograph, precipitation source and low-level diagnostics](docs/images/v3.8.0/winter-sounding.png)](docs/images/v3.8.0/winter-sounding.png)
+[![Overview showing the SPC convective risk and forecast discussion over a REFS precipitation map](docs/images/v3.10.0/overview.png)](docs/images/v3.10.0/overview.png)
+
+*Overview with the SPC convective outlook, forecast discussion, and workspace shortcuts.*
+
+| Model Viewer · REFS Mean parameters | Model Viewer · REFS Mean precipitation |
+| --- | --- |
+| [![Searchable parameter picker over a 500 mb wind map with labeled height contours](docs/images/v3.10.0/refs-mean-parameter-picker.png)](docs/images/v3.10.0/refs-mean-parameter-picker.png) | [![One-hour precipitation map with separate icon-labeled scales for rain, snow, freezing rain, and mix](docs/images/v3.10.0/refs-mean-precipitation-types.png)](docs/images/v3.10.0/refs-mean-precipitation-types.png) |
+
+| Live Tracking · KBYX radar | Soundings · HRRR Severe profile |
+| --- | --- |
+| [![KBYX base reflectivity over the Florida Keys at a 0.5-degree radar tilt](docs/images/v3.10.0/live-tracking-radar.png)](docs/images/v3.10.0/live-tracking-radar.png) | [![Severe sounding with Skew-T, hodograph, and parcel and export controls for an HRRR profile near Deerfield Beach](docs/images/v3.10.0/severe-sounding-controls.png)](docs/images/v3.10.0/severe-sounding-controls.png) |
+
+See also the [Winter sounding from an observed profile at Barrow, Alaska](docs/images/v3.8.0/winter-sounding.png).
 
 ## Get started
 

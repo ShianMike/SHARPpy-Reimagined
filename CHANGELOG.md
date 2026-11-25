@@ -105,6 +105,8 @@ Target version: **3.10.0** (not published).
 - Restyle the Overview outlooks with the app's glass surface, a prominent risk
   summary, compact category and product icons, aligned UTC timing, and a
   continuous forecast discussion reader.
+- Refresh the README gallery with v3.10.0 screenshots of Overview, Model Viewer,
+  Live Tracking, and Soundings.
 - Start Model Viewer panels with Road networks and Rivers off by default.
 - Preserve subtle map shading and frame-to-frame color changes in forecast and
   sounding GIFs while keeping cropped-frame compression.

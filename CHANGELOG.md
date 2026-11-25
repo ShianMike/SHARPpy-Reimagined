@@ -106,8 +106,8 @@ Target version: **3.10.0** (not published).
   summary, compact category and product icons, aligned UTC timing, and a
   continuous forecast discussion reader.
 - Refresh the README gallery with full-resolution v3.10.0 screenshots of
-  Overview, the REFS Mean parameter picker and precipitation map, Live Tracking,
-  and Soundings.
+  Overview, the REFS Mean parameter picker and F043 precipitation map, Live
+  Tracking, and Soundings.
 - Start Model Viewer panels with Road networks and Rivers off by default.
 - Preserve subtle map shading and frame-to-frame color changes in forecast and
   sounding GIFs while keeping cropped-frame compression.

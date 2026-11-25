@@ -80,9 +80,9 @@ Select any v3.10.0 screenshot to view it at full resolution.
 
 *Overview with the SPC convective outlook, forecast discussion, and workspace shortcuts.*
 
-| Model Viewer · REFS Mean parameters | Model Viewer · REFS Mean precipitation |
+| Model Viewer · REFS Mean parameters | Model Viewer · REFS Mean precipitation (F043) |
 | --- | --- |
-| [![Searchable parameter picker over a 500 mb wind map with labeled height contours](docs/images/v3.10.0/refs-mean-parameter-picker.png)](docs/images/v3.10.0/refs-mean-parameter-picker.png) | [![One-hour precipitation map with separate icon-labeled scales for rain, snow, freezing rain, and mix](docs/images/v3.10.0/refs-mean-precipitation-types.png)](docs/images/v3.10.0/refs-mean-precipitation-types.png) |
+| [![Searchable parameter picker over a 500 mb wind map with labeled height contours](docs/images/v3.10.0/refs-mean-parameter-picker.png)](docs/images/v3.10.0/refs-mean-parameter-picker.png) | [![REFS Mean F043 one-hour precipitation map with separate scales for rain, snow, freezing rain, and mix](docs/images/v3.10.0/refs-mean-precipitation-f043.png)](docs/images/v3.10.0/refs-mean-precipitation-f043.png) |
 
 | Live Tracking · KBYX radar | Soundings · HRRR Severe profile |
 | --- | --- |

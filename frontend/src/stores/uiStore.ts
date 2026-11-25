@@ -5,6 +5,7 @@ import { DEFAULT_UNITS, parseUnitPreferences, type UnitPreferences } from "../li
 import { FORECAST_OUTLOOK_DAYS, MAX_FORECAST_AUTHOR_LENGTH, type ForecastDrawingDetails } from "../types/forecastDrawing";
 import type { SoundingColorStyle } from "../types/soundings";
 import { DEFAULT_FORECAST_EXPORT_SETTINGS, parseForecastExportSettings, type ForecastExportSettings } from "./forecastExportSettings";
+import { DEFAULT_GITHUB_STAR_PREFERENCE, parseGitHubStarPreference, type GitHubStarPreference } from "./githubStarPreferences";
 
 export type Theme = "system" | "light" | "dark";
 type PopupPosition = { x: number; y: number } | null;
@@ -35,6 +36,8 @@ interface UiState {
   setForecastDrawingDetails(value: ForecastDrawingDetails): void;
   popupPositions: Record<string, PopupPosition>;
   setPopupPosition(id: string, value: PopupPosition): void;
+  githubStar: GitHubStarPreference;
+  setGitHubStar(value: GitHubStarPreference): void;
   setCollapsed(value: boolean): void;
   setTheme(value: Theme): void;
   setSoundingColorStyle(value: SoundingColorStyle): void;
@@ -47,7 +50,7 @@ function cleanForecastAuthor(name: string): string {
   return Array.from(name.trim().replace(/\s+/gu, " ")).slice(0, MAX_FORECAST_AUTHOR_LENGTH).join("");
 }
 
-export const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2, 3, 4] as const;
+export const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2, 3, 4, 5, 6] as const;
 export const useUiStore = create<UiState>()(persist((set, get) => ({
   lastUpdateCheckWindow: null,
   setLastUpdateCheckWindow: (lastUpdateCheckWindow) => { set({ lastUpdateCheckWindow }); },
@@ -81,6 +84,8 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
   setForecastDrawingDetails: ({ author, day }) => { set({ forecastDrawingDetails: { author: cleanForecastAuthor(author), day } }); },
   popupPositions: {},
   setPopupPosition: (id, position) => { set((state) => ({ popupPositions: { ...state.popupPositions, [id]: position } })); },
+  githubStar: DEFAULT_GITHUB_STAR_PREFERENCE,
+  setGitHubStar: (githubStar) => { set({ githubStar: parseGitHubStarPreference(githubStar) }); },
   setCollapsed: (collapsed) => { set({ collapsed }); },
   setTheme: (theme) => { set({ theme }); },
   setSoundingColorStyle: (soundingColorStyle) => { set({ soundingColorStyle }); },
@@ -107,9 +112,9 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
     };
   }),
   partialize: ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback,
-    popupPositions, units, forecastExport, forecastOutlinesOnly, forecastDrawingDetails }) => ({
+    popupPositions, githubStar, units, forecastExport, forecastOutlinesOnly, forecastDrawingDetails }) => ({
     lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback,
-    popupPositions, units, forecastExport, forecastOutlinesOnly, forecastDrawingDetails,
+    popupPositions, githubStar, units, forecastExport, forecastOutlinesOnly, forecastDrawingDetails,
   }),
   merge: (saved, current) => {
     const value = saved !== null && typeof saved === "object" ? saved as Record<string, unknown> : {};
@@ -137,6 +142,7 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
         const { x, y } = point as Record<string, unknown>;
         return typeof x === "number" && Number.isFinite(x) && typeof y === "number" && Number.isFinite(y) ? [[id, { x, y }]] : [];
       })),
+      githubStar: parseGitHubStarPreference(value.githubStar),
     };
   },
 }));

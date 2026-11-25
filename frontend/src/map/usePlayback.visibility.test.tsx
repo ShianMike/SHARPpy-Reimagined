@@ -49,7 +49,7 @@ it.each(["overview", "live", "sounding", "status", "settings"] as const)("does n
   } finally { hook.unmount(); queryClient.clear(); }
 });
 
-it.each([1, 3, 4])("waits for both render modes across four panels at %s times speed and carries the next load forward", async (speed) => {
+it.each([1, 3, 4, 5, 6])("waits for both render modes across four panels at %s times speed and carries the next load forward", async (speed) => {
   vi.useFakeTimers();
   useAppStore.setState({ activeWorkspace: "map" });
   vi.stubGlobal("ImageData", class { constructor(public data: Uint8ClampedArray, public width: number, public height: number) {} });

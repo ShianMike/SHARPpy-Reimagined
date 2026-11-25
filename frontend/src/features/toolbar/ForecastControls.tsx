@@ -1,8 +1,9 @@
-import { CalendarDays, ChevronDown, Clock3, CloudSun, SlidersHorizontal } from "lucide-react";
+import { CalendarDays, ChevronDown, Clock3, CloudSun, Layers, SlidersHorizontal } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Surface } from "../../ui/Surface";
 import { Action } from "../../ui/Controls";
 import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
+import { SourceSelect } from "../sounding/SourceFields";
 import { Popover } from "../../components/Popover";
 import { cx } from "../../lib/cx";
 import { failureOf } from "../../lib/backend/errors";
@@ -39,7 +40,9 @@ export function ForecastControls({ className }: ForecastControlsProps): ReactNod
   const open = (kind: ForecastStep | "parameter", element: HTMLButtonElement): void => {
     setAnchor(element); setPicker(kind); setPickerOpen(!(pickerOpen && picker === kind));
   };
-  return <Surface className={cx(styles.fields, className)} data-motion="fade" role="group" aria-label="Forecast" data-testid="forecast-fields">
+  const variants = context?.fieldsAvailable === true ? field.product?.variants : undefined;
+  const hasVariants = variants !== undefined && variants.length > 0;
+  return <Surface className={cx(styles.fields, hasVariants && styles.fieldsWithVariant, className)} data-motion="fade" role="group" aria-label="Forecast" data-testid="forecast-fields">
     <button className={cx(styles.trigger, hints.target)} type="button" aria-label="Choose model" aria-description={context?.model.label} aria-haspopup="dialog" aria-expanded={pickerOpen && picker === "model"} disabled={context === null} onClick={(event) => { open("model", event.currentTarget); }}>
       <CloudSun className="icon-sm" aria-hidden="true" /><span className={styles.triggerCopy}><span className={styles.name}>Model</span><strong>{context?.model.label ?? "—"}</strong>{context === null ? <small>{reason}</small> : null}</span><ChevronDown className="icon-sm" aria-hidden="true" />
       <span className={hints.hint} data-side="bottom" aria-hidden="true">{context?.model.label ?? reason}</span>
@@ -59,6 +62,9 @@ export function ForecastControls({ className }: ForecastControlsProps): ReactNod
       <SlidersHorizontal className="icon-sm" aria-hidden="true" /><span className={styles.triggerCopy}><span className={styles.name}>Parameter{panel > 0 ? ` · ${String(panel + 1)}` : ""}</span><strong>{parameterLabel}</strong></span><ChevronDown className="icon-sm" aria-hidden="true" />
       <span className={hints.hint} data-side="bottom" aria-hidden="true">{parameterHint}</span>
     </button>
+    {hasVariants ? <SourceSelect label="Field" toolbarIcon={Layers} value={field.variant?.key ?? field.product?.key ?? ""}
+      options={variants.map((variant) => ({ value: variant.key, label: variant.label }))}
+      onChange={(nextKey) => { useMapStore.getState().setProduct(nextKey); }} /> : null}
     {forecast.status === "error" ? <button type="button" className={styles.retry} onClick={forecast.retry} disabled={forecast.retrying}>Retry models</button> : null}
     <Popover open={parameterErrorOpen} anchor={parameterAnchor} movable role="dialog" label="Parameters unavailable" initialFocus="first"
       className={styles.loadError} onClose={() => { setDismissedError(field.catalog.error); }}>
@@ -74,7 +80,7 @@ export function ForecastControls({ className }: ForecastControlsProps): ReactNod
       label={picker === "parameter" ? "Parameters" : FORECAST_TITLES[picker]} initialFocus="first" align={picker === "parameter" ? "end" : "start"} width="content"
       className={picker === "parameter" ? styles.parameterPicker : cx(styles.picker, picker === "hour" && styles.hourPicker, picker === "model" && styles.modelPicker)}>
       {picker !== "parameter" && context !== null ? <ForecastDialog context={context} step={picker} anchor={anchor} download={download} onClose={() => { setPickerOpen(false); }} /> : null}
-      {picker === "parameter" && field.catalog.data !== undefined ? <ParameterPicker products={field.catalog.data.products} selected={field.product?.key ?? null} anchor={anchor} onClose={() => { setPickerOpen(false); }} /> : null}
+      {picker === "parameter" && field.catalog.data !== undefined ? <ParameterPicker products={field.catalog.data.products} selected={field.variant?.key ?? field.product?.key ?? null} anchor={anchor} onClose={() => { setPickerOpen(false); }} /> : null}
     </Popover>
     <span className={styles.announcement} role="status" aria-label="Forecast downloads">{download.started ? download.message : ""}</span>
   </Surface>;

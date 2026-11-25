@@ -342,33 +342,16 @@ def _classify_from_inputs(mucape, esrh, ebwd, stp, scp, ship):
     tuple maps to exactly one non-"insufficient data" label (Requirements 9.1,
     9.2, 9.3).
     """
-    # 2. No meaningful convection.
-    if mucape < _MUCAPE_MIN_CONVECTION:
-        return "none"
+    import sharpmod_rs
 
-    # 3. Significant-tornado environment.
-    if (stp >= _STP_TORNADO and scp >= _SCP_SUPERCELL
-            and esrh >= _ESRH_TORNADO and ebwd >= _EBWD_ORGANIZED):
-        return "tornado"
-
-    # 4. Organized/rotating storms (supercell) not meeting the tornado threshold.
-    if scp >= _SCP_SUPERCELL or ebwd >= _EBWD_SUPERCELL:
-        return "supercell"
-
-    # 5. Significant-hail environment.
-    if ship >= _SHIP_HAIL:
-        return "hail"
-
-    # 6. Damaging-wind environment.
-    if mucape >= _MUCAPE_WIND and ebwd >= _EBWD_ORGANIZED:
-        return "wind"
-
-    # 7. Low-end (marginal) severe potential.
-    if mucape >= _MUCAPE_MARGINAL or ebwd >= _EBWD_MARGINAL:
-        return "marginal"
-
-    # 8. Otherwise.
-    return "none"
+    return sharpmod_rs.classify_hazard_inputs(
+        float(mucape),
+        float(esrh),
+        float(ebwd),
+        float(stp),
+        float(scp),
+        float(ship),
+    )
 
 
 def classify(prof) -> str:

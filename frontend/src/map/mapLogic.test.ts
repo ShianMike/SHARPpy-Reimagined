@@ -1,4 +1,5 @@
 import mapCatalogFixture from "@contracts/public/map/catalog.json";
+import perModelFixtures from "@contracts/public/map/catalog.models.json";
 import modelCatalogFixture from "@contracts/public/soundings/models.catalog.json";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
@@ -7,7 +8,7 @@ import { parseMapCatalog } from "../lib/contracts/map";
 import { parseModelCatalog } from "../lib/contracts/soundings";
 import type { FieldFrame, SpcOutlook } from "../types/map";
 import { trimFieldCache } from "./mapQueries";
-import { defaultProductFor, productOf } from "./panelField";
+import { defaultProductFor, productOf, selectedVariant, variantKeyOf } from "./panelField";
 import { hourAfter } from "./usePlayback";
 
 const models = parseModelCatalog(modelCatalogFixture).models;
@@ -54,6 +55,19 @@ describe("the forecast context", () => {
     expect(hourAfter(hours, 0, -1, true)).toBe(3);
     expect(hourAfter(hours, 9, 1, true)).toBe(0);
   });
+
+  it("offers only complete intervals for selected guidance and keeps guidance opt-in for split maps", () => {
+    const refs = parseMapCatalog({ ...perModelFixtures.refs, products: perModelFixtures.refs.products.map((product) => ({
+      ...product,
+      ...(product.category !== "Guidance" ? {} : { forecastHours: product.key.endsWith("-24h") ? [36, 60] : [4, 5, 36, 60] }),
+    })) });
+    const choice = { modelKey: "refs", runTime: "2026-10-04T12:00:00Z", forecastHour: 1 };
+    expect(resolveForecast(models, refs, choice)?.hour).toBe(1);
+    expect(resolveForecast(models, refs, choice, ["grefs-wind-4h"])).toMatchObject({ hours: [4, 5, 36, 60], hour: 4 });
+    expect(resolveForecast(models, refs, choice, ["grefs-wind-4h", "grefs-tor-24h"])).toMatchObject({ hours: [36, 60], hour: 36 });
+    expect(defaultProductFor(refs, 1)?.category).toBe("Surface");
+    expect([0, 1, 2, 3].map((panel) => defaultProductFor(refs, panel)?.category)).not.toContain("Guidance");
+  });
 });
 
 describe("panel products", () => {
@@ -71,6 +85,20 @@ describe("panel products", () => {
     expect(productOf(catalog, "lftx", 2)?.key).toBe("lftx");
     expect(productOf(catalog, "not-listed", 0)?.key).toBe(catalog.defaultProduct);
     expect(productOf(undefined, "tmp-2m", 0)).toBeNull();
+  });
+
+  it("resolves a variant to its parent field and falls back to the default variant", () => {
+    const refs = parseMapCatalog(perModelFixtures.refs);
+    const field = refs.products.find((product) => product.variants !== undefined);
+    const minimum = field?.variants?.find((variant) => variant.label === "Ensemble Minimum");
+    const maximum = field?.variants?.find((variant) => variant.label === "Ensemble Maximum");
+    if (field === undefined || minimum === undefined || maximum === undefined) {
+      throw new Error("Missing REFS field variants");
+    }
+    expect(productOf(refs, maximum.key, 0)).toBe(field);
+    expect(selectedVariant(field, maximum.key)).toEqual(maximum);
+    expect(selectedVariant(field, "unknown")).toEqual({ key: field.key, label: "Ensemble Mean" });
+    expect(variantKeyOf(field, minimum.key)).toBe(minimum.key);
   });
 });
 

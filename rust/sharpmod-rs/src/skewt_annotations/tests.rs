@@ -234,33 +234,34 @@ fn assert_readable_lapse_rate_labels(
                 let args = call.get_item(1)?;
                 match name.as_str() {
                     "setPen" => pen = Some(args.get_item(0)?),
-                    "drawLine" | "drawText" => {
+                    "drawLine" => {
                         let pen = pen.as_ref().expect("annotation pen should be set");
                         assert!(
                             pen.call_method0("color")?.eq(&annotation_color)?,
                             "{name} at {rate:.1} °C/km on {background} should use {expected}"
                         );
-                        if name == "drawLine" {
-                            assert_eq!(pen.call_method0("widthF")?.extract::<f64>()?, 2.0);
-                            draws.push("bracket");
+                        assert_eq!(pen.call_method0("widthF")?.extract::<f64>()?, 2.0);
+                        draws.push("bracket");
+                    }
+                    "drawText" => {
+                        let pen = pen.as_ref().expect("label pen should be set");
+                        let color = pen.call_method0("color")?;
+                        if color.eq(&plot_color)? {
+                            draws.push("halo");
                         } else {
+                            assert!(color.eq(&annotation_color)?);
                             draws.push("text");
                         }
-                    }
-                    "strokePath" => {
-                        assert!(!args.get_item(0)?.call_method0("isEmpty")?.is_truthy()?);
-                        let halo = args.get_item(1)?;
-                        assert!(halo.call_method0("color")?.eq(&plot_color)?);
-                        let width: f64 = halo.call_method0("widthF")?.extract()?;
-                        assert!(width > 0.0 && width <= 3.0, "glyph halo width {width}");
-                        draws.push("halo");
                     }
                     "drawRect" | "fillRect" => panic!("annotation should have no backing plate"),
                     _ => {}
                 }
             }
-            assert_eq!(draws, ["bracket", "bracket", "bracket", "halo", "text"]);
-            let label = recorder.getattr("texts")?.get_item(0)?;
+            let mut expected_order = vec!["bracket"; 3];
+            expected_order.extend(["halo"; 8]);
+            expected_order.push("text");
+            assert_eq!(draws, expected_order);
+            let label = recorder.getattr("texts")?.get_item(8)?;
             assert!(label.get_item(2)?.eq(&bold_font)?);
             assert!(!widget
                 .getattr("esrh_font")?

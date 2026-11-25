@@ -6,6 +6,7 @@
 
 import { LayerExtension, type Layer } from "@deck.gl/core";
 import { BitmapLayer } from "@deck.gl/layers";
+import { isPtypePalette } from "../field/colourize";
 import { smoothFieldProps, type FieldSamplingProps } from "../fieldImages";
 import { buildContourLayers } from "./ContourLayer";
 import { buildWindBarbLayers } from "./WindBarbLayer";
@@ -169,8 +170,8 @@ function rasterLayer(id: string, raster: RasterImage | null, state: LayerState):
 }
 
 function fieldBitmap(field: FieldImage | null, state: LayerState, id: string): BitmapLayer[] {
-  // Occurrence flags stay nearest-neighbour: interpolation would invent fractional categories.
-  const sampling = state.smoothing && field !== null && field.palette.units !== "flag" ? smoothFieldProps(field) : null;
+  // Occurrence flags and categorical precip-type offsets stay nearest-neighbour: interpolation would invent fractional categories.
+  const sampling = state.smoothing && field !== null && field.palette.units !== "flag" && !isPtypePalette(field.palette) ? smoothFieldProps(field) : null;
   let bitmap = rasterLayer(id,
     sampling !== null && field !== null ? { image: sampling.image, bounds: field.bounds } : field, state);
   if (sampling !== null) {

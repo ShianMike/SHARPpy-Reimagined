@@ -31,6 +31,7 @@ RENDER_PARCELS = ("SFC", "ML", "FCST", "MU", "EFF")
 IMAGE_MODES = ("hd", "uhd")
 COLOR_STYLES = ("standard", "inverted", "protanopia")
 RECENT_RUN_COUNT = 16
+MAP_ONLY_MODELS = ("aigfs", "refs", "hrdps")
 
 
 def _png_size(data: bytes) -> tuple[int, int]:
@@ -61,10 +62,11 @@ def model_status(params: dict[str, Any]) -> dict[str, Any]:
     """Check provider inventories without decoding map or sounding data."""
     p.keys(params, ("model", "run_time", "forecast_hour"))
     from sharpmod.tools import model_extract as mx
+    from sharpmod.providers.hrrr_products import ICON_MODEL
 
     key = p.text(params, "model", 1, 40)
     config = next((cfg for cfg in mx.available_models() if cfg.key == key), None)
-    if key == "aigfs":
+    if key in MAP_ONLY_MODELS:
         config = mx.get_config(key)
     if config is None:
         raise p.invalid("model is not in the forecast catalogue")
@@ -75,13 +77,26 @@ def model_status(params: dict[str, Any]) -> dict[str, Any]:
     if hour not in mx.forecast_hours(config, cycle_hour=run.hour):
         raise p.invalid("forecast_hour is not published by this cycle")
     provider = mx.provider_capability(config, cycle_hour=run.hour).provider
-    if key == "aigfs":
+    if key in (*MAP_ONLY_MODELS, ICON_MODEL):
         from sharpmod.providers import hrrr_field as hf
-        provider = "NOAA/NCEP NOMADS"
+        provider = ("Deutscher Wetterdienst (DWD)" if key == ICON_MODEL else
+                    "ECCC MSC Datamart" if key == "hrdps" else "NOAA/NCEP NOMADS")
         try:
-            rows = hf.fetch_inventory(hf.grib_url(run, hour, "sfc", key), timeout=2.0)
+            if key == "hrdps":
+                from sharpmod.providers.hrrr_products import available_products
+                from sharpmod_rs import available_hrdps_map_products
+
+                rows = available_hrdps_map_products(available_products(key), run, hour, 2.0)
+            elif key == ICON_MODEL:
+                from sharpmod_rs import probe_icon_map
+
+                probe_icon_map(run, hour, 2.0)
+                rows = True
+            else:
+                rows = hf.fetch_inventory(hf.grib_url(run, hour, "sfc", key), timeout=2.0)
             state = "available" if rows else "unavailable"
-            message = "Surface map inventory found. Maps only; soundings are unavailable." if rows else "No surface map inventory found for this run and hour."
+            message = "Forecast map field found." if key == ICON_MODEL else (
+                "Map inventory found. Maps only." if rows else "No map inventory found for this run and hour.")
         except hf.HrrrFieldUnavailable:
             state, message = "unavailable", "Map fields are not published for this run and hour."
         except hf.HrrrFieldError:
@@ -121,7 +136,7 @@ def models_catalog(params: dict[str, Any]) -> dict[str, Any]:
     from sharpmod.analysis.ensemble_members import member_labels
 
     models: list[dict[str, Any]] = []
-    for config in (*mx.available_models(), mx.get_config("aigfs")):
+    for config in (*mx.available_models(), *(mx.get_config(key) for key in MAP_ONLY_MODELS)):
         runs = _recent_runs(config.cycles, now, RECENT_RUN_COUNT)
         # Publication lags the cycle: hourly models by about two hours, the others
         # by about five. The suggestion is the newest run older than that.

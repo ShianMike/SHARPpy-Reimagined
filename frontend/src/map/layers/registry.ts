@@ -9,7 +9,7 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import type { CanvasTokens } from "../canvasTokens";
 import type { LabelTier } from "../../stations/stationFormat";
 import type { Station } from "../../types/contracts";
-import type { ContourLines, FieldFrame, Outlook, OutlookKey, Palette, Place, ProductContour, RadarSite, ReportPoint } from "../../types/map";
+import type { ContourLines, FieldFrame, Outlook, OutlookLayerKey, Palette, Place, ProductContour, RadarSite, ReportPoint } from "../../types/map";
 import type { Bounds } from "../../types/soundings";
 import type { SpotterPosition } from "../../types/spotters";
 import type { SurfacePlot } from "../../types/surface";
@@ -19,21 +19,21 @@ import type { ScreenPoint, Viewport } from "../labels/declutter";
 
 export const LAYER_IDS = [
   "basemap", "roads", "rivers", "stations", "station-labels", "selection", "model-field", "satellite", "radar",
-  "storm-reports", "surface-plots", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "boundaries",
-  "model-domain", "place-labels", "watches", "warnings", "radar-site-labels", "isobars", "spotter-network",
+  "storm-reports", "surface-plots", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "wpc-ero", "wpc-winter",
+  "boundaries", "model-domain", "place-labels", "watches", "warnings", "radar-site-labels", "isobars", "spotter-network",
 ] as const;
 export type LayerId = (typeof LAYER_IDS)[number];
 
 /** The weather layers, which the user may stack in any order; bottom first by default. */
 export const ORDERABLE_LAYER_IDS = [
-  "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail",
+  "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "wpc-ero", "wpc-winter",
   "isobars", "surface-plots", "watches", "warnings", "spotter-network",
 ] as const;
 export type OrderableLayerId = (typeof ORDERABLE_LAYER_IDS)[number];
 
 /** Keep controls and rendering consistent, including previously saved layers. */
 export function layerInView(id: LayerId, view: "map" | "live"): boolean {
-  if (id === "model-field" || id === "isobars" || id.startsWith("spc-")) return view === "map";
+  if (id === "model-field" || id === "isobars" || id.startsWith("spc-") || id.startsWith("wpc-")) return view === "map";
   if (["radar", "satellite", "warnings", "watches", "radar-site-labels", "spotter-network"].includes(id)) return view === "live";
   return true;
 }
@@ -70,6 +70,8 @@ export const LAYER_DEFAULTS: Readonly<Record<LayerId, LayerState>> = {
   "spc-torn": { visible: false, opacity: 1 },
   "spc-wind": { visible: false, opacity: 1 },
   "spc-hail": { visible: false, opacity: 1 },
+  "wpc-ero": { visible: false, opacity: 1 },
+  "wpc-winter": { visible: false, opacity: 1 },
   boundaries: { visible: true, opacity: 1 },
   "model-domain": { visible: true, opacity: 1 },
   "place-labels": { visible: true, opacity: 1 },
@@ -114,7 +116,7 @@ export interface SceneData {
   contourSpec: ProductContour | null;
   /** Mean-sea-level pressure, independent of the selected field and its contours. */
   isobars: ContourLines | null;
-  outlooks: Readonly<Partial<Record<OutlookKey, Outlook>>>;
+  outlooks: Readonly<Partial<Record<OutlookLayerKey, Outlook>>>;
   /** The selected model's domain, a closed [lon, lat] path. */
   domain: readonly (readonly [number, number])[] | null;
   /** All place names; the label pass picks the subset to draw. */
@@ -197,37 +199,21 @@ export interface LayerDescriptor<Id extends string = LayerId> {
 }
 
 export function clampOpacity(value: number): number {
-  if (Number.isNaN(value)) {
-    return 0;
-  }
-  return Math.min(1, Math.max(0, value));
+  return Number.isNaN(value) ? 0 : Math.min(1, Math.max(0, value));
 }
-
-function stateFor<Id extends string>(
-  descriptor: LayerDescriptor<Id>,
-  states: Partial<Readonly<Record<Id, LayerState>>>,
-): LayerState {
+function stateFor<Id extends string>(descriptor: LayerDescriptor<Id>, states: Partial<Readonly<Record<Id, LayerState>>>): LayerState {
   const state = states[descriptor.id] ?? descriptor.defaults;
   return { ...state, opacity: clampOpacity(state.opacity) };
 }
-
-/** The zOrder of a descriptor, with the weather layers placed by the user's order. */
 function zOrderOf<Id extends string>(descriptor: LayerDescriptor<Id>, order: readonly string[]): number {
   const index = order.indexOf(descriptor.id);
   return index === -1 ? descriptor.zOrder : ORDERABLE_BASE + index;
 }
-
-function byZOrder<Id extends string>(
-  descriptors: readonly LayerDescriptor<Id>[],
-  order: readonly string[] = ORDERABLE_LAYER_IDS,
-): LayerDescriptor<Id>[] {
+function byZOrder<Id extends string>(descriptors: readonly LayerDescriptor<Id>[], order: readonly string[] = ORDERABLE_LAYER_IDS): LayerDescriptor<Id>[] {
   return [...descriptors].sort((a, b) => zOrderOf(a, order) - zOrderOf(b, order));
 }
 
-/**
- * The deck.gl layers of every deck descriptor, lowest zOrder first. Visibility
- * and opacity reach deck.gl as layer props, so a toggle keeps the GPU buffers.
- */
+/** Build deck.gl layers in z-order. Layer props preserve GPU buffers when toggled. */
 export function buildDeckLayers<Id extends string>(
   descriptors: readonly LayerDescriptor<Id>[],
   states: Partial<Readonly<Record<Id, LayerState>>>,
@@ -245,7 +231,9 @@ export function buildDeckLayers<Id extends string>(
       const layers = descriptor.build(context, stateFor(descriptor, states));
       for (const layer of layers) {
         // Keep readings above every weather fill, even when the user reorders overlays.
-        if (descriptor.id === "spotter-network" || descriptor.id === "surface-plots" || descriptor.id === "storm-reports" || ((layer.id.startsWith("spc-") || descriptor.id === "isobars") && layer.id.endsWith("-labels"))) {
+        const contourOrOutlookLabels = layer.id.endsWith("-labels")
+          && (descriptor.id === "model-field" || descriptor.id === "isobars" || layer.id.startsWith("spc-") || layer.id.startsWith("wpc-"));
+        if (descriptor.id === "spotter-network" || descriptor.id === "surface-plots" || descriptor.id === "storm-reports" || contourOrOutlookLabels) {
           labels.push(layer);
           continue;
         }
@@ -258,41 +246,20 @@ export function buildDeckLayers<Id extends string>(
   return [...out, ...labels];
 }
 
-/** Applies the state of every MapLibre style descriptor. */
-export function applyStyleLayers<Id extends string>(
-  map: MapLibreMap,
-  descriptors: readonly LayerDescriptor<Id>[],
-  states: Partial<Readonly<Record<Id, LayerState>>>,
-): void {
+export function applyStyleLayers<Id extends string>(map: MapLibreMap, descriptors: readonly LayerDescriptor<Id>[], states: Partial<Readonly<Record<Id, LayerState>>>): void {
   for (const descriptor of byZOrder(descriptors)) {
-    if (descriptor.kind === "maplibre-style" && descriptor.apply !== undefined) {
-      descriptor.apply(map, stateFor(descriptor, states));
-    }
+    if (descriptor.kind === "maplibre-style" && descriptor.apply !== undefined) descriptor.apply(map, stateFor(descriptor, states));
   }
 }
-
-/** The descriptors the layer panel lists, in zOrder (the weather layers in the user's order). */
-export function controllableLayers<Id extends string>(
-  descriptors: readonly LayerDescriptor<Id>[],
-  order: readonly string[] = ORDERABLE_LAYER_IDS,
-): LayerDescriptor<Id>[] {
+export function controllableLayers<Id extends string>(descriptors: readonly LayerDescriptor<Id>[], order: readonly string[] = ORDERABLE_LAYER_IDS): LayerDescriptor<Id>[] {
   return byZOrder(descriptors, order).filter((descriptor) => descriptor.userControllable);
 }
-
-/** A fresh copy of the defaults, for the map store. */
 export function defaultLayerStates(): Record<LayerId, LayerState> {
-  return Object.fromEntries(
-    LAYER_IDS.map((id) => [id, { ...LAYER_DEFAULTS[id] }]),
-  ) as Record<LayerId, LayerState>;
+  return Object.fromEntries(LAYER_IDS.map((id) => [id, { ...LAYER_DEFAULTS[id] }])) as Record<LayerId, LayerState>;
 }
-
-/** `order` with `id` moved one step up (1, towards the top) or down (-1). */
 export function moveInOrder<T extends string>(order: readonly T[], id: T, direction: 1 | -1): T[] {
-  const index = order.indexOf(id);
-  const target = index + direction;
-  if (index === -1 || target < 0 || target >= order.length) {
-    return [...order];
-  }
+  const index = order.indexOf(id), target = index + direction;
+  if (index === -1 || target < 0 || target >= order.length) return [...order];
   const next = [...order];
   next[index] = order[target] as T;
   next[target] = id;

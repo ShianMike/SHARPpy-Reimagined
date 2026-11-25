@@ -572,6 +572,51 @@ fn accumulation_and_nan_maxima_remain_correct_across_bounded_batches() {
             "nam".into(),
         )?;
         assert_eq!(value(py, &sum, "apcp")?, 45.);
+        let body = (1..=6).flat_map(|value| message(value, 24)).collect();
+        let index = (1..=6)
+            .map(|step| {
+                format!(
+                    "{step}:{}:d:APCP:surface:{}-{step} hour acc fcst:\n",
+                    (step - 1) * 24,
+                    step - 1
+                )
+            })
+            .collect::<String>()
+            .into_bytes();
+        server.replace(body, index, "\"hourly-acc\"");
+        let qpf_kwargs = PyDict::new(py);
+        qpf_kwargs.set_item("key", "qpf-6h")?;
+        qpf_kwargs.set_item("max_hours", 6)?;
+        let qpf_product = PyModule::import(py, "dataclasses")?
+            .getattr("replace")?
+            .call((product(py, "apcp")?,), Some(&qpf_kwargs))?;
+        let qpf6 = download_map_fields(py, &qpf_product, &run(py)?, 6, 5., None, "refs-m1".into())?;
+        assert_eq!(value(py, &qpf6, "apcp")?, 21.);
+        let body = [message(5, 24)].concat();
+        let index = b"1:0:d:ASNOW:surface:0-5 hour acc fcst:\n".to_vec();
+        server.replace(body, index, "\"hourly-diff\"");
+        let snow_field = PyModule::import(py, "sharpmod.providers.hrrr_products")?
+            .getattr("FieldSpec")?
+            .call1(("asnow", "sfc", "ASNOW", "surface", "0-* acc fcst"))?;
+        let snow_kwargs = PyDict::new(py);
+        snow_kwargs.set_item("key", "snow-1h")?;
+        snow_kwargs.set_item("fields", (snow_field,))?;
+        snow_kwargs.set_item("max_hours", 1)?;
+        let snow_product = PyModule::import(py, "dataclasses")?
+            .getattr("replace")?
+            .call((product(py, "pwat")?,), Some(&snow_kwargs))?;
+        let snow_plan_f01 = plan::fields(py, &snow_product, &run(py)?, 1, 5., "refs-m1", None)?;
+        assert!(snow_plan_f01.diff && !snow_plan_f01.sum && !snow_plan_f01.maximum);
+        assert_eq!(snow_plan_f01.fields.len(), 1);
+        let snow_plan_f06 = plan::fields(py, &snow_product, &run(py)?, 6, 5., "refs-m1", None)?;
+        assert!(snow_plan_f06.diff);
+        assert_eq!(snow_plan_f06.fields.len(), 2);
+        let snow_f01 =
+            download_map_fields(py, &snow_product, &run(py)?, 1, 5., None, "refs-m1".into())?;
+        assert_eq!(value(py, &snow_f01, "asnow")?, 5.);
+        let snow_f06 =
+            download_map_fields(py, &snow_product, &run(py)?, 6, 5., None, "refs-m1".into())?;
+        assert_eq!(value(py, &snow_f06, "asnow")?, 0.);
         let body = (1..=9)
             .flat_map(|value| message(if value == 4 { 254 } else { value }, 24))
             .collect();
@@ -594,6 +639,24 @@ fn accumulation_and_nan_maxima_remain_correct_across_bounded_batches() {
         let output = download_map_fields(py, &maximum, &run(py)?, 9, 5., None, "hrrr".into())?;
         assert_eq!(value(py, &output, "uh03")?, 254.);
         assert!(output
+            .bind(py)
+            .get_item("uh03")?
+            .unwrap()
+            .cast::<PyArray2<f32>>()?
+            .readonly()
+            .as_array()[[0, 1]]
+        .is_nan());
+        let run_max = download_map_fields(
+            py,
+            &product(py, "uh-0-3km-run")?,
+            &run(py)?,
+            9,
+            5.,
+            None,
+            "hrrr".into(),
+        )?;
+        assert_eq!(value(py, &run_max, "uh03")?, 254.);
+        assert!(run_max
             .bind(py)
             .get_item("uh03")?
             .unwrap()

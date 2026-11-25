@@ -4,7 +4,6 @@ import { useBackendClient } from "../../lib/backend/BackendProvider";
 import { useRadarSites } from "../../map/mapQueries";
 import { nearestRadarSite } from "../../map/nearestSite";
 import { FRAME_INTERVAL_MS } from "../../map/usePlayback";
-import { useSelectionAnchor } from "../../map/surfaceQueries";
 import { useAppStore } from "../../stores/appStore";
 import { useMapStore } from "../../stores/mapStore";
 import { liveHistoryTimes, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
@@ -26,7 +25,6 @@ export function useLiveHistory() {
   const sites = useRadarSites(true).data?.sites;
   const camera = useMapStore((state) => state.cameraSnapshot);
   const site = nearestRadarSite(sites ?? [], camera?.center[1] ?? 0, camera?.center[0] ?? 0);
-  const anchor = useSelectionAnchor();
   const { now, selectedTime, playing } = useLiveTrackingStore();
   const { speed, loop } = useUiStore();
   const panels = useMapStore((state) => state.livePanels);
@@ -35,7 +33,7 @@ export function useLiveHistory() {
   const cycle = useRef<LivePreparation | null>(null);
 
   const load = useCallback(async (time: number, followingLive: boolean, next: LivePreparation) => {
-    const requests = liveRequests(client, useMapStore.getState(), site, anchor, liveTimestamp(time), sites, followingLive);
+    const requests = liveRequests(client, useMapStore.getState(), site, liveTimestamp(time), sites, followingLive);
     await Promise.allSettled(requests.map((request) => {
       const key = hashKey(request.queryKey);
       let preparation = next.requests.get(key);
@@ -51,7 +49,7 @@ export function useLiveHistory() {
     const prepared = requests.map(({ queryKey }) => queryKey);
     if (!useLiveTrackingStore.getState().playing) trimLiveCache(queryClient);
     return prepared;
-  }, [client, queryClient, site, anchor, sites]);
+  }, [client, queryClient, site, sites]);
 
   useEffect(() => {
     if (!playing) {

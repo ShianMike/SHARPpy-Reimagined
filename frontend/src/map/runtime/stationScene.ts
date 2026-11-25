@@ -35,7 +35,7 @@ const NO_STATIONS: readonly Station[] = [];
 const NO_PLACES: readonly Place[] = [];
 const NO_SURFACE_DETAILS: readonly SurfacePlot[] = [];
 const DRAWING_HIDDEN_LAYERS = new Set<LayerId>([
-  "stations", "station-labels", "selection", SURFACE_LAYER_ID,
+  "stations", "station-labels", "selection", SURFACE_LAYER_ID, "wpc-ero",
   ...OUTLOOK_KEYS.map((key) => `spc-${key}` as const),
 ]);
 
@@ -46,6 +46,7 @@ function weatherShown(layers: Readonly<Record<LayerId, LayerState>>, data: Scene
     (layers.satellite.visible && data.satellite !== null) ||
     (layers.radar.visible && data.radar !== null) ||
     (data.alerts?.some((alert) => layers[alert.kind === "warning" ? "warnings" : "watches"].visible) ?? false) ||
+    (layers["wpc-ero"].visible && data.outlooks.ero !== undefined) ||
     OUTLOOK_KEYS.some((key) => layers[`spc-${key}` as const].visible && data.outlooks[key] !== undefined)
   );
 }
@@ -84,13 +85,17 @@ export class StationScene {
 
   constructor(
     private readonly overlay: MapLibreOverlay,
-    private readonly tokens: CanvasTokens,
+    private tokens: CanvasTokens,
     private readonly labelFont: string,
     /** The panel this scene draws: 0 to 3. */
     readonly panel: number,
     /** Called after each setProps: true when a visible, non-empty station layer went out. */
     private readonly onSubmitted: (stationsShown: boolean) => void,
   ) {}
+
+  setTokens(tokens: CanvasTokens): void {
+    this.tokens = tokens;
+  }
 
   setWeatherBeforeId(id: string | undefined): void {
     this.weatherBeforeId = id;
@@ -175,7 +180,7 @@ export class StationScene {
       occupied.push({ x, y, halfWidth });
       return true;
     });
-    const details = plots === null || (state.view === "map" && zoom < SURFACE_DETAIL_MIN_ZOOM)
+    const details = plots === null || zoom < SURFACE_DETAIL_MIN_ZOOM
       ? [] : selectSurfaceDetails(plots, map, bounds, viewport, labelSize, globe);
     if (details.length !== this.surfaceDetails.length || details.some(({ plot }, index) => plot !== this.surfaceDetails[index])) {
       this.surfaceDetails = details.map(({ plot }) => plot);
@@ -235,7 +240,7 @@ export class StationScene {
         ...this.data,
         surfacePresentation: {
           details: currentSurfaceLayout ? this.surfaceDetails : NO_SURFACE_DETAILS,
-          markers: mapState.view === "map",
+          markers: true,
         },
         windBarbs: this.windBarbs,
         point: mapState.view === "live" ? null : app.selectedPoint,

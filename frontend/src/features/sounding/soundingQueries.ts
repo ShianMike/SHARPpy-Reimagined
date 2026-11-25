@@ -25,10 +25,12 @@ const MODEL_LIST_STALE_MS = 10 * 60_000;
 /** Images are large; an unused one leaves memory after five minutes. */
 const IMAGE_GC_MS = 5 * 60_000;
 
-// NWS SCN 26-47 retires these offered families on 2026-11-03.
-// Keep their labels, backend definitions and providers for archived data.
-// https://www.weather.gov/media/notification/pdf_2026/scn26-47_Updated_Retirement_of_NAM_SREF_HREF_HiresW_NAM_MOS_aac.pdf
-const RETIRED_MODELS = new Set(["nam", "nam-3km-conus", "sref", "href", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3"]);
+// NWS SCN 26-47 ended NAM production beginning with the 12Z cycle.
+const NAM_ARCHIVE_LAST_RUN = "2026-11-03T06:00:00Z";
+const HIDDEN_RETIRED_MODELS = new Set(["sref", "href", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3"]);
+
+export const NAM_ARCHIVE_NOTICE = "NOAA ended NAM production on 3 Nov 2026. The last archived run is 06Z that day. Coverage varies by date and forecast hour.";
+export const isNamArchive = (modelKey: string): boolean => modelKey === "nam" || modelKey === "nam-3km-conus";
 
 const MODEL_LABELS: Readonly<Record<string, string>> = {
   hrrr: "HRRR",
@@ -36,6 +38,7 @@ const MODEL_LABELS: Readonly<Record<string, string>> = {
   nam: "NAM",
   "nam-3km-conus": "NAM 3km CONUS",
   rdps: "RDPS",
+  hrdps: "HRDPS",
   "hrw-wrf-arw": "HRW WRF-ARW",
   "hrw-wrf-nssl": "HRW WRF-NSSL",
   "hrw-fv3": "HRW FV3",
@@ -45,23 +48,30 @@ const MODEL_LABELS: Readonly<Record<string, string>> = {
   "refs-m3": "REFSm3",
   "refs-m4": "REFSm4",
   "refs-m5": "REFSm5",
+  "refs": "REFS Mean",
   gfs: "GFS",
   gdps: "GDPS",
   aigfs: "AIGFS",
+  "openmeteo-icon-global": "ICON",
   "openmeteo-ecmwf-ifs025": "ECMWF",
   "ecmwf-ifs-9km": "ECMWF 9km",
 };
 
 export const MODEL_REGIONS = ["CONUS", "Global", "Regional"] as const;
 export const modelRegion = (model: Pick<ForecastModel, "key" | "domain">): (typeof MODEL_REGIONS)[number] =>
-  model.key === "nam" || model.key === "rap" ? "Regional"
+  isNamArchive(model.key) ? "CONUS" : model.key === "rap" ? "Regional"
     : model.domain === "CONUS" ? "CONUS" : model.domain === "Global" ? "Global" : "Regional";
 
 const requestedModels = (catalog: ModelCatalog): ModelCatalog => ({
   ...catalog,
   models: catalog.models
-    .filter((model) => !RETIRED_MODELS.has(model.key) && Object.hasOwn(MODEL_LABELS, model.key))
-    .map((model) => ({ ...model, label: MODEL_LABELS[model.key] ?? model.label }))
+    .filter((model) => !HIDDEN_RETIRED_MODELS.has(model.key) && Object.hasOwn(MODEL_LABELS, model.key))
+    .map((model) => {
+      const label = MODEL_LABELS[model.key] ?? model.label;
+      return isNamArchive(model.key)
+        ? { ...model, label, suggestedRun: NAM_ARCHIVE_LAST_RUN, recentRuns: [NAM_ARCHIVE_LAST_RUN] }
+        : { ...model, label };
+    })
     .toSorted((left, right) => MODEL_REGIONS.indexOf(modelRegion(left)) - MODEL_REGIONS.indexOf(modelRegion(right))),
 });
 

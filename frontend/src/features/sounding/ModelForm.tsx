@@ -6,7 +6,7 @@ import { Notice } from "../../components/Notice";
 import { useSoundingStore } from "../../stores/soundingStore";
 import type { ForecastModel } from "../../types/soundings";
 import { SoundingErrorNotice } from "./SoundingErrorNotice";
-import { modelRegion, useModelCatalog, useOpenSounding } from "./soundingQueries";
+import { isNamArchive, modelRegion, NAM_ARCHIVE_NOTICE, useModelCatalog, useOpenSounding } from "./soundingQueries";
 import { addHours, forecastLabel, resolveModelRun } from "./soundingTime";
 import { SourceSelect } from "./SourceFields";
 import { ModelRunFields } from "./ModelRunFields";
@@ -70,7 +70,14 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
 
   return (
     <form className={styles.form} onSubmit={submit} aria-label="Model sounding">
-      <SourceSelect label="Model" value={model.key} popup="list" searchLabel="Search models" options={models.map((item) => ({ value: item.key, label: item.label, group: modelRegion(item), detail: `${item.domain}${item.gridSpacingKm === null ? "" : ` · ${String(item.gridSpacingKm)} km`}` }))} onChange={(modelKey) => { edit({ modelKey, runTime: null, forecastHour: null }); }} />
+      <SourceSelect label="Model" value={model.key} popup="list" searchLabel="Search models"
+        options={models.map((item) => ({
+          value: item.key,
+          label: item.label,
+          group: modelRegion(item),
+          detail: `${isNamArchive(item.key) ? "Archive · " : ""}${item.domain}${item.gridSpacingKm === null ? "" : ` · ${String(item.gridSpacingKm)} km`}`,
+        }))} onChange={(modelKey) => { edit({ modelKey, runTime: null, forecastHour: null }); }} />
+      {isNamArchive(model.key) ? <p className={styles.hint}>{NAM_ARCHIVE_NOTICE}</p> : null}
       <ModelRunFields model={model} run={run} onChange={(runTime) => { edit({ modelKey: model.key, runTime }); }} />
       <SourceSelect label="Forecast" value={hour} popup="grid" options={hours.map((item) => ({ value: item, label: forecastLabel(item), group: `Valid ${addHours(run, item).slice(0, 10)} · UTC`, detail: `${addHours(run, item).slice(11, 13)}Z` }))} onChange={(forecastHour) => { edit({ forecastHour }); }} />
       <div className={styles.pair}>

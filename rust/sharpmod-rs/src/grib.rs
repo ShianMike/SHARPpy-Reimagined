@@ -20,8 +20,10 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 pub mod area;
 pub(crate) mod gdps_grid;
+pub(crate) mod grefs_grid;
 mod grid_points;
 pub(crate) mod humidity;
+pub(crate) mod icon_grid;
 mod messages;
 mod point_cache;
 #[cfg(test)]

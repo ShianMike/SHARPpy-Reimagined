@@ -33,27 +33,16 @@ import { encodeShrf, parseShrf } from "../contracts/frames";
 import type { CommandName, Transport } from "./transport";
 import radarSites from "@contracts/public/map/radar-sites.json";
 import radarTilts from "@contracts/public/map/radar-tilts.json";
-import { contoursFor, hoursLater, latestSurfacePlotsFixture, outlookFor, reportsFor, satelliteFrameFor, siteFrameFor, surfacePlotsFor, thresholdFor } from "./fixtureFrames";
+import { contoursFor, hoursLater, latestSurfacePlotsFixture, outlookFor, reportsFor, satelliteFrameFor, siteFrameFor, surfacePlotsFor, thresholdFor, wpcOutlookFor } from "./fixtureFrames";
 import reportOptionsFixture from "@contracts/public/map/reports-options.json";
 import thresholdMetricsFixture from "@contracts/public/soundings/threshold-metrics.json";
 import thresholdCsvFixture from "@contracts/public/soundings/threshold-csv.example.json";
 import storageFixture from "@contracts/public/storage/usage.json";
 import clearedStorageFixture from "@contracts/public/storage/clear.json";
 export const SCENARIOS = [
-  "python-unavailable",
-  "catalog-error",
-  "seed-fallback",
-  "restarting",
-  "slow-catalog",
-  "health-error",
+  "python-unavailable", "catalog-error", "seed-fallback", "restarting", "slow-catalog", "health-error",
   // Map-side (DESIGN-frontend F4); the transport serves the healthy defaults.
-  "basemap-missing",
-  // Soundings: opening one fails as no provider has data.
-  "sounding-error",
-  "render-disconnected",
-  // Map data: every field frame is unpublished; outlooks, radar, and the UWyo list fail.
-  "field-error",
-  "overlay-error",
+  "basemap-missing", "sounding-error", "render-disconnected", "field-error", "overlay-error",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 /** Rejections the catalog-error scenario makes before it succeeds: the call and two automatic retries. */
@@ -250,6 +239,8 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
     get_weather_alerts: (args) => scenario === "overlay-error" ? rejectWith(overlayFailed) : Promise.resolve({ ...copy(weatherAlerts) as Record<string, unknown>, validTime: args?.validTime }),
     get_spc_outlook: (args) =>
       scenario === "overlay-error" ? rejectWith(overlayFailed) : Promise.resolve(outlookFor(args)),
+    get_wpc_outlook: (args) =>
+      scenario === "overlay-error" ? rejectWith(overlayFailed) : Promise.resolve(wpcOutlookFor(args)),
     build_forecast_drawing: () => rejectWith({
       code: "METHOD_NOT_FOUND",
       message: "Draw Forecast requires the live backend.",

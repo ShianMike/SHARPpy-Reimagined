@@ -243,41 +243,35 @@ describe("layer registry", () => {
     expect(clampOpacity(Number.NaN)).toBe(0);
   });
 
-  it("renders a test-only descriptor with no WeatherMap change", () => {
+  it("renders a test-only descriptor and WPC ERO fills/outlines/labels without WeatherMap edits", () => {
     const probe: LayerDescriptor<"probe-layer"> = {
-      id: "probe-layer",
-      label: "Probe",
-      kind: "deck",
-      zOrder: 150,
-      userControllable: true,
-      opacityControl: true,
+      id: "probe-layer", label: "Probe", kind: "deck", zOrder: 150, userControllable: true, opacityControl: true,
       defaults: { visible: true, opacity: 0.5 },
-      build: (context, state) => [
-        new ScatterplotLayer<Station>({
-          id: "probe-layer",
-          data: context.stations,
-          getPosition: (s) => [s.longitude, s.latitude],
-          visible: state.visible,
-          opacity: state.opacity,
-        }),
-      ],
+      build: (context, state) => [new ScatterplotLayer<Station>({ id: "probe-layer", data: context.stations, getPosition: (s) => [s.longitude, s.latitude], visible: state.visible, opacity: state.opacity })],
     };
     const registry: LayerDescriptor<string>[] = [...LAYER_REGISTRY, probe];
     const layers = buildDeckLayers(registry, defaultLayerStates(), ctx);
-    expect(layers.map((layer) => layer.id)).toEqual([
-      "stations",
-      "station-labels",
-      "probe-layer",
-      "selection-halo",
-      "selection-marker",
-    ]);
+    expect(layers.map((layer) => layer.id)).toEqual(["stations", "station-labels", "probe-layer", "selection-halo", "selection-marker"]);
     expect(layers.find((layer) => layer.id === "probe-layer")?.props.opacity).toBe(0.5);
     expect(controllableLayers(registry).map((d) => d.id)).toContain("probe-layer");
+
+    const ero: Outlook = {
+      title: "WPC", subtitle: "", validFrom: null, validTo: null, issued: null, covers: true, sourceUrl: "", attribution: "",
+      areas: [{ label: "SLGT", description: "Slight (At Least 15%)", fill: "#FFFE00", stroke: "#E69800", rank: 2, hatch: false, hatchLevel: 0, rings: [[[0, 0], [10, 0], [10, 10], [0, 10]]] }],
+    };
+    const eroStates = defaultLayerStates();
+    eroStates["wpc-ero"].visible = true;
+    const eroLayers = buildDeckLayers(LAYER_REGISTRY, eroStates, { ...ctx, outlooks: { ero } });
+    expect(eroLayers.map((l) => l.id)).toEqual(expect.arrayContaining(["wpc-ero-fill", "wpc-ero-outline", "wpc-ero-labels"]));
+    const labelLayer = eroLayers.find((l): l is TextLayer => l instanceof TextLayer && l.id === "wpc-ero-labels");
+    expect((labelLayer?.props.data as { text: string }[])[0]?.text).toBe("ERO SLGT");
   });
 
   it("lists only the user-controllable layers for the panel, in zOrder", () => {
     expect(controllableLayers(LAYER_REGISTRY).map((d) => d.id)).toEqual([
-      "basemap", "roads", "rivers", "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "isobars", "surface-plots", "watches", "warnings", "spotter-network", "model-domain", "place-labels",
+      "basemap", "roads", "rivers", "model-field", "satellite", "radar", "storm-reports",
+      "spc-cat", "spc-torn", "spc-wind", "spc-hail", "wpc-ero", "wpc-winter", "isobars",
+      "surface-plots", "watches", "warnings", "spotter-network", "model-domain", "place-labels",
       "stations", "radar-site-labels", "station-labels",
     ]);
   });

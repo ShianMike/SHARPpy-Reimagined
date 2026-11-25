@@ -6,7 +6,7 @@ import { dirname } from "node:path";
 import { expect, test } from "./support/test";
 import { waitForMapDrawn } from "./support/app";
 import { layerSettings, turnOn } from "./support/ui";
-import type { GifBenchmarkCapture } from "../src/features/forecastExport/gifExport.benchmark";
+import type { GifBenchmarkCapture } from "../src/features/forecastExport/gifExportBenchmark";
 
 const output = process.env.SHARPPY_GIF_BENCHMARK_OUT;
 const width = 1920;

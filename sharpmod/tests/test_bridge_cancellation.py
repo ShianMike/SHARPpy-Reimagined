@@ -104,7 +104,7 @@ def test_cancelling_one_shared_acquisition_preserves_another_consumer(monkeypatc
     first, second = Event(), Event()
     product = SimpleNamespace(key="test", contour=None, wind=False)
     calls = []
-    def produce(_model, _product, _run, _hour, _target, stopped):
+    def produce(_model, _product, _grid_key, _run, _hour, _target, stopped):
         calls.append(1)
         entered.set()
         assert finish.wait(5)
@@ -143,7 +143,7 @@ def test_fresh_consumers_replace_an_abandoned_field_without_losing_their_flight(
     product = SimpleNamespace(key="cancel-rejoin", contour=None, wind=False)
     calls = []
 
-    def produce(_model, _product, _run, _hour, _target, stopped):
+    def produce(_model, _product, _grid_key, _run, _hour, _target, stopped):
         calls.append(1)
         if len(calls) == 1:
             abandoned.set()

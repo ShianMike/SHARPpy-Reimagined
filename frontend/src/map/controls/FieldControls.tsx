@@ -97,6 +97,14 @@ export function FieldControls({ panel }: { panel: number }): ReactNode {
   return (
     <div className={styles.extra}>
       <ProductSelect catalog={catalog.data} value={product.key} />
+      {product.variants !== undefined && product.variants.length > 0 ? (
+        <SourceSelect
+          label="Field"
+          value={field.variant?.key ?? product.key}
+          options={product.variants.map((variant) => ({ value: variant.key, label: variant.label }))}
+          onChange={useMapStore.getState().setProduct}
+        />
+      ) : null}
       <div className={styles.rendering}>
         <span>Pixels</span>
         <div className={styles.renderingOptions} role="group" aria-label="Pixel rendering" aria-description="Applies to all model parameters in this panel.">

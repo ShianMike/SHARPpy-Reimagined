@@ -12,6 +12,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { BackendHealth, BridgeStatus } from "../../types/contracts";
 import { isTransitional } from "../contracts/health";
 import type { BackendClient } from "./client";
+import { browserEdgePath, EdgeStatusMonitor } from "./edge";
 import { recordLog } from "../../stores/logStore";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { useSoundingRecoveryStore } from "../../stores/soundingRecoveryStore";
@@ -47,6 +48,7 @@ export interface BackendProviderProps {
 
 export function BackendProvider({ client, children }: BackendProviderProps): ReactNode {
   const queryClient = useQueryClient();
+  const edgePath = browserEdgePath();
   const [subscription, setSubscription] = useState<SubscriptionState>({ subscribed: false, eventsAvailable: true });
 
   useEffect(() => {
@@ -108,6 +110,7 @@ export function BackendProvider({ client, children }: BackendProviderProps): Rea
 
   return (
     <ClientContext value={client}>
+      {edgePath === null ? null : <EdgeStatusMonitor path={edgePath} />}
       <SubscriptionContext value={subscription}>{children}</SubscriptionContext>
     </ClientContext>
   );

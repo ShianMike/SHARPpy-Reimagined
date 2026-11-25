@@ -142,24 +142,27 @@ it.each(Object.keys(payloads) as Kind[])("clears %s data when its selection chan
   }
 });
 
-it("shares the latest station snapshot across panels and keeps it through camera and time changes", async () => {
+it("shares the latest station snapshot across panels and workspaces through camera and time changes", async () => {
   const call = vi.fn<Transport["call"]>(() => Promise.resolve(surface));
   const client = new BackendClient({ call, listen: () => Promise.resolve(() => undefined) });
   const queryClient = createQueryClient();
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
   );
-  const hook = renderHook(({ time, visible }) => [
-    useSurfaceLayer(false, time, visible),
-    useSurfaceLayer(false, time, visible),
-  ], { wrapper, initialProps: { time: "2026-10-04T21:00:00Z", visible: false } });
+  const hook = renderHook(({ visible }) => [
+    useSurfaceLayer(visible),
+    useSurfaceLayer(visible),
+  ], { wrapper, initialProps: { visible: false } });
   try {
     expect(call).not.toHaveBeenCalled();
-    hook.rerender({ time: "2026-10-04T21:00:00Z", visible: true });
+    hook.rerender({ visible: true });
     await waitFor(() => { expect(hook.result.current.every((query) => query.isSuccess)).toBe(true); });
     const snapshot = hook.result.current[0]?.data;
-    act(() => { useMapStore.getState().setCameraSnapshot({ center: [151.2, -33.9], zoom: 7 }); });
-    hook.rerender({ time: "2026-10-05T03:00:00Z", visible: true });
+    act(() => {
+      useAppStore.getState().setActiveWorkspace("live");
+      useMapStore.getState().setCameraSnapshot({ center: [151.2, -33.9], zoom: 7 });
+    });
+    hook.rerender({ visible: true });
     expect(hook.result.current.every((query) => query.data === snapshot)).toBe(true);
     expect(call.mock.calls).toEqual([["get_latest_surface_plots", undefined]]);
   } finally {
@@ -240,7 +243,7 @@ it.each(["rrfs-a", "nam", "nam-3km-conus", "refs-m1", "refs-m2", "refs-m3", "ref
       }
       const catalogue = parseMapCatalog((modelCatalogs as Readonly<Record<string, unknown>>)[model]);
       expect(catalogue.fieldModel).toBe(model);
-      expect(catalogue.products).toHaveLength(model.startsWith("refs-") ? 23 : model === "nam" ? 34 : model === "nam-3km-conus" ? 37 : model === "hrrr" ? 40 : 39);
+      expect(catalogue.products).toHaveLength(model.startsWith("refs-") ? 36 : model === "nam" ? 37 : model === "nam-3km-conus" ? 42 : 45);
       expect(catalogue.products.some(({ key }) => key === "ltng")).toBe(!["nam", "nam-3km-conus"].includes(model));
       const secondaryProduct = defaultProductFor(parseMapCatalog(catalog), 1)?.key;
       expect(catalogue.products.some(({ key }) => key === secondaryProduct)).toBe(!model.startsWith("refs-"));

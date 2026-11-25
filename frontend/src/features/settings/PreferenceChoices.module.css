@@ -31,7 +31,7 @@
 .unitCard { justify-items: center; padding-block: var(--space-4); text-align: center; }
 .unitCard > input { inset: 0; width: 100%; height: 100%; opacity: 0; }
 .unitCard > strong { padding: 0; font-size: var(--font-size-title); font-variant-numeric: tabular-nums; }
-.speedOptions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-2); }
+.speedOptions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
 .speedCard { position: relative; display: grid; place-items: center; min-height: calc(var(--control-h-lg) + var(--space-2)); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--glass-inset-fill); cursor: pointer; }
 .speedCard > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .speedCard > strong { font-size: var(--font-size-title); font-weight: var(--font-weight-medium); font-variant-numeric: tabular-nums; }
@@ -47,5 +47,5 @@
   .visualOptions .card > strong { grid-column: 2; grid-row: 1; padding: 0; }
   .visualOptions .card > small { grid-column: 2; grid-row: 2; }
   .options[data-columns="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .speedOptions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .speedOptions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

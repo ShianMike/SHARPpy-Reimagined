@@ -178,3 +178,45 @@ it("rechecks the current UTC clock at midnight and hides guidance once its valid
   expect(within(screen.getByRole("group", { name: "SPC outlook product" })).getAllByRole("button")).toHaveLength(4);
   queryClient.clear();
 });
+
+it("renders the SPC discussion summary and expandable sections per day while staying clean when omitted", async () => {
+  const base = createTransport();
+  const transport = transportWith();
+  transport.call.mockImplementation((command, args) => {
+    if (command !== "get_spc_outlook") return base.call(command, args);
+    const day = args?.day === 2 ? 2 : args?.day === 3 ? 3 : 1;
+    return Promise.resolve({
+      ...current,
+      outlook: {
+        ...current.outlook,
+        ...(day === 3 ? {} : {
+          discussion: {
+            headline: `THERE IS A SLIGHT RISK ON DAY ${String(day)}`,
+            summary: `Day ${String(day)} summary highlighting organized severe thunderstorms.`,
+            sections: [
+              { heading: day === 1 ? "Synopsis" : "Day 2 Overview", body: `Detailed Day ${String(day)} discussion paragraph.` },
+              ...(day === 1 ? [{ heading: "Carolina Coast", body: "A separate area of thunderstorms is possible." }] : []),
+            ],
+            issued: "2026-10-04T12:50:00Z",
+            sourceUrl: `https://www.spc.noaa.gov/products/outlook/day${String(day)}otlk.html`,
+          },
+        }),
+      },
+    });
+  });
+  const { queryClient } = renderWithBackend(<SpcBriefing />, transport);
+  await screen.findByRole("heading", { name: "Forecast discussion" });
+  expect(screen.getByText(/there is a slight risk on day 1/i)).toBeTruthy();
+  expect(screen.getByText("Day 1 summary highlighting organized severe thunderstorms.")).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Read full discussion", expanded: false }));
+  expect(screen.getByRole("heading", { name: "Synopsis" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Carolina Coast" })).toBeTruthy();
+  expect(screen.queryByRole("group", { name: "Discussion sections" })).toBeNull();
+  expect(screen.getByText("Detailed Day 1 discussion paragraph.")).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Day 2" }));
+  await screen.findByText("Day 2 summary highlighting organized severe thunderstorms.");
+  expect(screen.getByRole("heading", { name: "Day 2 Overview" })).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Day 3" }));
+  await waitFor(() => { expect(screen.queryByRole("heading", { name: "Forecast discussion" })).toBeNull(); });
+  queryClient.clear();
+});

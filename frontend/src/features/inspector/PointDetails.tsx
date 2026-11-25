@@ -8,14 +8,14 @@ import { ChevronDown } from "lucide-react";
 import { cx } from "../../lib/cx";
 import { convertUnit, displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
-import { drawnRangeNote, formatValue, sampleAt } from "../../map/field/colourize";
+import { decodePtypeValue, drawnRangeNote, formatValue, sampleAt } from "../../map/field/colourize";
 import { containsPoint } from "../../map/layers/outlookGeometry";
-import { useSpcOutlooks } from "../../map/mapQueries";
+import { useSpcOutlooks, useWpcOutlook } from "../../map/mapQueries";
 import { usePanelField } from "../../map/panelField";
 import { useAppStore, type MapPoint } from "../../stores/appStore";
 import { panelLayers, useMapStore } from "../../stores/mapStore";
 import { useSoundingStore } from "../../stores/soundingStore";
-import { OUTLOOK_KEYS, OUTLOOK_NAMES, type OutlookArea, type OutlookKey } from "../../types/map";
+import { OUTLOOK_KEYS, OUTLOOK_NAMES, WPC_OUTLOOK_NAME, WPC_WINTER_NAME, type OutlookArea, type OutlookLayerKey } from "../../types/map";
 import { useForecastContext, type ForecastContext } from "../forecast/useForecast";
 import { compactUtc, forecastLabel } from "../sounding/soundingTime";
 import styles from "./Inspector.module.css";
@@ -30,7 +30,9 @@ function FieldValue({ panel, point, active }: { panel: number; point: MapPoint; 
   const panelNumber = panel + 1;
   const valueId = `point-value-${String(panelNumber)}`;
   const value = frame === undefined || field.frame.isError ? null : sampleAt(frame, point.longitude, point.latitude);
-  const note = value === null ? "" : drawnRangeNote(value, field.product.palette);
+  const decoded = value === null ? null : decodePtypeValue(value, field.product.palette);
+  const note = decoded === null ? "" : drawnRangeNote(decoded.amount, field.product.palette);
+  const ptypeNote = [decoded?.ptypeLabel, note === "" ? null : note].filter((part): part is string => part != null && part !== "").join(" · ");
   const unit = displayUnit(frame?.units ?? "", units, field.product.palette.display);
   return (
     <li>
@@ -38,12 +40,12 @@ function FieldValue({ panel, point, active }: { panel: number; point: MapPoint; 
         aria-busy={frame === undefined && !field.frame.isError} onClick={() => { useMapStore.getState().setActivePanel(panel); }} title={`Use panel ${String(panelNumber)}`}>
         <span className={cx(styles.panelNumber, "tabular")} aria-hidden="true">{panelNumber}</span>
         <strong className={styles.fieldName}>{field.product.shortLabel}</strong>
-        <span id={valueId} className={cx(styles.readingValue, "tabular")} data-state={value === null ? "unavailable" : "ready"} data-testid={valueId}>
-          {field.frame.isError ? "Unavailable" : frame === undefined ? "Loading…" : value === null ? "No data" : formatValue(convertUnit(value, frame.units, unit, field.product.palette.display))}
-          {value === null || unit === "" ? null : <span className={styles.units}> {unit}</span>}
+        <span id={valueId} className={cx(styles.readingValue, "tabular")} data-state={decoded === null ? "unavailable" : "ready"} data-testid={valueId}>
+          {field.frame.isError ? "Unavailable" : frame === undefined ? "Loading…" : decoded === null ? "No data" : formatValue(convertUnit(decoded.amount, frame.units, unit, field.product.palette.display))}
+          {decoded === null || unit === "" ? null : <span className={styles.units}> {unit}</span>}
         </span>
         <span className={styles.fieldDescription}>{field.product.label}</span>
-        {note === "" ? null : <span className={styles.rangeNote}>{note}</span>}
+        {ptypeNote === "" ? null : <span className={styles.rangeNote}>{ptypeNote}</span>}
       </button>
     </li>
   );
@@ -51,23 +53,41 @@ function FieldValue({ panel, point, active }: { panel: number; point: MapPoint; 
 
 /** The highest-ranked area of each loaded outlook that contains the point. */
 function OutlookAreas({ point, validTime }: { point: MapPoint; validTime: string }): ReactNode {
+  const wpcDay = useMapStore((state) => state.wpcOutlookDay);
+  const wpcWinterDay = useMapStore((state) => state.wpcWinterDay);
+  const wpcWinterProduct = useMapStore((state) => state.wpcWinterProduct);
   const flags = useMapStore((state) => {
     const layers = panelLayers(state, state.activePanel);
-    return OUTLOOK_KEYS.map((key) => layers[`spc-${key}` as const].visible).join();
+    return [...OUTLOOK_KEYS.map((key) => layers[`spc-${key}` as const].visible), layers["wpc-ero"].visible, layers["wpc-winter"].visible].join();
   });
-  const queries = useSpcOutlooks(flags.split(",").map((flag) => flag === "true"), validTime);
-  const found: { key: OutlookKey; area: OutlookArea }[] = [];
+  const bits = flags.split(",").map((flag) => flag === "true");
+  const queries = useSpcOutlooks(bits.slice(0, OUTLOOK_KEYS.length), validTime);
+  const wpcVisible = bits[OUTLOOK_KEYS.length] === true;
+  const winterVisible = bits[OUTLOOK_KEYS.length + 1] === true;
+  const wpcQuery = useWpcOutlook(wpcVisible, validTime, wpcDay, "ero");
+  const winterQuery = useWpcOutlook(winterVisible, validTime, wpcWinterDay, wpcWinterProduct);
+  const found: { key: OutlookLayerKey; name: string; area: OutlookArea }[] = [];
   queries.forEach((query, i) => {
     const key = OUTLOOK_KEYS[i];
     const areas = !query.isError && query.data?.outlook?.covers === true ? query.data.outlook.areas : [];
     const hit = [...areas].sort((a, b) => b.rank - a.rank).find((area) => containsPoint(area.rings, [point.longitude, point.latitude]));
-    if (key !== undefined && hit !== undefined && flags.split(",")[i] === "true") {
-      found.push({ key, area: hit });
+    if (key !== undefined && hit !== undefined && bits[i] === true) {
+      found.push({ key, name: OUTLOOK_NAMES[key], area: hit });
     }
   });
-  return found.length === 0 ? null : <dl className={styles.outlooks}>{found.map(({ key, area }) => (
+  for (const [on, q, dayMode, key, name] of [
+    [wpcVisible, wpcQuery, wpcDay, "ero", WPC_OUTLOOK_NAME],
+    [winterVisible, winterQuery, wpcWinterDay, "winter", WPC_WINTER_NAME],
+  ] as const) {
+    const item = on && !q.isError ? q.data?.outlook : null;
+    if (item != null && (dayMode !== "auto" || item.covers)) {
+      const hit = [...item.areas].sort((a, b) => b.rank - a.rank).find((area) => containsPoint(area.rings, [point.longitude, point.latitude]));
+      if (hit !== undefined) found.push({ key, name, area: hit });
+    }
+  }
+  return found.length === 0 ? null : <dl className={styles.outlooks}>{found.map(({ key, name, area }) => (
     <div className={styles.outlook} key={key}>
-      <dt>{OUTLOOK_NAMES[key]}</dt>
+      <dt>{name}</dt>
       <dd data-testid={`point-outlook-${key}`}>{area.description === "" ? area.label : `${area.label}, ${area.description}`}</dd>
     </div>
   ))}</dl>;

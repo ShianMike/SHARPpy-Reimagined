@@ -306,7 +306,7 @@ fn wet_bulb(pressure: f64, temperature: f64, dewpoint: f64) -> f64 {
     wet_lift(lcl_pressure, lcl_temperature, pressure)
 }
 
-fn theta_e(pressure: f64, temperature: f64, dewpoint: f64) -> f64 {
+pub(crate) fn theta_e(pressure: f64, temperature: f64, dewpoint: f64) -> f64 {
     let (lcl_pressure, lcl_temperature) = dry_lift(pressure, temperature, dewpoint);
     theta(
         100.0,

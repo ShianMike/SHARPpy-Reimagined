@@ -44,6 +44,8 @@ const COLOUR_TOKENS = {
   radarLabelUnavailableEdge: "--map-radar-label-unavailable-edge",
   stationLabelEdge: "--map-station-label-edge",
   domain: "--map-domain",
+  heightContour: "--map-height-contour",
+  heightContourHalo: "--map-height-contour-halo",
   placeText: "--map-place-text",
   obsUpper: "--map-obs-upper",
   obsLower: "--map-obs-lower",

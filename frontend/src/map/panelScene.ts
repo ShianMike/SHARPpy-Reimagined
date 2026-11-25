@@ -11,12 +11,12 @@ import { liveTimestamp, useLiveTrackingStore } from "../stores/liveTrackingStore
 import { useStationCatalog } from "../stations/stationQueries";
 import { panelLayers, panelWeather, panelReports, useMapStore } from "../stores/mapStore";
 import type { Station } from "../types/contracts";
-import { OUTLOOK_KEYS, type FieldFrame, type Outlook, type OutlookKey, type Palette, type Place, type RadarFrame, type RadarSite } from "../types/map";
+import { OUTLOOK_KEYS, type FieldFrame, type Outlook, type OutlookLayerKey, type Palette, type Place, type RadarFrame, type RadarSite } from "../types/map";
 import type { ForecastModel } from "../types/soundings";
 import { fieldImage } from "./fieldImages";
 import type { FieldImage, RasterImage } from "./layers/registry";
 import { useFieldContours } from "./contourQueries";
-import { usePanelRadar, usePlaceLabels, useRadarFrame, useRadarSiteFrame, useRadarSites, useSatelliteFrame, useStormReports, useSpcOutlooks } from "./mapQueries";
+import { usePanelRadar, usePlaceLabels, useRadarFrame, useRadarSiteFrame, useRadarSites, useSatelliteFrame, useStormReports, useSpcOutlooks, useWpcOutlook } from "./mapQueries";
 import { useSurfaceLayer } from "./surfaceQueries";
 import { useSpotterPositions } from "./spotterQueries";
 import { fieldAuxiliaries, usePanelField, type PanelField } from "./panelField";
@@ -102,25 +102,40 @@ export function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data" | "isEr
 }
 
 /** The outlooks this panel has loaded, keyed by product; a stable object while they do not change. */
-function useOutlooks(panel: number, validTime: string | null): { outlooks: Readonly<Partial<Record<OutlookKey, Outlook>>>; ready: boolean } {
+function useOutlooks(panel: number, validTime: string | null): { outlooks: Readonly<Partial<Record<OutlookLayerKey, Outlook>>>; ready: boolean } {
+  const live = useMapStore((state) => state.view === "live");
+  const wpcDay = useMapStore((state) => state.wpcOutlookDay);
+  const wpcWinterDay = useMapStore((state) => state.wpcWinterDay);
+  const wpcWinterProduct = useMapStore((state) => state.wpcWinterProduct);
   const visible = useMapStore((state) => {
     const layers = panelLayers(state, panel);
-    return OUTLOOK_KEYS.map((key) => layers[`spc-${key}` as const].visible).join();
+    return [...OUTLOOK_KEYS.map((key) => layers[`spc-${key}` as const].visible), layers["wpc-ero"].visible, layers["wpc-winter"].visible].join();
   });
-  const queries = useSpcOutlooks(OUTLOOK_KEYS.map((key, i) => visible.split(",")[i] === "true" && validTime !== null), validTime);
-  const ready = queries.every((query, index) => visible.split(",")[index] !== "true" || validTime !== null && query.isSuccess && !query.isFetching);
+  const flags = visible.split(",").map((flag) => flag === "true");
+  const queries = useSpcOutlooks(OUTLOOK_KEYS.map((_, i) => flags[i] === true && validTime !== null), validTime);
+  const wpcVisible = !live && flags[OUTLOOK_KEYS.length] === true;
+  const winterVisible = !live && flags[OUTLOOK_KEYS.length + 1] === true;
+  const wpcQuery = useWpcOutlook(wpcVisible, validTime, wpcDay, "ero");
+  const winterQuery = useWpcOutlook(winterVisible, validTime, wpcWinterDay, wpcWinterProduct);
+  const ready = queries.every((query, index) => flags[index] !== true || validTime !== null && query.isSuccess && !query.isFetching)
+    && (!wpcVisible || (wpcDay !== "auto" || validTime !== null) && wpcQuery.isSuccess && !wpcQuery.isFetching)
+    && (!winterVisible || (wpcWinterDay !== "auto" || validTime !== null) && winterQuery.isSuccess && !winterQuery.isFetching);
   const [cat, torn, wind, hail] = queries.map((query) =>
     validTime !== null && !query.isError && query.data?.outlook?.covers === true ? query.data.outlook : undefined,
   );
+  const wpcOutlook = wpcVisible && !wpcQuery.isError ? wpcQuery.data?.outlook ?? undefined : undefined;
+  const ero = wpcOutlook !== undefined && (wpcDay !== "auto" || wpcOutlook.covers) ? wpcOutlook : undefined;
+  const winterRaw = winterVisible && !winterQuery.isError ? winterQuery.data?.outlook ?? undefined : undefined;
+  const winter = winterRaw !== undefined && (wpcWinterDay !== "auto" || winterRaw.covers) ? winterRaw : undefined;
   return useMemo(() => {
-    const out: Partial<Record<OutlookKey, Outlook>> = {};
-    for (const [key, outlook] of [["cat", cat], ["torn", torn], ["wind", wind], ["hail", hail]] as const) {
+    const out: Partial<Record<OutlookLayerKey, Outlook>> = {};
+    for (const [key, outlook] of [["cat", cat], ["torn", torn], ["wind", wind], ["hail", hail], ["ero", ero], ["winter", winter]] as const) {
       if (outlook !== undefined) {
         out[key] = outlook;
       }
     }
     return { outlooks: out, ready };
-  }, [cat, torn, wind, hail, ready]);
+  }, [cat, torn, wind, hail, ero, winter, ready]);
 }
 
 /** Feeds a panel's runtime; returns the panel's field for its chip. */
@@ -156,24 +171,25 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   const alerts = live && !alertQuery.isError && (layers.warnings.visible || layers.watches.visible) ? alertQuery.data?.alerts ?? null : null;
   const reportQuery = useStormReports(validTime, reportWindowS, reportFilter, reportsVisible);
   const reports = reportsVisible && !reportQuery.isError ? reportQuery.data?.reports ?? null : null;
-  const surfaceQuery = useSurfaceLayer(live, validTime, surfaceVisible);
-  const surfacePlots = surfaceVisible && (!live || !surfaceQuery.isError) ? surfaceQuery.data?.plots ?? null : null;
+  const surfaceQuery = useSurfaceLayer(surfaceVisible);
+  const surfacePlots = surfaceVisible ? surfaceQuery.data?.plots ?? null : null;
   const { positions: spotterPositions } = useSpotterPositions(live && layers["spotter-network"].visible);
-  // Pressure lines belong to the independent Isobars control, including when
-  // the coloured product itself is MSLP; do not draw a second copy underneath.
-  const contourSpec = live || field.product?.key === "mslp" ? null : field.product?.contour ?? null;
+  const isobarsWanted = !live && layers.isobars.visible;
+  // Composite pressure and wind products carry their own isobars until the
+  // independent Isobars layer takes over.
+  const standalonePressure = field.product?.key === "mslp" && (!field.product.wind || isobarsWanted);
+  const contourSpec = live || standalonePressure ? null : field.product?.contour ?? null;
   const auxiliaryWanted = field.request !== null && field.product !== null && fieldAuxiliaries(field.product);
   const contourQuery = useFieldContours(
-    field.request?.product ?? null,
+    field.product?.key ?? null,
     field.request?.runTime ?? null,
     field.request?.forecastHour ?? null,
     auxiliaryWanted,
     field.request?.model,
   );
   const contourLines = contourQuery.isError ? null : contourQuery.data ?? null;
-  const isobarsWanted = !live && layers.isobars.visible;
   const pressureProduct = field.catalog.data?.products.find((product) => product.key === "mslp");
-  const isobarRequest = isobarsWanted && pressureProduct !== undefined && context?.fieldsAvailable === true;
+  const isobarRequest = isobarsWanted && !field.catalog.isPlaceholderData && pressureProduct !== undefined && context?.fieldsAvailable === true;
   const isobarQuery = useFieldContours(
     isobarRequest ? pressureProduct.key : null,
     isobarRequest ? context.run : null,
@@ -191,7 +207,7 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
     && (!reportsVisible || reportQuery.isSuccess && !reportQuery.isFetching)
     && (!auxiliaryWanted || contourQuery.isSuccess && !contourQuery.isFetching)
     && (!isobarRequest || isobarQuery.isSuccess && !isobarQuery.isFetching)
-    && (!surfaceVisible || (live ? surfaceQuery.isSuccess && !surfaceQuery.isFetching : surfaceQuery.data !== undefined))
+    && (!surfaceVisible || surfaceQuery.data !== undefined)
     && (!live || (!radarVisible || radarImage.decodedCurrent && radarImage.issue === null)
       && (!layers.satellite.visible || satellite.decodedCurrent && satellite.issue === null)
       && (!(layers.warnings.visible || layers.watches.visible) || alertQuery.isSuccess && !alertQuery.isFetching));

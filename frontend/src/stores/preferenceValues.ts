@@ -2,7 +2,7 @@
 import { isValidCamera, type CameraSnapshot } from "../map/runtime/camera";
 import { clampOpacity, LAYER_IDS, ORDERABLE_LAYER_IDS, type LayerId, type LayerState, type OrderableLayerId } from "../map/layers/registry";
 import type { GraphicsOverride } from "../types/graphics";
-import { RADAR_TILTS, type RadarTilt } from "../types/map";
+import { OUTLOOK_DAYS, RADAR_TILTS, WPC_WINTER_PRODUCTS, type RadarTilt, type WpcOutlookDayMode, type WpcWinterProduct } from "../types/map";
 import { MAX_PANELS, PANEL_LAYOUTS, useMapStore, type MapState, type WeatherOptions, type ReportSettings } from "./mapStore";
 
 export const PREFERENCES_KEY = "sharppy.prefs.v1";
@@ -10,7 +10,7 @@ const OVERRIDES: readonly GraphicsOverride[] = ["auto", "low", "balanced", "high
 const MAX_STATION_ID_LENGTH = 16;
 const initialMap = useMapStore.getInitialState();
 
-export interface Preferences extends Pick<MapState, "panelLayout" | "projection" | "activePanel" | "layerOrder" | "radarProduct" | "radarScope" | "radarSite" | "radarTilt" | "satelliteChannel" | "reportWindowS" | "reportFilter" | "layerPanelGroup"> {
+export interface Preferences extends Pick<MapState, "panelLayout" | "projection" | "activePanel" | "layerOrder" | "radarProduct" | "radarScope" | "radarSite" | "radarTilt" | "satelliteChannel" | "wpcOutlookDay" | "wpcWinterDay" | "wpcWinterProduct" | "reportWindowS" | "reportFilter" | "layerPanelGroup"> {
   version: 1;
   graphicsOverride: GraphicsOverride;
   modelKey: string | null;
@@ -38,6 +38,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   radarScope: initialMap.radarScope,
   radarSite: initialMap.radarSite,
   satelliteChannel: initialMap.satelliteChannel,
+  wpcOutlookDay: initialMap.wpcOutlookDay,
+  wpcWinterDay: initialMap.wpcWinterDay,
+  wpcWinterProduct: initialMap.wpcWinterProduct,
   reportWindowS: initialMap.reportWindowS,
   reportFilter: initialMap.reportFilter,
   layerPanelGroup: initialMap.layerPanelGroup,
@@ -163,6 +166,10 @@ function field<T>(obj: Record<string, unknown>, key: string, valid: (value: unkn
 
 const isOverride = (value: unknown): value is GraphicsOverride => OVERRIDES.includes(value as GraphicsOverride);
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
+const isWpcOutlookDay = (value: unknown): value is WpcOutlookDayMode =>
+  value === "auto" || (OUTLOOK_DAYS as readonly unknown[]).includes(value);
+const isWpcWinterProduct = (value: unknown): value is WpcWinterProduct =>
+  (WPC_WINTER_PRODUCTS as readonly unknown[]).includes(value);
 const isRadarTilt = (value: unknown): value is RadarTilt => RADAR_TILTS.some((tilt) => tilt.value === value);
 const isProductKey = (value: unknown): value is string | null =>
   value === null || (typeof value === "string" && value.trim() !== "" && value.length <= 128);
@@ -207,6 +214,9 @@ export function parsePreferences(raw: string | null): Preferences {
     radarScope: field(data, "radarScope", (value): value is MapState["radarScope"] => value === "mosaic" || value === "site", "mosaic"),
     radarSite: field(data, "radarSite", isStationId, null),
     satelliteChannel: field(data, "satelliteChannel", (value): value is MapState["satelliteChannel"] => value === "infrared" || value === "visible", "infrared"),
+    wpcOutlookDay: field(data, "wpcOutlookDay", isWpcOutlookDay, "auto"),
+    wpcWinterDay: field(data, "wpcWinterDay", isWpcOutlookDay, "auto"),
+    wpcWinterProduct: field(data, "wpcWinterProduct", isWpcWinterProduct, "winter-overall"),
     ...reports,
     layerPanelGroup: field(data, "layerPanelGroup", (value): value is MapState["layerPanelGroup"] => value === "weather" || value === "legend" || value === "map", "weather"),
     layers: parseLayers(data.layers),

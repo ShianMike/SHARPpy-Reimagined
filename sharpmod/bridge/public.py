@@ -26,6 +26,7 @@ COMMANDS = {
     "get_weather_field": "fields.grid",
     "get_cached_forecast_hours": "fields.cached",
     "get_spc_outlook": "outlooks.spc",
+    "get_wpc_outlook": "outlooks.wpc",
     "build_forecast_drawing": "outlooks.build_forecast",
     "get_weather_alerts": "alerts.weather",
     "get_radar_frame": "radar.mosaic",

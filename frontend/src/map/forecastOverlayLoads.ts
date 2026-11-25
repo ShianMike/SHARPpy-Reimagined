@@ -4,7 +4,7 @@ import type { BackendClient } from "../lib/backend/client";
 import { panelLayers, panelReports, type MapState } from "../stores/mapStore";
 import { OUTLOOK_KEYS } from "../types/map";
 import { contourQueryOptions } from "./contourQueries";
-import { outlookQueryOptions, reportQueryOptions, type FrameRequest } from "./mapQueries";
+import { outlookQueryOptions, reportQueryOptions, wpcOutlookQueryOptions, type FrameRequest } from "./mapQueries";
 import { queryFrame } from "./queryFrame";
 
 /** Load the exact overlays drawn at this time with the panel's own layer settings. */
@@ -14,6 +14,12 @@ export function forecastOverlayLoads(client: BackendClient, queryClient: QueryCl
   const validTime = addHours(frame.runTime, frame.forecastHour);
   const loads: Promise<unknown>[] = OUTLOOK_KEYS.filter((key) => layers[`spc-${key}`].visible)
     .map((key) => queryFrame(queryClient, outlookQueryOptions(client, key, validTime), signal, { keepUntil }));
+  if (layers["wpc-ero"].visible) {
+    loads.push(queryFrame(queryClient, wpcOutlookQueryOptions(client, validTime, map.wpcOutlookDay, "ero"), signal, { keepUntil }));
+  }
+  if (layers["wpc-winter"].visible) {
+    loads.push(queryFrame(queryClient, wpcOutlookQueryOptions(client, validTime, map.wpcWinterDay, map.wpcWinterProduct), signal, { keepUntil }));
+  }
   if (layers["storm-reports"].visible) {
     const { reportWindowS, reportFilter } = panelReports(map, panel);
     loads.push(queryFrame(queryClient, reportQueryOptions(client, validTime, reportWindowS, reportFilter), signal, { keepUntil }));

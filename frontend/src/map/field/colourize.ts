@@ -12,6 +12,46 @@ import type { FieldFrame, Palette } from "../../types/map";
 export const LUT_SIZE = 1024;
 const CELL_VALUES = 65536;
 
+const PTYPE_STOPS_PER_GROUP = 17;
+const PTYPE_GROUPS = [
+  { label: "Rain", offset: 0 },
+  { label: "Snow", offset: 10 },
+  { label: "Freezing rain", offset: 20 },
+  { label: "Mix", offset: 30 },
+] as const;
+
+export function isPtypePalette(palette: Palette): boolean {
+  // The original catalogs have no type labels. Each encoded ramp starts at its offset plus 0.01.
+  return palette.stepped && palette.stops.length === PTYPE_GROUPS.length * PTYPE_STOPS_PER_GROUP
+    && PTYPE_GROUPS.every(({ offset }, index) => palette.stops[index * PTYPE_STOPS_PER_GROUP]?.[0] === offset + 0.01);
+}
+
+export function ptypePaletteGroups(palette: Palette): { label: string; stops: Palette["stops"] }[] | null {
+  if (!isPtypePalette(palette)) return null;
+  return PTYPE_GROUPS.map(({ label, offset }, index) => {
+    const start = index * PTYPE_STOPS_PER_GROUP;
+    return {
+      label: palette.ptypeLabels?.[index] ?? label,
+      stops: palette.stops.slice(start, start + PTYPE_STOPS_PER_GROUP)
+        .map(([value, colour]) => [Number((value - offset).toFixed(2)), colour] as const),
+    };
+  });
+}
+
+/** Tick locations are the lower edges of equal-width colour bands. */
+export function ptypePaletteTicks(ticks: Palette["ticks"], stops: Palette["stops"]): { value: number; at: number }[] {
+  return stops.flatMap(([value], index) => index === 0 || index === stops.length - 1 || ticks.includes(value)
+    ? [{ value, at: index / stops.length }]
+    : []);
+}
+
+export function decodePtypeValue(value: number, palette: Palette): { amount: number; ptypeLabel: string | null } {
+  if (!isPtypePalette(palette)) return { amount: value, ptypeLabel: null };
+  const index = Math.min(PTYPE_GROUPS.length - 1, Math.max(0, Math.floor(value / 10)));
+  const group = PTYPE_GROUPS[index] ?? PTYPE_GROUPS[0];
+  return { amount: Math.max(0, Number((value - group.offset).toFixed(2))), ptypeLabel: palette.ptypeLabels?.[index] ?? group.label };
+}
+
 function hexChannels(hex: string): [number, number, number] {
   return [Number.parseInt(hex.slice(1, 3), 16), Number.parseInt(hex.slice(3, 5), 16), Number.parseInt(hex.slice(5, 7), 16)];
 }

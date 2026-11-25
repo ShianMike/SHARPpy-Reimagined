@@ -17,6 +17,7 @@ describe("contour contracts", () => {
   it("parses the exported fixture unchanged", () => {
     const lines = parseContourLines(contours);
     expect(lines.segments).toEqual(contours.segments);
+    expect(lines.labels).toEqual(contours.labels);
     expect(lines.wind?.data).toBeInstanceOf(Uint16Array);
     expect(lines.wind?.data.length).toBe(contours.wind.width * contours.wind.height);
     expect(lines.product).toBe("hgt-wind-500");
@@ -30,11 +31,12 @@ describe("contour contracts", () => {
   it("accepts sparse numeric labels without changing legacy frames", () => {
     const labels = [{ position: [-99.5, 35.5], value: 1012 }];
     expect(parseContourLines({ ...contours, product: "mslp", unit: "hPa", interval: 4, labels }).labels).toEqual(labels);
-    expect(parseContourLines(contours).labels).toBeUndefined();
+    const legacy = edit(contours, (copy) => { delete copy.labels; });
+    expect(parseContourLines(legacy).labels).toBeUndefined();
   });
 
   it("accepts connected paths and rejects incomplete, off-globe or oversized paths", () => {
-    const frame = { ...contours, product: "mslp", unit: "hPa", interval: 4, segments: [], wind: null };
+    const frame = { ...contours, product: "mslp", unit: "hPa", interval: 4, segments: [], wind: null, labels: undefined };
     const paths = [[[-100, 35], [-99.5, 35.25], [-99, 36]]];
     expect(parseContourLines({ ...frame, paths }).paths).toEqual(paths);
     expect(parseContourLines(frame).paths).toBeUndefined();

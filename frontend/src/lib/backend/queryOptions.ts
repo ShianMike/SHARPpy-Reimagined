@@ -2,7 +2,7 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import type { ThresholdEvaluationRequest } from "../../types/thresholds";
-import type { RadarTilt } from "../../types/map";
+import type { OutlookDay, RadarTilt, WpcProduct } from "../../types/map";
 import { trackRadarCacheOrder } from "../../map/radarSiteAvailability";
 import { BackendFailure } from "./errors";
 
@@ -23,6 +23,8 @@ export const mapKeys = {
   catalog: (model: string, runTime?: string, forecastHour?: number) => [...QUERY_KEYS.mapCatalog, model, ...(runTime === undefined ? [] : [runTime, forecastHour])] as const,
   field: (product: string, runTime: string, hour: number, model = "hrrr") => ["fields", product, runTime, hour, model] as const,
   outlook: (product: string, validTime: string) => ["outlooks", product, validTime] as const,
+  wpcOutlook: (validTime: string, product: WpcProduct = "ero") => ["wpc-outlook", product, validTime] as const,
+  wpcLatest: (day: OutlookDay, product: WpcProduct = "ero") => ["wpc-latest", product, day] as const,
   alerts: (validTime: string) => ["weather-alerts", validTime] as const,
   radar: (product: string | null, time: string | null = null, live = false) => ["radar", product ?? "default", ...(time === null ? [] : [time]), ...(live && time !== null ? ["live"] : [])] as const,
   radarSites: ["radar", "sites"] as const,

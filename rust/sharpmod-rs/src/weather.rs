@@ -146,6 +146,8 @@ fn clear_weather_cache() {
     }
     sharpmod_weather::radar_provider::clear();
     sharpmod_weather::spc_outlook::client().clear();
+    sharpmod_weather::wpc_outlook::client().clear();
+    sharpmod_weather::wpc_winter_outlook::client().clear();
 }
 
 #[pyfunction(signature = (public=false, include_discovered=true))]
@@ -384,6 +386,180 @@ fn spc_outlook_fetch(
 #[pyfunction]
 fn spc_outlook_clear_cache() {
     sharpmod_weather::spc_outlook::client().clear();
+    sharpmod_weather::wpc_outlook::client().clear();
+    sharpmod_weather::wpc_winter_outlook::client().clear();
+}
+
+#[pyfunction]
+fn spc_outlook_discussion(py: Python<'_>, day: u8) -> PyResult<Option<String>> {
+    let runtime = runtime()?;
+    py.detach(move || {
+        let discussion =
+            runtime.block_on(sharpmod_weather::spc_outlook::client().fetch_discussion(day, None));
+        discussion
+            .map(|item| serde_json::to_string(&item))
+            .transpose()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    })
+}
+
+fn bridge_invalid(py: Python<'_>, message: &str) -> PyErr {
+    match PyModule::import(py, "sharpmod.bridge.params")
+        .and_then(|module| module.call_method1("invalid", (message,)))
+    {
+        Ok(error) => PyErr::from_value(error),
+        Err(error) => error,
+    }
+}
+
+#[pyfunction]
+fn wpc_outlook_bridge<'py>(
+    py: Python<'py>,
+    params: &Bound<'py, pyo3::types::PyDict>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let json_mod = PyModule::import(py, "json")?;
+    let raw: String = json_mod.call_method1("dumps", (params,))?.extract()?;
+    let args: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(&raw).map_err(|error| bridge_invalid(py, &error.to_string()))?;
+    for key in args.keys() {
+        if key != "valid_time" && key != "day" && key != "product" {
+            return Err(bridge_invalid(py, &format!("unexpected parameter {key}")));
+        }
+    }
+    let product = match args.get("product") {
+        None => "ero".to_owned(),
+        Some(value) => {
+            let Some(p) = value.as_str() else {
+                return Err(bridge_invalid(py, "product must be a string"));
+            };
+            if p != "ero" && sharpmod_weather::wpc_winter_outlook::winter_product_spec(p).is_none()
+            {
+                return Err(bridge_invalid(py, "unknown WPC outlook product"));
+            }
+            p.to_owned()
+        }
+    };
+    let Some(valid_time_str) = args.get("valid_time").and_then(serde_json::Value::as_str) else {
+        return Err(bridge_invalid(py, "valid_time must be an RFC 3339 string"));
+    };
+    let when = OffsetDateTime::parse(valid_time_str, &Rfc3339)
+        .map_err(|_| bridge_invalid(py, "valid_time must be an RFC 3339 timestamp"))?;
+    let day = match args.get("day") {
+        None => None,
+        Some(value) => {
+            let parsed = value
+                .as_i64()
+                .filter(|&n| (1..=3).contains(&n) && !value.is_boolean());
+            match parsed {
+                Some(n) => Some(n as u8),
+                None => return Err(bridge_invalid(py, "day must be 1, 2, or 3")),
+            }
+        }
+    };
+    let runtime = runtime()?;
+    let product_for_fetch = product.clone();
+    let fetched = py.detach(move || {
+        runtime.block_on(async {
+            if product_for_fetch == "ero" {
+                let client = sharpmod_weather::wpc_outlook::client();
+                match day {
+                    Some(d) => client.fetch_latest(d).await,
+                    None => client
+                        .fetch(when, OffsetDateTime::now_utc())
+                        .await
+                        .map(|opt| opt.map(|layer| (layer, None))),
+                }
+            } else {
+                let client = sharpmod_weather::wpc_winter_outlook::client();
+                match day {
+                    Some(d) => client.fetch_latest(d, &product_for_fetch).await,
+                    None => client
+                        .fetch(when, OffsetDateTime::now_utc(), &product_for_fetch)
+                        .await
+                        .map(|opt| opt.map(|layer| (layer, None))),
+                }
+            }
+        })
+    });
+    let resolved = match fetched {
+        Ok(value) => value,
+        Err(reason) => {
+            let short = reason.lines().next().unwrap_or("request failed");
+            let truncated: String = short.chars().take(200).collect();
+            return match PyModule::import(py, "sharpmod.bridge.errors").and_then(|module| {
+                module.call_method1(
+                    "BridgeError",
+                    (
+                        "OVERLAY_FETCH_FAILED",
+                        format!("The WPC outlook could not be read: {truncated}."),
+                        true,
+                    ),
+                )
+            }) {
+                Ok(error) => Err(PyErr::from_value(error)),
+                Err(error) => Err(error),
+            };
+        }
+    };
+    let round4 = |v: f64| (v * 10_000.0).round() / 10_000.0;
+    let outlook = resolved.map(|(layer, discussion)| {
+        let areas: Vec<serde_json::Value> = layer
+            .areas
+            .iter()
+            .map(|area| {
+                let rings: Vec<Vec<[f64; 2]>> = area
+                    .rings
+                    .iter()
+                    .map(|ring| {
+                        ring.iter()
+                            .map(|&[lon, lat]| [round4(lon), round4(lat)])
+                            .collect()
+                    })
+                    .collect();
+                serde_json::json!({
+                    "label": area.label,
+                    "description": area.description,
+                    "fill": area.fill,
+                    "stroke": area.stroke,
+                    "rank": area.rank,
+                    "hatch": area.hatch,
+                    "hatch_level": area.hatch_level,
+                    "rings": rings,
+                })
+            })
+            .collect();
+        let mut obj = serde_json::json!({
+            "title": layer.title,
+            "subtitle": layer.subtitle,
+            "valid_from": layer.valid_from,
+            "valid_to": layer.valid_to,
+            "issued": layer.issued,
+            "covers": layer.covers(when),
+            "source_url": layer.source_url,
+            "attribution": layer.attribution,
+            "areas": areas,
+        });
+        if let Some(map) = obj.as_object_mut() {
+            if day.is_some() {
+                map.insert(
+                    "affected_states".into(),
+                    serde_json::json!(layer.affected_states()),
+                );
+            }
+            if let Some(disc) = discussion {
+                map.insert("discussion".into(), serde_json::json!(disc));
+            }
+        }
+        obj
+    });
+    let payload = serde_json::json!({
+        "product": product,
+        "valid_time": sharpmod_weather::format_rfc3339_utc(when),
+        "outlook": outlook,
+    });
+    let serialized = serde_json::to_string(&payload)
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    json_mod.call_method1("loads", (serialized,))
 }
 
 #[pyfunction]
@@ -558,6 +734,8 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(spc_outlook_parse, module)?)?;
     module.add_function(wrap_pyfunction!(spc_outlook_fetch, module)?)?;
     module.add_function(wrap_pyfunction!(spc_outlook_clear_cache, module)?)?;
+    module.add_function(wrap_pyfunction!(spc_outlook_discussion, module)?)?;
+    module.add_function(wrap_pyfunction!(wpc_outlook_bridge, module)?)?;
     module.add_function(wrap_pyfunction!(uwyo_parse_stations, module)?)?;
     module.add_function(wrap_pyfunction!(uwyo_decode_text, module)?)?;
     module.add_function(wrap_pyfunction!(radar_wms_capabilities, module)?)?;

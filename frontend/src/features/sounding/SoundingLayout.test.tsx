@@ -13,16 +13,36 @@ import { SoundingWorkspace } from "./SoundingWorkspace";
 
 afterEach(() => { cleanup(); useSoundingStore.setState(useSoundingStore.getInitialState(), true); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-it("guides an empty controls sidebar back to the selected source", async () => {
+it("switches sidebar views by keyboard and restores focus when reopening the quick start or choosing a source", async () => {
+  const user = userEvent.setup();
   useSoundingStore.getState().setSource("file");
   renderWithBackend(<SoundingWorkspace />, createTransport());
-  await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
+  const views = within(screen.getByRole("tablist", { name: "Sidebar view" }));
+  const sources = views.getByRole("tab", { name: "Sources", selected: true });
+  const controls = views.getByRole("tab", { name: "Sounding controls", selected: false });
+  await user.tab();
+  expect(document.activeElement).toBe(sources);
+  await user.keyboard("{ArrowRight}");
+  expect(document.activeElement).toBe(controls);
+  expect(views.getByRole("tab", { name: "Sounding controls", selected: true })).toBe(controls);
+  expect(views.getByRole("tab", { name: "Sources", selected: false })).toBe(sources);
+  await user.keyboard("{ArrowLeft}");
+  expect(document.activeElement).toBe(sources);
+  expect(views.getByRole("tab", { name: "Sources", selected: true })).toBe(sources);
+  await user.keyboard("{End}");
+  await user.click(screen.getByRole("button", { name: "Hide controls" }));
+  expect(screen.queryByRole("tablist", { name: "Sidebar view" })).toBeNull();
+  const show = screen.getByRole("button", { name: "Show controls" });
+  await waitFor(() => { expect(document.activeElement).toBe(show); });
+  await user.click(show);
+  const panel = screen.getByRole("tabpanel", { name: "Sounding controls" });
+  await waitFor(() => { expect(document.activeElement).toBe(panel); });
   const guide = screen.getByRole("region", { name: "Sounding quick start" });
   expect(within(guide).getByRole("heading", { name: "Start with a sounding" })).toBeTruthy();
   expect(within(guide).getAllByRole("listitem")).toHaveLength(3);
   expect(guide.textContent).toContain("Undo history");
   expect(guide.textContent).toContain("all four height charts");
-  await userEvent.click(within(guide).getByRole("button", { name: "Choose a source" }));
+  await user.click(within(guide).getByRole("button", { name: "Choose a source" }));
   const source = screen.getByRole("tab", { name: "File", selected: true });
   await waitFor(() => { expect(document.activeElement).toBe(source); });
   expect(screen.getByRole("button", { name: "Browse files" })).toBeTruthy();
@@ -44,7 +64,7 @@ it("swaps sources and controls without losing a file or draft, with no Info pane
   await userEvent.upload(screen.getByLabelText("File", { selector: "input" }), new File(["profile"], "retained.npz"));
   expect(screen.queryByLabelText("Sounding details")).toBeNull();
   const image = screen.getByTestId("sounding-image");
-  await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
+  await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
   expect(screen.queryByRole("tablist", { name: "Source" })).toBeNull();
   const sidebar = document.getElementById("sounding-sources");
   expect(sidebar?.dataset.surface).toBe("flat");
@@ -67,10 +87,10 @@ it("swaps sources and controls without losing a file or draft, with no Info pane
   expect(editor.compareDocumentPosition(screen.getByRole("button", { name: "Export PNG" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   await userEvent.clear(input); await userEvent.type(input, "32");
   expect(sidebar?.contains(input)).toBe(true);
-  await userEvent.click(screen.getByRole("button", { name: "Show sounding sources" }));
+  await userEvent.click(screen.getByRole("tab", { name: "Sources" }));
   expect(screen.getByText("retained.npz")).toBeTruthy();
   expect(screen.queryByLabelText("Sounding details")).toBeNull();
-  await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
+  await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
   expect(screen.getByRole("spinbutton", { name: "Temperature °C" })).toBe(input);
   expect(input.value).toBe("32");
   await userEvent.click(screen.getByRole("button", { name: "Hide controls" }));

@@ -65,6 +65,8 @@ def _dcp_impl(prof):
     # --- 0-6 km kinematic terms (layer-scoped: the interp/winds routines
     # resolve these from the valid levels spanning the SFC->6 km AGL layer and
     # tolerate masked levels elsewhere in the column) -----------------------
+    import sharpmod_rs
+
     shear06 = _api._shear_0_6km(prof)
     mnwind06 = _api._mean_wind_0_6km(prof)
     if is_missing(shear06) or is_missing(mnwind06):
@@ -83,19 +85,10 @@ def _dcp_impl(prof):
         return MISSING
     dcape, mucape = buoyancy
 
-    # Requirement 2.5: a zero buoyancy factor makes DCP exactly zero (not MISSING).
-    if dcape == 0.0 or mucape == 0.0:
-        return 0.0
-
-    value = (
-        (dcape / _api._DCAPE_NORM)
-        * (mucape / _api._MUCAPE_NORM)
-        * (shear06 / _api._SHEAR_NORM)
-        * (mnwind06 / _api._MNWIND_NORM)
+    value = sharpmod_rs.derived_dcp(
+        float(dcape), float(mucape), float(shear06), float(mnwind06)
     )
-    if not np.isfinite(value):
-        return MISSING
-    return float(value)
+    return MISSING if value is None else value
 
 
 def _mu_parcel_terms(pres, hght, tmpc, dwpc, wdir, wspd):
@@ -145,6 +138,8 @@ def normalized_cape_cin(prof):
 
 
 def _normalized_cape_cin_impl(prof):
+    import sharpmod_rs
+
     arrays = _api._profile_columns(prof)
     if arrays is None:
         return MISSING, MISSING
@@ -162,25 +157,13 @@ def _normalized_cape_cin_impl(prof):
         el_agl = _api._finite_or_none(mupcl.el_height)
         mu_start_agl = _api._finite_or_none(mupcl.start_height)
 
-    # --- NCAPE: MUCAPE / (EL - LFC) ----------------------------------------
-    ncape = MISSING
-    if mucape is not None and lfc_agl is not None and el_agl is not None:
-        depth = el_agl - lfc_agl
-        if depth > 0.0:                     # Req 4.4: guard non-positive depth
-            value = mucape / depth
-            if np.isfinite(value):
-                ncape = float(value)
-
-    # --- NCIN: CIN / (LFC - MU start) --------------------------------------
-    ncin = MISSING
-    if cin is not None and lfc_agl is not None and mu_start_agl is not None:
-        depth = lfc_agl - mu_start_agl
-        if depth > 0.0:                     # Req 4.5: guard non-positive depth
-            value = cin / depth
-            if np.isfinite(value):
-                ncin = float(value)
-
-    return ncape, ncin
+    ncape_val, ncin_val = sharpmod_rs.derived_ncape_ncin(
+        mucape, cin, lfc_agl, el_agl, mu_start_agl
+    )
+    return (
+        MISSING if ncape_val is None else ncape_val,
+        MISSING if ncin_val is None else ncin_val,
+    )
 
 
 def _sfc_cape(pres, hght, tmpc, dwpc, wdir, wspd):
@@ -258,6 +241,8 @@ def ehi(prof, layer):
 
 
 def _ehi_impl(prof, layer):
+    import sharpmod_rs
+
     bounds = _api._layer_top_agl(layer)
     if bounds is None:
         return MISSING
@@ -281,7 +266,5 @@ def _ehi_impl(prof, layer):
     if cape is None or not np.isfinite(cape):
         return MISSING
 
-    value = (cape * srh) / _api._EHI_NORM
-    if not np.isfinite(value):
-        return MISSING
-    return float(value)
+    value = sharpmod_rs.derived_ehi(float(cape), srh)
+    return MISSING if value is None else value

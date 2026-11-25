@@ -184,13 +184,27 @@ def test_model_catalogues_reuse_scales_and_only_offer_published_products(model):
 
     catalog = fields.catalog({"model": model})
     assert catalog["field_model"] == model
-    assert len(catalog["products"]) == (23 if model.startswith("refs-") else 37 if model == "nam-3km-conus" else 39) + int(model == "hrrr")
+    assert len(catalog["products"]) == {"hrrr": 46, "rrfs-a": 45, "nam-3km-conus": 42}.get(model, 36)
     assert any(item["key"] == "ltng" for item in catalog["products"]) == (model != "nam-3km-conus")
     if model == "nam-3km-conus":
         with pytest.raises(BridgeError, match="not a nam-3km-conus field product"):
             fields._request({"model": model, "product": "ltng", "run_time": EXPORT.RUN_TIME, "forecast_hour": 1})
     for product in hp.available_products(model):
-        assert product.palette is hp.PRODUCTS[product.key].palette
+        shared_key = (
+            "apcp" if product.key.startswith("qpf-")
+            else "mlcin" if product.key == "sbcin"
+            else "refc" if product.key == "refd-1km"
+            else "snod" if product.key == "snow-1h"
+            else product.key
+        )
+        if shared_key in hp.PRODUCTS:
+            assert product.palette is hp.PRODUCTS[shared_key].palette
+        elif product.key == "lcl":
+            assert (product.palette.minimum, product.palette.maximum, product.palette.units) == (0.0, 10000.0, "m")
+            assert product.palette.stepped
+            assert len(product.palette.tick_values()) == 16
+        else:
+            assert product.key == "cape-0-3km"
         for spec in product.all_fields:
             if model == "nam-3km-conus":
                 assert spec.source == hp.SOURCE_SURFACE
@@ -200,8 +214,83 @@ def test_model_catalogues_reuse_scales_and_only_offer_published_products(model):
                 assert spec.level == "entire atmosphere"
                 assert spec.forecast == ("max fcst" if model == "rrfs-a" or model.startswith("refs-") else "")
     if model.startswith("refs-"):
-        assert "Composite Parameters" not in catalog["categories"]
+        assert "Composite Parameters" in catalog["categories"]
+        assert "Winter Weather" in catalog["categories"]
+        assert {
+            "scp", "stp", "sbcin", "lcl", "ehi-0-1km", "ehi-0-3km",
+            "qpf-1h", "qpf-6h", "qpf-12h", "qpf-24h", "apcp", "snow-1h",
+        } <= {item["key"] for item in catalog["products"]}
         assert {item["key"] for item in catalog["products"]}.isdisjoint(hp._REFS_UNSUPPORTED)
+
+
+def test_refs_member_composites_use_published_surface_and_shear_fields():
+    from sharpmod.providers import hrrr_products as hp
+
+    products = {item.key: item for item in hp.available_products("refs-m1")}
+    scp = products["scp"].derive({
+        "sbcape": np.array([[1000.0, np.nan]], dtype=np.float32),
+        "srh03": np.array([[50.0, 50.0]], dtype=np.float32),
+        "ushr06": np.array([[20.0, 20.0]], dtype=np.float32),
+        "vshr06": np.array([[0.0, 0.0]], dtype=np.float32),
+    })
+    np.testing.assert_allclose(scp[0, 0], 1.0)
+    assert np.isnan(scp[0, 1])
+
+    stp = products["stp"].derive({
+        "sbcape": np.array([[1500.0, 1500.0]], dtype=np.float32),
+        "sbcin": np.array([[-50.0, -50.0]], dtype=np.float32),
+        "tmp2m": np.array([[293.15, 297.15]], dtype=np.float32),
+        "dpt2m": np.array([[285.15, 285.15]], dtype=np.float32),
+        "srh01": np.array([[150.0, 150.0]], dtype=np.float32),
+        "ushr06": np.array([[20.0, 20.0]], dtype=np.float32),
+        "vshr06": np.array([[0.0, 0.0]], dtype=np.float32),
+    })
+    np.testing.assert_allclose(stp[0], [1.0, 0.5], rtol=1e-6)
+
+    sbcin = products["sbcin"].derive({
+        "sbcin": np.array([[-75.0, np.nan]], dtype=np.float32),
+    })
+    np.testing.assert_allclose(sbcin[0, 0], -75.0)
+    assert np.isnan(sbcin[0, 1])
+
+    lcl = products["lcl"].derive({
+        "tmp2m": np.array([[293.15, 285.15, np.nan]], dtype=np.float32),
+        "dpt2m": np.array([[285.15, 290.15, 285.15]], dtype=np.float32),
+    })
+    np.testing.assert_allclose(lcl[0, :2], [1000.0, 0.0], rtol=1e-6)
+    assert np.isnan(lcl[0, 2])
+
+    ehi01 = products["ehi-0-1km"].derive({
+        "sbcape": np.array([[1600.0, np.nan]], dtype=np.float32),
+        "srh01": np.array([[200.0, 200.0]], dtype=np.float32),
+    })
+    np.testing.assert_allclose(ehi01[0, 0], 2.0, rtol=1e-6)
+    assert np.isnan(ehi01[0, 1])
+
+    ehi03 = products["ehi-0-3km"].derive({
+        "sbcape": np.array([[1600.0, np.nan]], dtype=np.float32),
+        "srh03": np.array([[300.0, 300.0]], dtype=np.float32),
+    })
+    np.testing.assert_allclose(ehi03[0, 0], 3.0, rtol=1e-6)
+    assert np.isnan(ehi03[0, 1])
+
+    assert products["sbcin"].label == "Surface-Based CIN"
+    assert products["lcl"].label == "Surface-Based LCL Height"
+    assert products["ehi-0-1km"].label == "Energy Helicity Index (EHI): 0-1 km AGL"
+    assert products["ehi-0-3km"].label == "Energy Helicity Index (EHI): 0-3 km AGL"
+    for key, expected_label, expected_hours in (
+        ("qpf-1h", "1-h QPF", 1),
+        ("qpf-6h", "6-h QPF", 6),
+        ("qpf-12h", "12-h QPF", 12),
+        ("qpf-24h", "24-h QPF", 24),
+        ("apcp", "Total QPF", 0),
+        ("snow-1h", "1-h Snowfall", 1),
+    ):
+        assert products[key].label == expected_label
+        assert products[key].max_hours == expected_hours
+    snow = products["snow-1h"].derive({"asnow": np.array([[0.0254, np.nan]], dtype=np.float32)})
+    np.testing.assert_allclose(snow[0, 0], 1.0, rtol=1e-6)
+    assert np.isnan(snow[0, 1])
 
 
 def test_switching_models_keeps_separate_numeric_grids(offline, monkeypatch):
@@ -576,3 +665,143 @@ def test_the_map_handlers_load_no_qt_module():
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert out.stdout.strip() == "[]"
+
+
+def test_refs_sbcape_variants_share_contours_and_cache_each_statistic(offline, monkeypatch):
+    import sharpmod_rs
+    from sharpmod.bridge import contours, frame_cache
+    from sharpmod.bridge.errors import BridgeError
+    from sharpmod.providers import hrrr_field
+
+    calls = []
+
+    def fake_refs_zarr(key, run, hour, timeout, should_cancel=None):
+        calls.append(key)
+        if key in {"ehi-0-1km", "ehi-0-3km"}:
+            srh_name, srh_val = ("srh01", 200.0) if key == "ehi-0-1km" else ("srh03", 300.0)
+            return (
+                {
+                    "sbcape": np.full(hrrr_field.HRRR_SHAPE, 1600.0, dtype=np.float32),
+                    srh_name: np.full(hrrr_field.HRRR_SHAPE, srh_val, dtype=np.float32),
+                },
+                "https://www.spc.noaa.gov/exper/refs/data/2026/10/04/refs-spc_20261004_1800.zarr",
+            )
+        if key == "scp":
+            return (
+                {
+                    "mucape": np.full(hrrr_field.HRRR_SHAPE, 2000.0, dtype=np.float32),
+                    "srh03": np.full(hrrr_field.HRRR_SHAPE, 150.0, dtype=np.float32),
+                    "ushr06": np.full(hrrr_field.HRRR_SHAPE, 20.0, dtype=np.float32),
+                    "vshr06": np.zeros(hrrr_field.HRRR_SHAPE, dtype=np.float32),
+                },
+                "https://www.spc.noaa.gov/exper/refs/data/2026/10/04/refs-spc_20261004_1800.zarr",
+            )
+        fill = {
+            "qpf-1h-ptype": 10.0804,
+            "qpf-3h": 0.45,
+            "qpf-6h": 0.85,
+            "qpf-24h": 1.75,
+            "qpf-48h": 2.6,
+            "snow-1h": 0.65,
+            "sbcape-min": 250.0,
+            "sbcape": 1200.0,
+            "sbcape-max": 2400.0,
+            "mucape": 1850.0,
+            "srh-0-1km": 220.0,
+            "stp": 2.5,
+            "refc-4h": 55.0,
+            "refc-24h": 62.5,
+            "wind-10m-4h": 38.0,
+            "wind-10m-24h": 44.0,
+        }[key]
+        scalar_only = {
+            "qpf-1h-ptype": "qpf1h_ptype",
+            "qpf-3h": "qpf3h",
+            "qpf-6h": "qpf6h",
+            "qpf-24h": "qpf24h",
+            "qpf-48h": "qpf48h",
+            "snow-1h": "snow1h",
+            "srh-0-1km": "srh01",
+            "stp": "stp",
+            "refc-4h": "refc4h",
+            "refc-24h": "refc24h",
+            "wind-10m-4h": "wspd10m4h",
+            "wind-10m-24h": "wspd10m24h",
+        }
+        if key in scalar_only:
+            return (
+                {scalar_only[key]: np.full(hrrr_field.HRRR_SHAPE, fill, dtype=np.float32)},
+                "https://www.spc.noaa.gov/exper/refs/data/2026/10/04/refs-spc_20261004_1800.zarr",
+            )
+        scalar_field = "mucape" if key == "mucape" else "sbcape"
+        return (
+            {
+                scalar_field: np.full(hrrr_field.HRRR_SHAPE, fill, dtype=np.float32),
+                "ushr06": np.full(hrrr_field.HRRR_SHAPE, 15.0, dtype=np.float32),
+                "vshr06": np.zeros(hrrr_field.HRRR_SHAPE, dtype=np.float32),
+            },
+            "https://www.spc.noaa.gov/exper/refs/data/2026/10/04/refs-spc_20261004_1800.zarr",
+        )
+
+    monkeypatch.setattr(sharpmod_rs, "refs_zarr_map_fields", fake_refs_zarr)
+    monkeypatch.setattr(sharpmod_rs, "available_refs_map_products", lambda products, _run, _hour, _timeout: products)
+    cat = fields.catalog({"model": "refs", "run_time": EXPORT.RUN_TIME, "forecast_hour": 1})
+    cat_by_key = {item["key"]: item for item in cat["products"]}
+    assert cat_by_key["qpf-3h"]["forecast_hours"] == list(range(3, 61, 3))
+    assert cat_by_key["qpf-6h"]["forecast_hours"] == list(range(6, 61, 6))
+    assert cat_by_key["qpf-24h"]["forecast_hours"] == [30, 42, 54]
+    assert cat_by_key["qpf-48h"]["forecast_hours"] == [54]
+    assert cat_by_key["refc-4h"]["forecast_hours"] == list(range(4, 61))
+    assert cat_by_key["wind-10m-4h"]["forecast_hours"] == list(range(4, 61))
+    assert cat_by_key["refc-24h"]["forecast_hours"] == [30, 42, 54]
+    assert cat_by_key["wind-10m-24h"]["forecast_hours"] == [30, 42, 54]
+    for key, expected in (("sbcape-min", 250.0), ("sbcape", 1200.0), ("sbcape-max", 2400.0)):
+        request = {"model": "refs", "product": key, "run_time": EXPORT.RUN_TIME, "forecast_hour": 1}
+        grid = fields.grid(request)
+        lines = contours.contours(request)
+        assert grid["product"] == key
+        assert grid["value_min"] == pytest.approx(expected)
+        assert grid["value_max"] == pytest.approx(expected)
+        assert lines["product"] == "sbcape" and lines["wind"]
+    mucape_req = {"model": "refs", "product": "mucape", "run_time": EXPORT.RUN_TIME, "forecast_hour": 1}
+    mucape_grid = fields.grid(mucape_req)
+    mucape_lines = contours.contours(mucape_req)
+    assert mucape_grid["product"] == "mucape"
+    assert mucape_grid["value_min"] == pytest.approx(1850.0)
+    assert mucape_lines["product"] == "mucape" and mucape_lines["wind"]
+    for key, hour, expected, expected_units in (
+        ("qpf-1h-ptype", 1, 10.0804, "in"),
+        ("qpf-3h", 3, 0.45, "in"),
+        ("qpf-6h", 6, 0.85, "in"),
+        ("qpf-24h", 30, 1.75, "in"),
+        ("qpf-48h", 54, 2.6, "in"),
+        ("snow-1h", 1, 0.65, "in"),
+        ("srh-0-1km", 1, 220.0, "m^2/s^2"),
+        ("ehi-0-1km", 1, 2.0, ""),
+        ("ehi-0-3km", 1, 3.0, ""),
+        ("scp", 1, 6.0, ""),
+        ("stp", 1, 2.5, ""),
+        ("refc-4h", 4, 55.0, "dBZ"),
+        ("refc-24h", 30, 62.5, "dBZ"),
+        ("wind-10m-4h", 4, 38.0, "kt"),
+        ("wind-10m-24h", 30, 44.0, "kt"),
+    ):
+        req = {"model": "refs", "product": key, "run_time": EXPORT.RUN_TIME, "forecast_hour": hour}
+        grid = fields.grid(req)
+        assert grid["product"] == key
+        assert grid["value_min"] == pytest.approx(expected, abs=1e-3)
+        assert grid["units"] == expected_units
+        assert grid["attribution"] == "NOAA Storm Prediction Center REFS"
+        with pytest.raises(BridgeError) as err:
+            contours.contours(req)
+        assert err.value.code == "INVALID_ARGUMENT"
+        assert "carries no contour lines" in err.value.message
+    assert calls == [
+        "sbcape-min", "sbcape", "sbcape-max", "mucape",
+        "qpf-1h-ptype", "qpf-3h", "qpf-6h", "qpf-24h", "qpf-48h",
+        "snow-1h",
+        "srh-0-1km", "ehi-0-1km", "ehi-0-3km", "scp", "stp", "refc-4h", "refc-24h", "wind-10m-4h", "wind-10m-24h",
+    ]
+    assert frame_cache.cached_hours({
+        "model": "refs", "products": ["sbcape-min"], "run_time": EXPORT.RUN_TIME, "hours": [1, 2],
+    }) == [1]

@@ -1,11 +1,20 @@
 //! Reference color tables for the forecast map catalogue.
 
 pub(super) const ISOTACH_MIN_KT: u8 = 20;
-pub(super) const WIND_850_MAX_KT: u8 = 80;
+pub(super) const LOW_LEVEL_WIND_MAX_KT: u8 = 80;
+pub(super) const WIND_500_MAX_KT: u8 = 140;
 pub(super) const DEEP_SHEAR_MAX_KT: u8 = 140;
 pub(super) const EHI_FLOOR: f64 = 0.5;
 pub(super) const EHI_TICKS: [f64; 16] = [
     0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 12.0, 14.0, 16.0, 16.4,
+];
+pub(super) const CAPE03_TICKS: [f64; 15] = [
+    0.0, 25.0, 50.0, 75.0, 100.0, 125.0, 150.0, 175.0, 200.0, 225.0, 250.0, 275.0, 300.0, 425.0,
+    525.0,
+];
+pub(super) const LCL_TICKS: [f64; 16] = [
+    0.0, 250.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0, 1750.0, 2000.0, 2500.0, 3000.0, 3500.0,
+    4000.0, 6500.0, 9000.0, 10000.0,
 ];
 
 const EHI_COLOURS: [&str; 72] = [
@@ -33,13 +42,41 @@ pub(super) fn ehi_stops() -> impl ExactSizeIterator<Item = (f64, &'static str)> 
     })
 }
 
+pub(super) fn cape03_stops() -> impl ExactSizeIterator<Item = (f64, &'static str)> {
+    (0..70usize).map(|index| {
+        // Five swatches per 25 J/kg through 300, then 25 J/kg per swatch.
+        let value = if index < 60 {
+            5 * index
+        } else {
+            300 + 25 * (index - 60)
+        };
+        (value as f64, EHI_COLOURS[index.min(68)])
+    })
+}
+
+pub(super) fn lcl_stops() -> impl ExactSizeIterator<Item = (f64, &'static str)> {
+    (0..73usize).map(|index| {
+        let value = match index {
+            0..=39 => (index * 50) as f64,
+            40..=59 => (2000 + (index - 40) * 100) as f64,
+            _ => (4000 + (index - 60) * 500) as f64,
+        };
+        let colour = if index <= 70 {
+            EHI_COLOURS[index]
+        } else {
+            "#cfb0b2"
+        };
+        (value, colour)
+    })
+}
+
 pub(super) fn isotach_stops(
     source: Vec<(f64, String)>,
     max_kt: u8,
     source_step: f64,
 ) -> Vec<(f64, String)> {
-    // Both references start at the 50 kt swatch of the upper wind table.
-    // Deep shear uses every color, while 850 mb wind uses every other color.
+    // Start at the 50 kt swatch of the original wind table. The 500 mb and
+    // deep-shear maps use every colour, and the 700/850 mb maps use every other one.
     let min = f64::from(ISOTACH_MIN_KT);
     let max = f64::from(max_kt);
     source
@@ -54,6 +91,29 @@ pub(super) fn isotach_stops(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shallow_cape_uses_the_reference_bands() {
+        let stops: Vec<_> = cape03_stops().collect();
+        assert_eq!(stops.len(), 70);
+        for (index, expected) in [
+            (0, (0.0, "#ffffff")),
+            (5, (25.0, "#a5a5a5")),
+            (10, (50.0, "#37536a")),
+            (20, (100.0, "#e9dd96")),
+            (30, (150.0, "#dc4110")),
+            (60, (300.0, "#893d48")),
+            (65, (425.0, "#a97178")),
+            (68, (500.0, "#bc9195")),
+            (69, (525.0, "#bc9195")),
+        ] {
+            assert_eq!(stops[index], expected);
+        }
+        assert!(stops.windows(2).all(|pair| pair[0].0 < pair[1].0));
+        assert!(CAPE03_TICKS
+            .iter()
+            .all(|tick| stops.iter().any(|(value, _)| value == tick)));
+    }
 
     #[test]
     fn ehi_matches_reference_swatch_boundaries() {
@@ -80,6 +140,32 @@ mod tests {
     }
 
     #[test]
+    fn lcl_matches_reference_swatch_boundaries() {
+        let stops: Vec<_> = lcl_stops().collect();
+        assert_eq!(stops.len(), 73);
+        for (index, expected) in [
+            (0, (0.0, "#ffffff")),
+            (5, (250.0, "#a5a5a5")),
+            (10, (500.0, "#37536a")),
+            (20, (1000.0, "#e9dd96")),
+            (30, (1500.0, "#dc4110")),
+            (40, (2000.0, "#73088a")),
+            (50, (3000.0, "#e9bec3")),
+            (60, (4000.0, "#893d48")),
+            (65, (6500.0, "#a97178")),
+            (70, (9000.0, "#c9a6a8")),
+            (71, (9500.0, "#cfb0b2")),
+            (72, (10000.0, "#cfb0b2")),
+        ] {
+            assert_eq!(stops[index], expected);
+        }
+        assert!(stops.windows(2).all(|pair| pair[0].0 < pair[1].0));
+        assert!(LCL_TICKS
+            .iter()
+            .all(|tick| stops.iter().any(|(value, _)| value == tick)));
+    }
+
+    #[test]
     fn wind_850_matches_the_supplied_knot_swatches() {
         let source = [
             (49.0, "#ffffff"),
@@ -97,7 +183,7 @@ mod tests {
                 .into_iter()
                 .map(|(speed, colour)| (speed, colour.to_owned()))
                 .collect(),
-            WIND_850_MAX_KT,
+            LOW_LEVEL_WIND_MAX_KT,
             2.0,
         );
         let swatches: Vec<_> = mapped

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import overlayFailure from "@contracts/public/errors/OVERLAY_FETCH_FAILED.json";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
@@ -64,14 +65,14 @@ it("toggles road networks in Map details for the active panel without hiding the
   const { view, queryClient } = renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
   await userEvent.click(screen.getByRole("button", { name: "Map details" }));
   const roads = screen.getByRole("switch", { name: "Road networks" });
-  expect(roads.getAttribute("aria-checked")).toBe("true");
+  expect(roads.getAttribute("aria-checked")).toBe("false");
   await userEvent.click(roads);
-  expect(panelLayers(useMapStore.getState(), 1).roads.visible).toBe(false);
-  expect(panelLayers(useMapStore.getState(), 0).roads.visible).toBe(true);
+  expect(panelLayers(useMapStore.getState(), 1).roads.visible).toBe(true);
+  expect(panelLayers(useMapStore.getState(), 0).roads.visible).toBe(false);
   expect(panelLayers(useMapStore.getState(), 1).basemap.visible).toBe(true);
   expect(panelLayers(useMapStore.getState(), 1)["place-labels"].visible).toBe(true);
   await userEvent.click(roads);
-  expect(panelLayers(useMapStore.getState(), 1).roads.visible).toBe(true);
+  expect(panelLayers(useMapStore.getState(), 1).roads.visible).toBe(false);
   view.unmount(); queryClient.clear();
 });
 
@@ -164,7 +165,15 @@ it("leads with enabled layers and opens provider settings only when requested", 
   useMapStore.getState().setLayerVisible("radar", false);
   useMapStore.getState().setLayerVisible("watches", true);
   useMapStore.getState().setLayerVisible("warnings", true);
-  renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport("overlay-error"));
+  const transport = createTransport();
+  renderWithBackend(<LayerPanel availabilities={new Set()} />, {
+    ...transport,
+    call: (command, args) => command === "get_radar_frame"
+      // Retry behavior has its own coverage. This test only needs the error state.
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- backend errors use a plain DTO
+      ? Promise.reject({ ...overlayFailure, retryable: false })
+      : transport.call(command, args),
+  });
   const panel = screen.getByRole("region", { name: "Layers" });
   const switches = within(panel).getAllByRole("switch");
   expect(switches.slice(0, 2).map((toggle) => toggle.getAttribute("aria-label"))).toEqual(["NWS warnings", "NWS watches"]);
@@ -174,7 +183,7 @@ it("leads with enabled layers and opens provider settings only when requested", 
   expect(screen.getByRole("button", { name: "Radar mosaic settings" }).getAttribute("aria-expanded")).toBe("false");
   await userEvent.click(screen.getByRole("button", { name: "Radar mosaic settings" }));
   expect(screen.getByRole("combobox", { name: "Radar" })).toBeTruthy();
-  await waitFor(() => { expect(screen.getByTestId("radar-error").textContent).toBeTruthy(); }, { timeout: 4000 });
+  expect((await screen.findByTestId("radar-error")).textContent).toBeTruthy();
   expect(within(panel).getAllByRole("switch").slice(0, 3).map((toggle) => toggle.getAttribute("aria-label"))).toEqual(["NWS warnings", "NWS watches", "Radar mosaic"]);
   await userEvent.click(within(panel).getByRole("switch", { name: "Radar mosaic" }));
   await waitFor(() => { expect(document.activeElement).toBe(within(panel).getByRole("switch", { name: "Radar mosaic" })); });

@@ -258,6 +258,7 @@ async fn real_sidecar_serves_the_bundled_catalogue_and_shuts_down_cleanly() {
     else {
         panic!("bridge not up: {:?}", health.bridge);
     };
+    assert_ne!(pid, 0, "a running bridge has a process ID");
     assert!(
         matches!(
             health.scientific_backend,

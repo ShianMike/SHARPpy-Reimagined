@@ -7,7 +7,7 @@
 use crate::interpolation::PreparedInterpolation;
 
 pub const LAYER_WIDTH: usize = 15;
-const KTS_PER_MS: f64 = 1.943_844_492_440_604_6;
+pub(crate) const KTS_PER_MS: f64 = 1.943_844_492_440_604_6;
 const MAX_PRESSURE_SAMPLES: usize = 5_000;
 /// Pressures within this distance of the layer top count as the top itself, so
 /// floating-point drift cannot append a duplicate level.

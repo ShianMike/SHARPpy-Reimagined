@@ -25,6 +25,7 @@ import outlookWind from "@contracts/public/map/outlook.wind.json";
 import contoursFixture from "@contracts/public/map/contours.json";
 import surfaceFixture from "@contracts/public/map/surface.json";
 import thresholdFixture from "@contracts/public/soundings/threshold.example.json";
+import wpcOutlookFixtures from "./wpcOutlookFixture.json";
 import { encodeShrf, parseShrf } from "../contracts/frames";
 
 /** A request's own time, hours on: relabelling only, never a derivation. */
@@ -72,12 +73,90 @@ export function outlookFor(args: Readonly<Record<string, unknown>> | undefined):
   const validTime = String(args?.validTime);
   if (args?.day !== undefined && args.day !== 1) return { product, validTime, outlook: null };
   const base = structuredClone(OUTLOOKS[product] ?? { ...outlookWind, product }) as Record<string, unknown>;
-  const outlook = base.outlook as { validFrom: string; validTo: string; covers: boolean } | null;
+  const outlook = base.outlook as {
+    validFrom: string;
+    validTo: string;
+    issued: string | null;
+    covers: boolean;
+    discussion?: unknown;
+  } | null;
   if (outlook !== null) {
     const t = Date.parse(validTime);
     outlook.covers = Date.parse(outlook.validFrom) <= t && t < Date.parse(outlook.validTo);
+    if (args?.day === 1) {
+      outlook.discussion = {
+        headline: "THERE IS A SLIGHT RISK OF SEVERE THUNDERSTORMS ACROSS PORTIONS OF THE SOUTHERN PLAINS",
+        summary: "Scattered severe storms capable of damaging gusts and large hail may develop through evening across portions of the central and southern Plains.",
+        sections: [{ heading: "Synopsis", body: "An upper-level trough over the High Plains will advance eastward through the evening, supporting organized thunderstorm development along a dryline." }],
+        issued: outlook.issued,
+        sourceUrl: "https://www.spc.noaa.gov/products/outlook/day1otlk.html",
+      };
+    }
   }
   return { ...base, validTime };
+}
+
+/** The fixture WPC Excessive Rainfall or Winter Weather Outlook for the requested time or issuance day. */
+export function wpcOutlookFor(args: Readonly<Record<string, unknown>> | undefined): unknown {
+  const validTime = String(args?.validTime);
+  const product = typeof args?.product === "string" ? args.product : "ero";
+  const winter = product.startsWith("winter-");
+  const day = typeof args?.day === "number" ? args.day : 1;
+  if (!winter && args?.day !== undefined && day !== 1) return { product, validTime, outlook: null };
+  const ref = outlookCat.outlook;
+  const start = Date.parse(ref.validFrom);
+  const end = Date.parse(ref.validTo);
+  const t = Date.parse(validTime);
+  const covers = start <= t && t < end;
+  const sourceUrl = winter
+    ? "https://www.wpc.ncep.noaa.gov/wwd/wssi/wssi.php"
+    : `https://www.wpc.ncep.noaa.gov/qpf/ero.php?opt=curr&day=${String(day)}`;
+  const rawAreas = winter ? wpcOutlookFixtures.winter : wpcOutlookFixtures.ero;
+  const winterLabels: Readonly<Record<string, string>> = {
+    "winter-overall": "Overall impact",
+    "winter-snow": "Snow amount",
+    "winter-ice": "Ice accumulation",
+    "winter-snow-load": "Snow load",
+    "winter-blowing-snow": "Blowing snow",
+  };
+  return {
+    product,
+    validTime,
+    outlook: {
+      title: winter
+        ? `WPC Day ${String(day)} Winter Weather Outlook — ${winterLabels[product] ?? "Overall impact"}`
+        : `WPC Day ${String(day)} Excessive Rainfall Outlook`,
+      subtitle: ref.subtitle.replace(/^Day \d+/, `Day ${String(day)}${winter ? ` · ${winterLabels[product] ?? "Overall impact"}` : ""}`),
+      validFrom: ref.validFrom,
+      validTo: ref.validTo,
+      issued: ref.issued,
+      covers,
+      sourceUrl,
+      attribution: "NOAA/NWS Weather Prediction Center",
+      ...(args?.day === undefined ? {} : {
+        affectedStates: winter ? ["Illinois", "Missouri"] : ["Oklahoma", "Texas"],
+        discussion: winter
+          ? {
+            headline: "Significant snowfall likely to produce hazardous travel impacts in eastern Missouri and western Illinois",
+            summary: "Steady snowfall rates around 1 to 2 inches per hour may accumulate 6 to 10 inches across eastern Missouri and western Illinois overnight into Day 2.",
+            sections: [{ heading: `Middle Mississippi Valley (Day ${String(day)})`, body: "Strong frontal forcing and deep moisture transport will sustain wet accumulating snow along the Mississippi River corridor." }],
+            issued: ref.issued,
+            sourceUrl,
+          }
+          : {
+            headline: "THERE IS A SLIGHT RISK OF EXCESSIVE RAINFALL ACROSS PORTIONS OF THE SOUTHERN PLAINS",
+            summary: "Repeated heavy rain bands may produce localized totals of 2 to 4 inches and isolated flash flooding across eastern Oklahoma and north Texas.",
+            sections: [{ heading: "Southern Plains", body: "Persistent low-level moisture transport will sustain high rainfall rates along a slow-moving frontal boundary." }],
+            issued: ref.issued,
+            sourceUrl,
+          },
+      }),
+      areas: rawAreas.map((area, index) => ({
+        ...area,
+        rings: ref.areas[index]?.rings ?? ref.areas[0]?.rings ?? [],
+      })),
+    },
+  };
 }
 
 const REPORT_FIXTURES: Readonly<Record<string, unknown>> = {

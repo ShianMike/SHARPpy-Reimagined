@@ -695,6 +695,43 @@ cargo test --manifest-path rust/sharpmod-rs/Cargo.toml --locked --release --test
 On Linux, use the absolute path to the installed `libeccodes.so`. Ensure the
 library's dependent binaries are discoverable by the OS loader.
 
+## Additional Python-to-Rust migrations (M9–M14)
+
+While keeping `BACKEND_API_VERSION = 7`, `sharpmod_rs` and `sharpmod-weather`
+also own six additional compute, planning, and I/O modules registered in
+`REQUIRED_RUST_CAPABILITIES`:
+
+- **M9 Model field & HTTP byte-range planning** (`rust/sharpmod-rs/src/model_planning.rs`):
+  `choose_noaa_fields`, `choose_ifs_fields`, `build_noaa_search`, `build_ifs_search`,
+  `supports_noaa_surface_merge`, `supports_ifs_surface_merge`, `plan_model_ranges`,
+  `parallelize_model_range_plan`, `parse_content_range_details`, and `valid_grib_file`
+  backing `sharpmod.models.model_fields` and `sharpmod.models.model_transport`.
+- **M10 NOAA RRFS / REFS NOMADS inventories & provenance** (`rust/sharpmod-rs/src/rrfs_nomads/`):
+  `rrfs_domain_for`, `rrfs_build_url`, `rrfs_release_candidates`, `rrfs_remember_release`,
+  `rrfs_forget_release`, `rrfs_parse_idx`, `rrfs_select_records`, `rrfs_pressure_field_plan`,
+  `rrfs_write_provenance`, and `rrfs_read_provenance` backing `sharpmod.providers.rrfs_nomads`.
+- **M11 Derived indices, fast STP, hazard, winter & fire** (`rust/sharpmod-rs/src/derived_indices/`):
+  `fast_effective_stp_cin`, `max_thetae_vertical_velocity`, `derived_dcp`,
+  `derived_ncape_ncin`, `derived_ehi`, `derived_vgp`, `derived_hpi`, `derived_peskov`,
+  `derived_peskov_profile`, `derived_lscp`, `derived_nstp`, `derived_moshe`,
+  `classify_hazard_inputs`, `kuchera_snow_liquid_ratio`, `column_max_temperature_c`, and
+  `fire_ventilation_rate` backing `sharpmod.analysis.box_analysis_fast` and
+  `sharpmod.sharptab.{derived,derived_thermo,derived_indices,hazard,winter,fire}`.
+- **M12 Box grid regions, lattice, transects & statistics** (`rust/sharpmod-rs/src/box_grid_analysis/`):
+  `box_region_from_corners`, `box_region_from_bounds`, `box_region_contains`,
+  `plan_box_lattice`, `box_transect_column`, `box_transect_columns`, `box_field_statistics`,
+  and `box_envelope_stats` backing `sharpmod.analysis.{box_sounding,box_analysis,box_analysis_core}`.
+- **M13 Decoder cleanup & bridge gzip/storage cache** (`rust/weather-core/src/bridge_cache.rs`,
+  `rust/sharpmod-rs/src/{decoder_clean.rs,bridge_cache_bindings.rs}`):
+  `sanitize_profile_keep_mask`, `clean_column`, `thin_profile_indices`, `live_cache_digest`,
+  `live_cache_ttl`, `live_cache_read`, `live_cache_write`, `frame_cache_read_gzip`,
+  `frame_cache_compress_gzip`, and `storage_scan_files` backing `sharpmod.io.decoder` and
+  `sharpmod.bridge.{live_cache,frame_cache,storage}` (`storage._files` retains an `ImportError`
+  fallback for Python-only sidecar environments).
+- **M14 Batch extraction manifest, containment & SHA-256** (`rust/sharpmod-rs/src/batch_manifest.rs`):
+  `batch_safe_identifier`, `batch_contained_path`, `batch_file_sha256`,
+  `batch_json_fingerprint`, and `batch_load_manifest` backing `sharpmod.analysis.batch_extract`.
+
 ## Current limitations
 
 - Native wheels are CI/build artifacts rather than a separately published

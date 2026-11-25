@@ -52,7 +52,7 @@ def index_map(size: tuple[int, int],
             col = np.floor(np.round((lon_grid.ravel() + 180) / grid.spacing + 0.5, 8)).astype(np.int32) % grid.shape[1]
             row = np.floor(np.round((90 - lat_grid.ravel()) / grid.spacing + 0.5, 8)).astype(np.int32)
         else:
-            if model in {"rap", "rdps"}:
+            if model in {"rap", "rdps", "hrdps"}:
                 projection = sharpmod_rs.regional_map_projection(model)
             else:
                 projection = _api.NAM_PROJ4 if model == "nam" or model in _api.HRW_MODELS else _api.HRRR_PROJ4

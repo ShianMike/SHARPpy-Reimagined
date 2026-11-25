@@ -91,6 +91,9 @@ export function applyPreferences(preferences: Preferences): void {
     radarScope: preferences.radarScope,
     radarSite: preferences.radarSite,
     satelliteChannel: preferences.satelliteChannel,
+    wpcOutlookDay: preferences.wpcOutlookDay,
+    wpcWinterDay: preferences.wpcWinterDay,
+    wpcWinterProduct: preferences.wpcWinterProduct,
     reportWindowS: preferences.reportWindowS,
     reportFilter: preferences.reportFilter,
     layerPanelGroup: preferences.layerPanelGroup,
@@ -117,6 +120,9 @@ export function currentPreferences(): Preferences {
     radarScope: map.radarScope,
     radarSite: map.radarSite,
     satelliteChannel: map.satelliteChannel,
+    wpcOutlookDay: map.wpcOutlookDay,
+    wpcWinterDay: map.wpcWinterDay,
+    wpcWinterProduct: map.wpcWinterProduct,
     reportWindowS: map.reportWindowS,
     reportFilter: map.reportFilter,
     layerPanelGroup: map.layerPanelGroup,
@@ -149,6 +155,9 @@ export function resetLayerSettings(): void {
     radarScope: initial.radarScope,
     radarSite: initial.radarSite,
     satelliteChannel: initial.satelliteChannel,
+    wpcOutlookDay: initial.wpcOutlookDay,
+    wpcWinterDay: initial.wpcWinterDay,
+    wpcWinterProduct: initial.wpcWinterProduct,
     reportWindowS: initial.reportWindowS,
     reportFilter: initial.reportFilter,
     availabilityTime: initial.availabilityTime,
@@ -161,7 +170,7 @@ export function resetAllSettings(): void {
   const { cameraSnapshot, focusRequest } = useMapStore.getState();
   useMapStore.setState({ ...useMapStore.getInitialState(), cameraSnapshot, focusRequest }, true);
   useForecastStore.setState(useForecastStore.getInitialState(), true);
-  useUiStore.setState({ ...useUiStore.getInitialState(), lastVersion: useUiStore.getState().lastVersion }, true);
+  useUiStore.setState({ ...useUiStore.getInitialState(), lastVersion: useUiStore.getState().lastVersion, githubStar: useUiStore.getState().githubStar }, true);
   useGraphicsStore.getState().setOverride(DEFAULT_PREFERENCES.graphicsOverride);
 }
 

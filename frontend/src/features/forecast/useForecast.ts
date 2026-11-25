@@ -4,10 +4,12 @@
 // for the map fields comes from the catalogue's per-cycle limits.
 
 import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useModelCatalog } from "../sounding/soundingQueries";
 import { addHours, resolveModelRun } from "../sounding/soundingTime";
 import { useMapCatalog } from "../../map/mapQueries";
 import { useForecastStore, type ForecastState } from "../../stores/forecastStore";
+import { panelLayers, panelProduct, useMapStore } from "../../stores/mapStore";
 import type { MapCatalog } from "../../types/map";
 import type { ForecastModel } from "../../types/soundings";
 
@@ -34,6 +36,7 @@ export function resolveForecast(
   models: readonly ForecastModel[],
   catalog: MapCatalog | undefined,
   choice: ForecastChoice,
+  selectedProducts: readonly string[] = [],
 ): ForecastContext | null {
   const fieldModel = catalog?.fieldModel ?? null;
   const model =
@@ -48,7 +51,10 @@ export function resolveForecast(
   const cycle = new Date(run).getUTCHours();
   const limit = Math.min(model.maxForecastHours[cycle] ?? Infinity, fieldsAvailable ? (catalog.maxForecastHours[cycle] ?? Infinity) : Infinity);
   const allowed = model.forecastHours.filter((hour) => hour <= limit);
-  const hours = allowed.length > 0 ? allowed : model.forecastHours;
+  const schedules = fieldsAvailable ? catalog.products.flatMap(({ key, forecastHours }) =>
+    forecastHours !== undefined && selectedProducts.includes(key) ? [forecastHours] : []) : [];
+  const scheduled = allowed.filter((hour) => schedules.every((schedule) => schedule.includes(hour)));
+  const hours = scheduled.length > 0 ? scheduled : allowed.length > 0 ? allowed : model.forecastHours;
   const hour = closestHour(hours, choice.forecastHour ?? model.defaultForecastHour);
   return { models, model, run, hours, hour, validTime: addHours(run, hour), fieldsAvailable };
 }
@@ -67,11 +73,15 @@ export function useForecast(): ForecastResolution {
   const modelKey = useForecastStore((state) => state.modelKey);
   const runTime = useForecastStore((state) => state.runTime);
   const forecastHour = useForecastStore((state) => state.forecastHour);
+  const selectedProducts = useMapStore(useShallow((state) => Array.from({ length: state.panelLayout }, (_, panel) => {
+    const product = panelProduct(state, panel);
+    return panelLayers(state, panel)["model-field"].visible && product !== null ? product : "";
+  })));
   // One object while nothing it depends on changes, so effects can depend on it.
   const resolved = useMemo(
     () =>
-      models.data === undefined ? null : resolveForecast(models.data.models, catalog.data, { modelKey, runTime, forecastHour }),
-    [models.data, catalog.data, modelKey, runTime, forecastHour],
+      models.data === undefined ? null : resolveForecast(models.data.models, catalog.data, { modelKey, runTime, forecastHour }, selectedProducts),
+    [models.data, catalog.data, modelKey, runTime, forecastHour, selectedProducts],
   );
   if (models.isError) {
     return {

@@ -85,15 +85,9 @@ def kuchera_snow_liquid_ratio(max_temp_c) -> float | None:
     answer. Clamping keeps the warm branch from running negative, which the
     two-line form otherwise would.
     """
-    if not _usable(max_temp_c):
-        return None
-    max_temp_k = float(max_temp_c) + ZERO_CELSIUS_K
-    offset = KUCHERA_PIVOT_K - max_temp_k
-    if max_temp_k > KUCHERA_PIVOT_K:
-        ratio = KUCHERA_BASE_RATIO + KUCHERA_WARM_FACTOR * offset
-    else:
-        ratio = KUCHERA_BASE_RATIO + offset
-    return max(ratio, 0.0)
+    import sharpmod_rs
+
+    return sharpmod_rs.kuchera_snow_liquid_ratio(max_temp_c)
 
 
 def column_max_temperature_c(prof, ptop: float = KUCHERA_TOP_HPA):
@@ -106,25 +100,24 @@ def column_max_temperature_c(prof, ptop: float = KUCHERA_TOP_HPA):
     Returns ``None`` when the profile has no usable temperature in the layer.
     """
     import numpy as np
+    import sharpmod_rs
 
     pres = getattr(prof, "pres", None)
     tmpc = getattr(prof, "tmpc", None)
     if pres is None or tmpc is None:
         return None
     try:
-        levels = np.ma.masked_invalid(np.ma.asarray(pres, dtype=float))
-        temps = np.ma.masked_invalid(np.ma.asarray(tmpc, dtype=float))
-        usable = (~np.ma.getmaskarray(levels)
-                  & ~np.ma.getmaskarray(temps)
-                  & (levels.filled(-1.0) >= float(ptop))
-                  & (temps.filled(VENDORED_MISSING) != VENDORED_MISSING))
-        candidates = np.asarray(temps.filled(VENDORED_MISSING))[usable]
+        levels = np.asarray(
+            np.ma.masked_invalid(np.ma.asarray(pres, dtype=float)).filled(VENDORED_MISSING),
+            dtype=float,
+        )
+        temps = np.asarray(
+            np.ma.masked_invalid(np.ma.asarray(tmpc, dtype=float)).filled(VENDORED_MISSING),
+            dtype=float,
+        )
+        return sharpmod_rs.column_max_temperature_c(levels, temps, float(ptop))
     except Exception:  # noqa: BLE001 - a malformed profile is not fatal
         return None
-    if candidates.size == 0:
-        return None
-    warmest = float(candidates.max())
-    return warmest if _usable(warmest) else None
 
 
 def profile_snow_liquid_ratio(prof, ptop: float = KUCHERA_TOP_HPA):

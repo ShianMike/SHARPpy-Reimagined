@@ -22,11 +22,11 @@ fn records(product: &Bound<'_, PyAny>, model: Model) -> PyResult<Vec<(String, Re
         .try_iter()?
         .map(|field| {
             let name: String = field?.getattr("name")?.extract()?;
-            let record = (if model == Model::Rdps {
-                gdps_fields::rdps_record(&name)
-            } else {
-                gdps_fields::record(&name)
-            })
+            let record = match model {
+                Model::Gdps => gdps_fields::record(&name),
+                Model::Rdps => gdps_fields::rdps_record(&name),
+                Model::Hrdps => gdps_fields::hrdps_record(&name),
+            }
             .map_err(|error| field_error(product.py(), error))?;
             Ok((name, record))
         })
@@ -59,6 +59,13 @@ fn rdps_map_directory(py: Python<'_>, run: OffsetDateTime, hour: u16) -> PyResul
 }
 
 #[pyfunction]
+fn hrdps_map_directory(py: Python<'_>, run: OffsetDateTime, hour: u16) -> PyResult<String> {
+    Ok(Frame::for_model(Model::Hrdps, run, hour)
+        .map_err(|error| field_error(py, error))?
+        .directory())
+}
+
+#[pyfunction]
 fn available_gdps_map_products(
     py: Python<'_>,
     products: Vec<Py<PyAny>>,
@@ -86,6 +93,22 @@ fn available_rdps_map_products(
         py,
         products,
         Frame::for_model(Model::Rdps, run, hour).map_err(|error| field_error(py, error))?,
+        timeout,
+    )
+}
+
+#[pyfunction]
+fn available_hrdps_map_products(
+    py: Python<'_>,
+    products: Vec<Py<PyAny>>,
+    run: OffsetDateTime,
+    hour: u16,
+    timeout: f64,
+) -> PyResult<Vec<Py<PyAny>>> {
+    available(
+        py,
+        products,
+        Frame::for_model(Model::Hrdps, run, hour).map_err(|error| field_error(py, error))?,
         timeout,
     )
 }
@@ -173,6 +196,21 @@ fn download_rdps_map_fields<'py>(
     download(py, product, frame, timeout, should_cancel, workers)
 }
 
+#[pyfunction(signature = (product, run, hour, timeout, should_cancel=None, workers=4))]
+fn download_hrdps_map_fields<'py>(
+    py: Python<'py>,
+    product: &Bound<'py, PyAny>,
+    run: OffsetDateTime,
+    hour: u16,
+    timeout: f64,
+    should_cancel: Option<Py<PyAny>>,
+    workers: usize,
+) -> PyResult<Bound<'py, PyDict>> {
+    let frame =
+        Frame::for_model(Model::Hrdps, run, hour).map_err(|error| field_error(py, error))?;
+    download(py, product, frame, timeout, should_cancel, workers)
+}
+
 fn download<'py>(
     py: Python<'py>,
     product: &Bound<'py, PyAny>,
@@ -233,7 +271,7 @@ fn download<'py>(
     });
     lock.call_method0("release")?;
     let mut values = values.map_err(|error| field_error(py, error))?;
-    if frame.model == Model::Rdps {
+    if matches!(frame.model, Model::Rdps | Model::Hrdps) {
         // Each product requests complete pairs. Rotate before deriving speed or
         // packing arrows, so all downstream consumers see true east/north winds.
         let pairs = values
@@ -258,16 +296,23 @@ fn download<'py>(
                 let (a, b) = values.split_at_mut(i);
                 (&mut b[0].1, &mut a[j].1)
             };
-            crate::regional_grids::rotate_rdps(u, v);
+            if frame.model == Model::Hrdps {
+                crate::regional_grids::rotate_hrdps(u, v);
+            } else {
+                crate::regional_grids::rotate_rdps(u, v);
+            }
         }
     }
-    let shape = if frame.model == Model::Rdps {
-        (
+    let shape = match frame.model {
+        Model::Gdps => (HEIGHT, WIDTH),
+        Model::Rdps => (
             crate::regional_grids::RDPS_HEIGHT,
             crate::regional_grids::RDPS_WIDTH,
-        )
-    } else {
-        (HEIGHT, WIDTH)
+        ),
+        Model::Hrdps => (
+            crate::regional_grids::HRDPS_HEIGHT,
+            crate::regional_grids::HRDPS_WIDTH,
+        ),
     };
     let decoded = PyDict::new(py);
     for (name, values) in values {
@@ -286,5 +331,8 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(rdps_map_directory, module)?)?;
     module.add_function(wrap_pyfunction!(available_rdps_map_products, module)?)?;
     module.add_function(wrap_pyfunction!(download_rdps_map_fields, module)?)?;
+    module.add_function(wrap_pyfunction!(hrdps_map_directory, module)?)?;
+    module.add_function(wrap_pyfunction!(available_hrdps_map_products, module)?)?;
+    module.add_function(wrap_pyfunction!(download_hrdps_map_fields, module)?)?;
     Ok(())
 }

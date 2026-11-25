@@ -218,8 +218,11 @@ def test_hazard_products_follow_each_models_published_inventory(model):
                  "prate-frzr", "prate-sleet", "prate-snow"}
     expected = (additions - {"efhl", "lftx"} - uh if model in hp.ECMWF_MODELS or model == "gfs"
                 else additions - {"efhl", "lftx", "pwat"} - uh if model in {"gdps", "rdps"}
+                else {"apcp", "gust"} if model == "hrdps"
+                else {"apcp", "pwat"} if model == hp.ICON_MODEL
                 else additions - uh if model == "rap"
                 else {"apcp", "wind-10m"} if model == "aigfs"
+                else {"pwat"} if model == "refs"
                 else uh | {"apcp", "gust", "lftx", "pwat", "wind-10m"} if model in hp.HRW_MODELS
                 else uh | {"apcp", "gust", "pwat", "wind-10m"} if model.startswith("refs-")
                 else additions - {"efhl"} - uh if model == "nam"
@@ -291,7 +294,7 @@ def test_nam_total_precipitation_never_returns_a_partial_total(missing, monkeypa
                             timeout=1, should_cancel=None, model="nam-3km-conus")
 
 
-@pytest.mark.parametrize("model", hp.FIELD_MODELS)
+@pytest.mark.parametrize("model", [model for model in hp.FIELD_MODELS if model != "refs"])
 def test_initial_run_precipitation_is_zero_without_downloading(model, monkeypatch):
     product = next(p for p in hp.available_products(model) if p.key == "apcp")
     monkeypatch.setattr(hf, "field_grid", lambda _model: replace(hf.HRRR_GRID, shape=(1, 2)))

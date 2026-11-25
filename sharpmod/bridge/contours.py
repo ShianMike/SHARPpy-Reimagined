@@ -50,7 +50,7 @@ def wind_grid(product, decoded, mapping, *, model="hrrr"):
     )
     if u.shape != grid.shape or v.shape != u.shape:
         raise HrrrFieldError("wind components do not match the model grid")
-    lambert = None if model in GLOBAL_MODELS or model == "rdps" else (
+    lambert = None if model in GLOBAL_MODELS or model in {"rdps", "hrdps"} else (
         grid.shape[1], grid.x0, grid.y0, grid.spacing, grid._rho0
     )
     try:
@@ -85,7 +85,7 @@ def contours(params: dict[str, Any]) -> dict[str, Any]:
     from sharpmod.bridge import fields as bridge_fields
     from sharpmod.providers import hrrr_field
 
-    model, product, run, hour = bridge_fields._request(params)
+    model, product, requested_key, run, hour = bridge_fields._resolve_request(params)
     if product.contour is None and not product.wind:
         raise p.invalid(f"product {product.key!r} carries no contour lines")
     from sharpmod.bridge import frame_cache
@@ -93,7 +93,7 @@ def contours(params: dict[str, Any]) -> dict[str, Any]:
     cached = frame_cache.read(target)
     if cached is not None:
         return cached
-    result = bridge_fields._acquire(model, product, run, hour)[1]
+    result = bridge_fields._acquire(model, product, run, hour, requested_key)[1]
     if isinstance(result, BridgeError):
         raise result
     return result

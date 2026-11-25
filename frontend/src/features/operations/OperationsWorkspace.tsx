@@ -18,7 +18,7 @@ import { HealthIndicator } from "../toolbar/HealthIndicator";
 import styles from "./OperationsWorkspace.module.css";
 import { ModelBackendStatus } from "./ModelBackendStatus";
 import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
-import { SpcBriefing } from "./SpcBriefing";
+import { OutlookBriefing } from "./OutlookBriefing";
 
 const SOURCES = [
   { source: "observed", label: "Observed", hint: "Weather balloon profiles", icon: RadioTower },
@@ -51,7 +51,9 @@ export function OperationsWorkspace(): ReactNode {
       </div>
       <HealthIndicator />
     </header>
-    <SpcBriefing />
+    <div className={styles.briefings}>
+      <OutlookBriefing />
+    </div>
     <div className={styles.workflows}>
       <section className={styles.workflow} aria-labelledby="continue-title">
         <header className={styles.workflowHeading}><Map className="icon" aria-hidden="true" /><h2 id="continue-title">Model Viewer</h2><span>Panel {String(panel + 1)}</span></header>

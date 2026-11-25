@@ -290,8 +290,8 @@ def test_models_catalog_lists_every_selectable_model(monkeypatch):
     monkeypatch.setattr(params, "now", lambda: now)
     catalog = soundings.models_catalog({})
     models = {m["key"]: m for m in catalog["models"]}
-    assert set(models) == {c.key for c in model_extract.available_models()} | {"aigfs"}
-    assert {key for key, model in models.items() if not model["soundings_available"]} == {"aigfs"}
+    assert set(models) == {c.key for c in model_extract.available_models()} | {"aigfs", "refs", "hrdps"}
+    assert {key for key, model in models.items() if not model["soundings_available"]} == {"aigfs", "refs", "hrdps"}
     assert models["aigfs"]["domain"] == "Global"
     assert models["aigfs"]["forecast_hours"] == list(range(0, 385, 6))
     hrrr = models["hrrr"]
@@ -310,7 +310,8 @@ def test_models_catalog_lists_every_selectable_model(monkeypatch):
         assert model["recent_runs"] == sorted(model["recent_runs"], reverse=True)
         assert model["forecast_hours"]
         assert len(model["max_forecast_hours"]) == 24
-        assert set(model["max_forecast_hours"]) <= set(model["forecast_hours"])
+        cycle_maximums = {model["max_forecast_hours"][cycle] for cycle in model["cycles"]}
+        assert cycle_maximums <= set(model["forecast_hours"])
 
 
 @pytest.mark.parametrize("cycle_hour", (0, 6, 12, 18))

@@ -131,3 +131,45 @@ it("uses SPC's actual colors and omits an outlook that does not cover the select
   expect(key.queryByText("TSTM")).toBeNull();
   view.unmount(); queryClient.clear();
 });
+
+it("renders WPC ERO legend keys, empty quiet days, and Auto/Day 1-3 controls with discussion summaries", async () => {
+  useAppStore.getState().setActiveWorkspace("map");
+  useForecastStore.setState({ modelKey: "hrrr", runTime: "2026-10-04T12:00:00Z", forecastHour: 9 });
+  useMapStore.getState().setLayerVisible("wpc-ero", true);
+  useMapStore.getState().setLayerPanelGroup("legend");
+  const { wpcOutlookFor } = await import("../../lib/backend/fixtureFrames");
+  const base = createTransport();
+  const original = base.call.bind(base);
+  let mode: "normal" | "uncovered" | "quiet" = "normal";
+  vi.spyOn(base, "call").mockImplementation((command, args) => {
+    if (command !== "get_wpc_outlook") return original(command, args);
+    const res = structuredClone(wpcOutlookFor(args)) as { product: string; validTime: string; outlook: Record<string, unknown> | null };
+    if (res.outlook && mode === "uncovered" && args?.day === undefined) res.outlook.covers = false;
+    if (res.outlook && mode === "quiet") res.outlook.areas = [];
+    if (res.outlook === null && args?.day === 2) {
+      res.outlook = { ...(wpcOutlookFor({ ...args, day: 1 }) as { outlook: Record<string, unknown> }).outlook, title: "WPC Day 2 Excessive Rainfall Outlook", subtitle: "Day 2 ERO" };
+    }
+    return Promise.resolve(res);
+  });
+  const { view, queryClient } = renderWithBackend(<LayerPanel availabilities={new Set()} />, base);
+  const key = within(screen.getByTestId("legend-wpc-ero"));
+  await waitFor(() => { expect(key.getByText("SLGT")).toBeTruthy(); });
+  expect(key.getByText("MRGL")).toBeTruthy();
+  await act(async () => { mode = "quiet"; await queryClient.invalidateQueries({ queryKey: ["wpc-outlook"] }); });
+  await waitFor(() => { expect(key.getByText("No areas outlined (< 5% risk).")).toBeTruthy(); });
+  await act(async () => { mode = "uncovered"; await queryClient.invalidateQueries({ queryKey: ["wpc-outlook"] }); });
+  await waitFor(() => { expect(key.getByText("No WPC outlook covers this time.")).toBeTruthy(); });
+
+  await act(async () => { mode = "normal"; await queryClient.invalidateQueries({ queryKey: ["wpc-outlook"] }); });
+  fireEvent.click(screen.getByRole("button", { name: "Weather" }));
+  fireEvent.click(within(screen.getByTestId("layer-row-wpc-ero")).getByRole("button", { expanded: false }));
+  const editor = within(screen.getByTestId("layer-settings-wpc-ero"));
+  expect(within(editor.getByRole("group", { name: "WPC outlook day" })).getAllByRole("button").map((b) => b.textContent)).toEqual(["Auto", "Day 1", "Day 2", "Day 3"]);
+  await waitFor(() => { expect(editor.getByText("Forecast discussion")).toBeTruthy(); });
+  expect(editor.getByText(/Repeated heavy rain bands/)).toBeTruthy();
+  fireEvent.click(editor.getByRole("button", { name: "Day 2" }));
+  expect(useMapStore.getState().wpcOutlookDay).toBe(2);
+  await waitFor(() => { expect(editor.getByTestId("outlook-shown-ero").textContent).toContain("Day 2 ERO"); });
+  expect(editor.getByText("Forecast discussion")).toBeTruthy();
+  view.unmount(); queryClient.clear();
+});

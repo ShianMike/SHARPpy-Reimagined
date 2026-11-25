@@ -10,7 +10,7 @@ import { OUTLOOK_KEYS, type OutlookKey } from "../../types/map";
 import { LAYER_REGISTRY } from "../layers/descriptors";
 import type { OrderableLayerId } from "../layers/registry";
 import { SYMBOL_PATHS } from "../layers/StormReportLayer";
-import { useSatelliteFrame, useSpcOutlooks, useStormReports } from "../mapQueries";
+import { useSatelliteFrame, useSpcOutlooks, useStormReports, useWpcOutlook } from "../mapQueries";
 import { usePanelField } from "../panelField";
 import { useWeatherAlerts } from "../weatherAlertsQuery";
 import { FieldLegend } from "./FieldLegend";
@@ -69,6 +69,23 @@ function OutlookKey({ product }: { product: OutlookKey }) {
     </>;
 }
 
+function WpcOutlookKey({ kind }: { kind: "ero" | "winter" }) {
+  const time = useWeatherTime();
+  const dayMode = useMapStore((state) => (kind === "winter" ? state.wpcWinterDay : state.wpcOutlookDay));
+  const product = useMapStore((state) => (kind === "winter" ? state.wpcWinterProduct : "ero"));
+  const query = useWpcOutlook(true, time, dayMode, product);
+  const outlook = query.data?.outlook;
+  const label = kind === "winter" ? "WPC winter weather outlooks" : "WPC outlooks";
+  const emptyText = kind === "winter" ? "No winter weather impact areas outlined." : "No areas outlined (< 5% risk).";
+  return dayMode === "auto" && time === null ? <p>Choose a forecast time to view {label}.</p>
+    : query.isError ? <SoundingErrorNotice error={query.error} operation="get_wpc_outlook" onRetry={() => { void query.refetch(); }} busy={query.isFetching} testId={kind === "winter" ? "legend-wpc-winter-error" : "legend-wpc-error"} />
+    : query.data === undefined ? <p>Loading WPC outlook…</p>
+    : outlook == null || (dayMode === "auto" && !outlook.covers) ? <p>No WPC outlook covers this time.</p> : <>
+      {outlook.areas.length === 0 ? <p>{emptyText}</p> : <ColourKeys entries={outlook.areas.map(({ label: areaLabel, fill, stroke, hatch }) => ({ label: areaLabel, fill, stroke, hatch }))} />}
+      <p>{outlook.subtitle}</p>
+    </>;
+}
+
 function ReportKey({ panel }: { panel: number }) {
   const time = useWeatherTime();
   const windowS = useMapStore((state) => panelReports(state, panel).reportWindowS);
@@ -112,6 +129,8 @@ function WeatherKey({ id, panel }: { id: OrderableLayerId; panel: number }): Rea
     case "storm-reports": return <ReportKey panel={panel} />;
     case "surface-plots": return <SurfacePlotControls />;
     case "spotter-network": return <SpotterNetworkStatus />;
+    case "wpc-ero": return <WpcOutlookKey kind="ero" />;
+    case "wpc-winter": return <WpcOutlookKey kind="winter" />;
     default: return <OutlookKey product={id.slice("spc-".length) as OutlookKey} />;
   }
 }

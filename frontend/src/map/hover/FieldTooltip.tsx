@@ -3,7 +3,7 @@ import { cx } from "../../lib/cx";
 import { convertUnit, displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
 import { Surface } from "../../ui/Surface";
-import { drawnRangeNote, formatValue, sampleAt } from "../field/colourize";
+import { decodePtypeValue, drawnRangeNote, formatValue, sampleAt } from "../field/colourize";
 import type { PanelField } from "../panelField";
 import { useHoverStore, type PointerPosition } from "./hoverStore";
 import styles from "./StationTooltip.module.css";
@@ -16,11 +16,14 @@ export function FieldTooltip({ panel, field }: { panel: number; field: PanelFiel
   const palette = field.product?.palette;
   const visible = pointer !== null && !field.frame.isError && frame !== undefined && palette !== undefined && field.blocked === null;
   const value = visible ? sampleAt(frame, pointer.longitude, pointer.latitude) : null;
-  const note = value === null || palette === undefined ? "" : drawnRangeNote(value, palette);
+  const decoded = value === null || palette === undefined ? null : decodePtypeValue(value, palette);
+  const note = decoded === null || palette === undefined ? "" : drawnRangeNote(decoded.amount, palette);
   const source = frame?.units ?? "";
   const unit = displayUnit(source, units, palette?.display);
-  const text = value === null ? "No data here" : `${formatValue(convertUnit(value, source, unit, palette?.display))} ${unit}${note === "" ? "" : ` (${note})`}`;
-  const label = field.product?.label;
+  const suffix = [decoded?.ptypeLabel, note === "" ? null : note].filter((part): part is string => part != null && part !== "").join(", ");
+  const text = decoded === null ? "No data here" : `${formatValue(convertUnit(decoded.amount, source, unit, palette?.display))} ${unit}${suffix === "" ? "" : ` (${suffix})`}`;
+  const label = field.product === null ? undefined
+    : field.variant === null ? field.product.label : `${field.product.shortLabel} · ${field.variant.label}`;
   return <PointerValue pointer={visible ? pointer : null} label={label} text={text} />;
 }
 

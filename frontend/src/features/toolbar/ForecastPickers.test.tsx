@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import mapCatalog from "@contracts/public/map/catalog.json";
+import modelCatalogs from "@contracts/public/map/catalog.models.json";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it } from "vitest";
@@ -179,4 +180,23 @@ it.each(["tmp-2m", "rh-2m", "ltng", ...exponentProducts.map((product) => product
   expect(panelProduct(useMapStore.getState(), 1)).toBe(product.key);
   expect(panelProduct(useMapStore.getState(), 0)).toBe(firstPanel);
   expect(document.activeElement).toBe(screen.getByRole("button", { name: "Choose parameter" }));
+});
+
+it("offers the minimum, mean, and maximum in the REFS Field switcher", async () => {
+  const field = parseMapCatalog(modelCatalogs.refs).products.find((product) => product.variants !== undefined);
+  const maximum = field?.variants?.find((variant) => variant.label === "Ensemble Maximum");
+  if (field === undefined || maximum === undefined) throw new Error("Missing REFS field variants");
+  useForecastStore.getState().setModel("refs");
+  useForecastStore.getState().setHour(1);
+  useMapStore.getState().setProduct(field.key);
+  renderWithBackend(<ForecastControls />, createTransport("field-error"));
+  const fieldTrigger = await screen.findByRole<HTMLButtonElement>("combobox", { name: "Field" });
+  expect(fieldTrigger.textContent).toContain("Ensemble Mean");
+  await userEvent.click(fieldTrigger);
+  const listbox = screen.getByRole("listbox", { name: "Field" });
+  expect(within(listbox).getAllByRole("option").map((option) => option.textContent))
+    .toEqual(["Ensemble Minimum", "Ensemble Mean", "Ensemble Maximum"]);
+  await userEvent.click(within(listbox).getByRole("option", { name: "Ensemble Maximum" }));
+  expect(panelProduct(useMapStore.getState(), 0)).toBe(maximum.key);
+  expect(fieldTrigger.textContent).toContain("Ensemble Maximum");
 });

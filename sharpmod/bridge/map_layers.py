@@ -98,6 +98,10 @@ def spc_outlook(params: dict[str, Any]) -> dict[str, Any]:
     }
     if layer.affected_states is not None:
         result["outlook"]["affected_states"] = list(layer.affected_states)
+    if day is not None:
+        discussion = __import__("sharpmod_rs").spc_outlook_discussion(day)
+        if discussion is not None:
+            result["outlook"]["discussion"] = json.loads(discussion)
     return result
 
 

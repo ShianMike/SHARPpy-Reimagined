@@ -42,7 +42,9 @@ function BoxRequest({ context, bounds, revision }: { context: ForecastContext; b
       {completed === undefined ? null : <span>{completed.validColumns.toLocaleString()} columns
         {completed.validColumns === completed.selectedColumns ? "" : ` / ${completed.selectedColumns.toLocaleString()} selected`}</span>}
     </div>
-    {!supported ? <p className={styles.explanation}>Point profiles only. Choose HRRR, GFS or another native-grid model.</p> : null}
+    {!supported ? <p className={styles.explanation}>{context.model.soundingsAvailable
+      ? "Point profiles only. Choose HRRR, GFS or another native-grid model."
+      : `${context.model.label} supports forecast maps only.`}</p> : null}
     {open.isPending ? <><DownloadStatus label={`${context.model.label} box`} progress={open.progress} />
       <Action onClick={open.cancel}>Cancel</Action></> : null}
     {open.cancelled ? <p role="status" className={styles.explanation}>Box sounding cancelled.</p> : null}

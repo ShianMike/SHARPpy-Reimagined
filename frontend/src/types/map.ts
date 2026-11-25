@@ -17,6 +17,12 @@ export interface Palette {
   /** Values above are hidden; null clips them to the last colour. */
   ceiling: number | null;
   ticks: readonly number[];
+  ptypeLabels?: readonly string[];
+}
+
+export interface FieldVariant {
+  key: string;
+  label: string;
 }
 
 export interface FieldProduct {
@@ -28,6 +34,10 @@ export interface FieldProduct {
   caveat: string;
   /** First forecast hour with a complete product interval. */
   minimumForecastHour: number;
+  /** Forecast hours scheduled for this product in the selected run. */
+  forecastHours?: readonly number[];
+  /** Selectable ensemble/field variants for this product. */
+  variants?: readonly FieldVariant[];
   palette: Palette;
   /** The product's contour-line spec; null for products drawn as colour only. */
   contour: ProductContour | null;
@@ -46,23 +56,14 @@ export interface RadarProduct {
 export const SATELLITE_CHANNELS = ["infrared", "visible"] as const;
 export type SatelliteChannel = (typeof SATELLITE_CHANNELS)[number];
 
-export const OUTLOOK_KEYS = ["cat", "torn", "wind", "hail"] as const;
-export type OutlookKey = (typeof OUTLOOK_KEYS)[number];
-export const OUTLOOK_DAYS = [1, 2, 3] as const;
-export type OutlookDay = (typeof OUTLOOK_DAYS)[number];
-export type OutlookProductKey = OutlookKey | "prob";
-/** The layer names the panel and the inspector show. */
-export const OUTLOOK_NAMES: Readonly<Record<OutlookKey, string>> = {
-  cat: "SPC categorical",
-  torn: "SPC tornado",
-  wind: "SPC wind",
-  hail: "SPC hail",
-};
-
-export interface OutlookProduct {
-  key: string;
-  label: string;
-}
+export {
+  OUTLOOK_DAYS, OUTLOOK_KEYS, OUTLOOK_NAMES, WPC_OUTLOOK_KEY, WPC_OUTLOOK_NAME,
+  WPC_WINTER_KEY, WPC_WINTER_NAME, WPC_WINTER_PRODUCTS, WPC_WINTER_PRODUCT_LABELS, WPC_PRODUCTS,
+  type Outlook, type OutlookArea, type OutlookDay, type OutlookDiscussion, type OutlookDiscussionSection,
+  type OutlookKey, type OutlookLayerKey, type OutlookProduct, type OutlookProductKey,
+  type SpcOutlook, type WpcOutlook, type WpcOutlookDayMode, type WpcProduct, type WpcWinterProduct,
+} from "./outlooks";
+import type { OutlookProduct } from "./outlooks";
 
 export interface MapCatalog {
   /** The selected model whose supported fields this catalogue describes. */
@@ -219,42 +220,6 @@ export interface StormReports {
 export interface ReportOptions {
   windows: readonly { label: string; seconds: number }[];
   filters: readonly { key: string; label: string }[];
-}
-
-export interface OutlookArea {
-  label: string;
-  description: string;
-  /** SPC's fill colour; null for an area SPC draws unfilled. */
-  fill: string | null;
-  stroke: string;
-  rank: number;
-  /** SPC hatches the area (significant severe). */
-  hatch: boolean;
-  hatchLevel: number;
-  /** The exterior ring, then holes; `[lon, lat]` points, not closed. */
-  rings: readonly (readonly (readonly [number, number])[])[];
-}
-
-export interface Outlook {
-  title: string;
-  subtitle: string;
-  validFrom: string | null;
-  validTo: string | null;
-  issued: string | null;
-  /** False when the nearest outlook found does not cover the requested time. */
-  covers: boolean;
-  sourceUrl: string;
-  attribution: string;
-  /** States with some coverage in the highest risk tier of a latest issuance. */
-  affectedStates?: readonly string[];
-  areas: readonly OutlookArea[];
-}
-
-export interface SpcOutlook {
-  product: string;
-  validTime: string | null;
-  /** Null when SPC published nothing for the time. */
-  outlook: Outlook | null;
 }
 
 export interface Place {

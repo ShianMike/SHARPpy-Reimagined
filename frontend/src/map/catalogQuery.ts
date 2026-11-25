@@ -8,9 +8,9 @@ import { resolveModelRun } from "../features/sounding/soundingTime";
 import type { MapCatalog } from "../types/map";
 
 function usesRunInventory(model: string): boolean {
-  return model === "hrrr" || model === "rap" || model === "rdps" || model === "rrfs-a" || model.startsWith("refs-")
+  return model === "hrrr" || model === "rap" || model === "rdps" || model === "hrdps" || model === "rrfs-a" || model === "refs" || model.startsWith("refs-")
     || model === "nam-3km-conus" || model === "gfs" || model === "gdps" || model === "aigfs"
-    || model === "openmeteo-ecmwf-ifs025" || model === "ecmwf-ifs-9km" || model.startsWith("hrw-");
+    || model === "openmeteo-icon-global" || model === "openmeteo-ecmwf-ifs025" || model === "ecmwf-ifs-9km" || model.startsWith("hrw-");
 }
 
 /** Share the visible and prepared frame's product inventory. */
@@ -37,7 +37,9 @@ export function useMapCatalog(): UseQueryResult<MapCatalog> {
   const dynamic = usesRunInventory(model);
   const run = dynamic && selected !== undefined ? resolveModelRun(selected, model === requestedModel ? runChoice : null) : undefined;
   const limit = run === undefined ? 0 : selected?.maxForecastHours[new Date(run).getUTCHours()] ?? 0;
-  const hour = run === undefined ? undefined : selected?.forecastHours.findLast((value) => value <= limit && value <= (hourChoice ?? selected.defaultForecastHour));
+  const hours = run === undefined ? undefined : selected?.forecastHours;
+  const hour = hours?.findLast((value) => value <= limit && value <= (hourChoice ?? selected?.defaultForecastHour ?? 0))
+    ?? hours?.find((value) => value <= limit);
   return useQuery({
     ...mapCatalogQueryOptions(client, model, run, hour),
     // An hour-specific inventory must not remove the palette while it loads.

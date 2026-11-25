@@ -14,7 +14,7 @@ afterEach(() => { cleanup(); useAppStore.setState(useAppStore.getInitialState(),
 it("preserves a typed station across source and workspace remounts, then follows an explicit new selection", async () => {
   useAppStore.getState().selectStation("72357");
   const transport = createTransport();
-  const workspace = renderWithBackend(<SourcePanel onHide={() => undefined} />, transport);
+  const workspace = renderWithBackend(<SourcePanel />, transport);
   const input = screen.getByRole<HTMLInputElement>("textbox", { name: "Station" });
   expect(input.value).toBe("72357");
   await userEvent.clear(input); await userEvent.type(input, "73111");
@@ -22,18 +22,18 @@ it("preserves a typed station across source and workspace remounts, then follows
   await userEvent.click(screen.getByRole("tab", { name: "Obs." }));
   expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Station" }).value).toBe("73111");
   workspace.view.unmount();
-  const reopened = renderWithBackend(<SourcePanel onHide={() => undefined} />, transport);
+  const reopened = renderWithBackend(<SourcePanel />, transport);
   expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Station" }).value).toBe("73111");
   reopened.view.unmount();
   useAppStore.getState().selectStation("72451");
-  renderWithBackend(<SourcePanel onHide={() => undefined} />, transport);
+  renderWithBackend(<SourcePanel />, transport);
   expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Station" }).value).toBe("72451");
 });
 
 it("chooses launch hours in a compact popup and restores focus without losing source inputs", async () => {
   const user = userEvent.setup();
   useSoundingStore.getState().setObserved({ stationId: "72357", date: "2026-10-04", hour: 0, provider: "iem" });
-  renderWithBackend(<SourcePanel onHide={() => undefined} />, createTransport());
+  renderWithBackend(<SourcePanel />, createTransport());
   const trigger = screen.getByRole("combobox", { name: "Launch" });
   await user.click(trigger);
   const popup = screen.getByRole("dialog", { name: "Launch" });

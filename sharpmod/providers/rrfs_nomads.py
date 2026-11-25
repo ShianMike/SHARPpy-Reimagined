@@ -39,20 +39,12 @@ so one transfer serves every point at that run and forecast hour.
 
 from __future__ import annotations
 
-from contextlib import suppress
 from dataclasses import dataclass
-import json
 import logging
-import os
 from pathlib import Path
-import re
-import tempfile
-import threading
 
 from sharpmod.models.model_fields import (
     NOAA_SURFACE_SEARCH,
-    build_noaa_search,
-    choose_noaa_fields,
 )
 from sharpmod.models.model_transport import (
     DownloadCancelled,
@@ -151,20 +143,13 @@ DOMAINS = {
     ),
 }
 
-_IDX_ROW = re.compile(r"^\s*(\d+):(\d+):(.*)$")
-_RELEASE_LOCK = threading.Lock()
-_RELEASE_CACHE: str | None = None
-
-
 def domain_for(name) -> RrfsDomain:
     """Return the published domain matching a configured domain tag."""
     if isinstance(name, RrfsDomain):
         return name
-    key = re.sub(r"[\s_\-]+", " ", str(name or "").strip().lower())
-    try:
-        return DOMAINS[key]
-    except KeyError:
-        raise ValueError("unknown RRFS domain: %r" % (name,)) from None
+    import sharpmod_rs
+
+    return RrfsDomain(*sharpmod_rs.rrfs_domain_for(name))
 
 
 def publishes_pressure_levels(cycle_hour) -> bool:
@@ -177,44 +162,32 @@ def publishes_pressure_levels(cycle_hour) -> bool:
 
 def build_url(release, run_dt, fxx, product, domain, *, member=None) -> str:
     """Return one published RRFS or individual REFS member GRIB2 URL."""
-    item = domain_for(domain)
-    directory = f"rrfs.{run_dt:%Y%m%d}/{run_dt:%H}"
-    prefix = f"rrfs.t{run_dt:%H}z"
-    if member is not None:
-        if type(member) is not int or not 1 <= member <= 5:
-            raise ValueError("REFS member must be an integer from 1 to 5")
-        directory = f"rrfsens.{run_dt:%Y%m%d}/{run_dt:%H}/m{member:03d}"
-        prefix += f".m{member:03d}"
-        product += "nomads"
-    return (
-        f"{NOMADS_ROOT}/{release}/{directory}/"
-        f"{prefix}.{product}.{item.resolution}"
-        f".f{int(fxx):03d}.{item.tag}.grib2"
+    import sharpmod_rs
+
+    return sharpmod_rs.rrfs_build_url(
+        release, run_dt, fxx, product, domain, member=member
     )
 
 
 def _release_candidates() -> tuple[str, ...]:
     """Return release directories with any remembered winner tried first."""
-    with _RELEASE_LOCK:
-        cached = _RELEASE_CACHE
-    if cached is None:
-        return RELEASE_PATHS
-    return (cached, *(item for item in RELEASE_PATHS if item != cached))
+    import sharpmod_rs
+
+    return tuple(sharpmod_rs.rrfs_release_candidates())
 
 
 def _remember_release(release) -> None:
-    global _RELEASE_CACHE
-    with _RELEASE_LOCK:
-        if _RELEASE_CACHE != release:
-            _LOGGER.info("rrfs_nomads.release release=%s", release)
-            _RELEASE_CACHE = release
+    import sharpmod_rs
+
+    if sharpmod_rs.rrfs_remember_release(release):
+        _LOGGER.info("rrfs_nomads.release release=%s", release)
 
 
 def forget_release() -> None:
     """Drop the remembered release directory. Intended for tests."""
-    global _RELEASE_CACHE
-    with _RELEASE_LOCK:
-        _RELEASE_CACHE = None
+    import sharpmod_rs
+
+    sharpmod_rs.rrfs_forget_release()
 
 
 @dataclass(frozen=True)
@@ -242,55 +215,20 @@ def parse_idx(text, total_size) -> tuple[IdxRecord, ...]:
     record ends at the object's last byte. ``total_size`` therefore has to come
     from the object itself; the inventory cannot supply it.
     """
-    rows = []
-    for raw in str(text or "").splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        match = _IDX_ROW.match(line)
-        if match is None:
-            continue
-        parts = line.split(":")
-        rows.append((
-            int(match.group(2)),
-            int(match.group(1)),
-            parts[3] if len(parts) > 3 else "",
-            parts[4] if len(parts) > 4 else "",
-            parts[5] if len(parts) > 5 else "",
-            line,
-        ))
-    if not rows:
-        raise RrfsUnavailable("RRFS inventory published no records")
-    total = int(total_size or 0)
-    if total <= 0:
-        raise RrfsUnavailable("RRFS object published no usable length")
+    import sharpmod_rs
 
-    # Records normally arrive in file order, but sorting defensively keeps an
-    # out-of-order inventory from producing a negative-length range.
-    rows.sort()
-    starts = sorted({row[0] for row in rows})
-    following = {
-        value: (starts[index + 1] if index + 1 < len(starts) else total)
-        for index, value in enumerate(starts)
-    }
-
-    records = []
-    for start, number, variable, level, forecast, line in rows:
-        end = following[start] - 1
-        if start < 0 or end < start or end >= total:
-            raise RrfsUnavailable(
-                "RRFS inventory record %d has an unusable byte range" % number
-            )
-        records.append(IdxRecord(
-            number, start, end, variable, level, forecast, line
-        ))
-    return tuple(records)
+    return tuple(
+        IdxRecord(*row)
+        for row in sharpmod_rs.rrfs_parse_idx(text, total_size)
+    )
 
 
 def select_records(records, pattern):
     """Return inventory records whose raw line matches ``pattern``."""
-    matcher = re.compile(pattern)
-    return tuple(item for item in records if matcher.search(item.line))
+    import sharpmod_rs
+
+    items = tuple(records)
+    return tuple(items[index] for index in sharpmod_rs.rrfs_select_records(items, pattern))
 
 
 def pressure_field_plan(records):
@@ -301,16 +239,9 @@ def pressure_field_plan(records):
     than a DataFrame. Restricting it to isobaric rows keeps the level-only
     records from voting on the pressure plan.
     """
-    inventory = {
-        "variable": [
-            item.variable for item in records if item.level.endswith(" mb")
-        ]
-    }
-    fields = tuple(
-        name for name in choose_noaa_fields(inventory)
-        if str(name).upper() not in UNUSABLE_PRESSURE_FIELDS
-    )
-    return build_noaa_search(fields), fields
+    import sharpmod_rs
+
+    return sharpmod_rs.rrfs_pressure_field_plan(records)
 
 
 @dataclass(frozen=True)
@@ -341,53 +272,20 @@ def write_provenance(combined_path, *, fields, source_url, pressure_fields):
     were actually fetched, so a warm hit can rebuild provenance truthfully
     instead of re-deriving it from a fresh inventory or re-downloading.
     """
-    payload = {
-        "version": 1,
-        "fields": list(fields),
-        "pressure_fields": list(pressure_fields),
-        "source_url": str(source_url),
-        "transport": TRANSPORT,
-    }
-    target = provenance_path(combined_path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    handle, temporary = tempfile.mkstemp(
-        prefix=target.name + ".", suffix=".tmp", dir=target.parent
+    import sharpmod_rs
+
+    return Path(
+        sharpmod_rs.rrfs_write_provenance(
+            combined_path, fields, source_url, pressure_fields
+        )
     )
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8") as stream:
-            json.dump(payload, stream, sort_keys=True)
-        os.replace(temporary, target)
-    except BaseException:
-        with suppress(OSError):
-            os.remove(temporary)
-        raise
-    return target
 
 
 def read_provenance(combined_path):
     """Return a combined file's recorded provenance, or ``None``."""
-    try:
-        payload = json.loads(
-            provenance_path(combined_path).read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError, TypeError):
-        return None
-    if not isinstance(payload, dict) or payload.get("version") != 1:
-        return None
-    fields = payload.get("fields")
-    pressure_fields = payload.get("pressure_fields")
-    source_url = payload.get("source_url")
-    if not (isinstance(fields, list) and fields):
-        return None
-    if not (isinstance(pressure_fields, list) and pressure_fields):
-        return None
-    if not isinstance(source_url, str) or not source_url:
-        return None
-    return {
-        "fields": tuple(str(name) for name in fields),
-        "pressure_fields": tuple(str(name) for name in pressure_fields),
-        "source_url": source_url,
-    }
+    import sharpmod_rs
+
+    return sharpmod_rs.rrfs_read_provenance(combined_path)
 
 
 def _new_session():

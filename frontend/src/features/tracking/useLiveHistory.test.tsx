@@ -233,7 +233,7 @@ it("honors a loop change as the last frame settles", async () => {
   view.unmount(); queryClient.clear();
 });
 
-it.each([3, 4])("advances loaded live frames at %s times speed", async (speed) => {
+it.each([3, 4, 5, 6])("advances loaded live frames at %s times speed", async (speed) => {
   vi.useFakeTimers(); vi.setSystemTime(now);
   useUiStore.getState().setSpeed(speed);
   const transport = createTransport(), original = transport.call.bind(transport);

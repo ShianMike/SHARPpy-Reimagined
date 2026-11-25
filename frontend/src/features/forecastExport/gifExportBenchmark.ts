@@ -1,4 +1,4 @@
-// Fixture-only hook installed by the opt-in Playwright spec before the dialog opens.
+// Types for the fixture hook installed by the opt-in Playwright spec.
 // Production builds fold away the references in ForecastExportDialog.
 // Keep the fixture contract independent of the application modules so the
 // Node-side Playwright project can type-check it without importing React code.

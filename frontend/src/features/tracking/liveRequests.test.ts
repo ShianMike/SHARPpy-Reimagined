@@ -34,11 +34,20 @@ it.each([2, 4] as const)("preloads the separate report choices for all %i visibl
   const client = new BackendClient(createTransport());
   const fetch = vi.spyOn(client, "getStormReports");
   const time = "2026-10-17T08:00:00Z";
-  const requests = liveRequests(client, useMapStore.getState(), null, null, time);
+  const requests = liveRequests(client, useMapStore.getState(), null, time);
   expect(requests.map(({ queryKey }) => queryKey)).toEqual(filters.slice(0, layout)
     .map((filter, panel) => mapKeys.reports(time, windows[panel] ?? 21600, filter)));
   await Promise.all(requests.map(request => request.queryFn()));
   for (let panel = 0; panel < layout; panel++) expect(fetch).toHaveBeenCalledWith(time, windows[panel], filters[panel]);
+});
+
+it("does not enqueue per-timestamp surface plot requests when surface plots are visible", () => {
+  useAppStore.getState().setActiveWorkspace("live");
+  const state = useMapStore.getState();
+  state.setLayerVisible("radar", false);
+  state.setLayerVisible("surface-plots", true);
+  const client = new BackendClient(createTransport());
+  expect(liveRequests(client, useMapStore.getState(), null, "2026-10-17T08:00:00Z")).toEqual([]);
 });
 
 it("reuses a confirmed alert history gap on playback loops but retries other provider failures", async () => {
@@ -131,7 +140,7 @@ it.each([
   const frame = parseRadarSiteFrame(Uint8Array.from(atob(radarSite.split(",")[1] ?? ""), (character) => character.charCodeAt(0)).buffer);
   const fetch = vi.spyOn(client, "getRadarSiteFrame").mockResolvedValue(frame);
   const time = "2026-10-17T08:00:00Z";
-  const requests = liveRequests(client, useMapStore.getState(), "ABRD", null, time, sites);
+  const requests = liveRequests(client, useMapStore.getState(), "ABRD", time, sites);
   expect(requests.map(({ queryKey }) => queryKey)).toEqual([
     mapKeys.radarSite(product, "ABRD", time, "0"), mapKeys.radarSite("velocity", "KTLX", time, "2"),
   ]);
@@ -147,7 +156,7 @@ it("uses provider metadata for MRRL playback without requesting NEXRAD tilts", (
   const client = new BackendClient(createTransport());
   const frames = vi.spyOn(client, "getRadarSiteFrame"), tilts = vi.spyOn(client, "getRadarTilts");
   const time = "2026-10-17T08:00:00Z";
-  expect(liveRequests(client, useMapStore.getState(), null, null, time, sites).map(({ queryKey }) => queryKey))
+  expect(liveRequests(client, useMapStore.getState(), null, time, sites).map(({ queryKey }) => queryKey))
     .toContainEqual(mapKeys.radarSite("reflectivity", "TEST", time, "0"));
   expect(frames).not.toHaveBeenCalled();
   expect(tilts).not.toHaveBeenCalled();
@@ -159,6 +168,6 @@ it("keeps Australian velocity while the site catalogue is loading", () => {
   state.setRadarScope("site"); state.setRadarSite("ABRD"); state.setRadarProduct("velocity"); state.setRadarTilt("2");
   const time = "2026-10-17T08:00:00Z";
   const client = new BackendClient(createTransport());
-  expect(liveRequests(client, useMapStore.getState(), null, null, time).map(({ queryKey }) => queryKey))
+  expect(liveRequests(client, useMapStore.getState(), null, time).map(({ queryKey }) => queryKey))
     .toContainEqual(mapKeys.radarSite("velocity", "ABRD", time, "0"));
 });

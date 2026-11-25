@@ -74,9 +74,11 @@ test.describe("at 1440 by 900", () => {
     for (const height of [900, 600]) {
       await page.setViewportSize({ width: 1440, height });
       const side = page.locator("#sounding-sources");
+      const views = side.getByRole("tablist", { name: "Sidebar view" });
       const list = page.getByTestId("open-soundings");
       const heading = page.getByRole("heading", { name: "Open soundings 12" });
       await list.scrollIntoViewIfNeeded();
+      const viewsBefore = await boxOf(views);
       const before = await boxOf(page.getByRole("tablist", { name: "Source" }));
       const headingBefore = await boxOf(heading);
       expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
@@ -86,6 +88,9 @@ test.describe("at 1440 by 900", () => {
       expect(await side.evaluate((element) => element.scrollTop === 0 && element.scrollHeight <= element.clientHeight)).toBe(true);
       expect(await boxOf(page.getByRole("tablist", { name: "Source" }))).toEqual(before);
       expect(await boxOf(heading)).toEqual(headingBefore);
+      expect(await boxOf(views)).toEqual(viewsBefore);
+      await expect(views.getByRole("tab", { name: "Sources", selected: true })).toBeInViewport();
+      await expect(views.getByRole("tab", { name: "Sounding controls" })).toBeInViewport();
       await expect(page.getByRole("button", { name: "Hide sources" })).toBeVisible();
       await page.getByRole("tab", { name: "Model", exact: true }).click();
       const openModel = page.getByTestId("open-model");
@@ -105,7 +110,7 @@ test.describe("at 1440 by 900", () => {
     await showWorkspace(page, "Soundings");
     await page.getByRole("textbox", { name: "Station" }).fill("72357");
     await openObserved(page);
-    await page.getByRole("button", { name: "Show sounding controls", exact: true }).click();
+    await page.getByRole("tab", { name: "Sounding controls", exact: true }).click();
     await page.getByRole("button", { name: "Fit sounding to view", exact: true }).click();
     const stage = page.getByTestId("sounding-stage");
     await stage.evaluate((element) => {
@@ -156,7 +161,7 @@ test.describe("at 1440 by 900", () => {
     await openObserved(page);
     await expect(page.getByTestId("sounding-title")).toHaveText("72357 (example data)");
     await expect(page.getByTestId("open-soundings").getByRole("listitem")).toHaveCount(1);
-    await page.getByRole("button", { name: "Show sounding controls", exact: true }).click();
+    await page.getByRole("tab", { name: "Sounding controls", exact: true }).click();
     await expect(page.getByRole("region", { name: "Chart panels", exact: true })).toBeVisible();
     const parcel = page.getByRole("group", { name: "Parcel" });
     await expect(parcel.getByRole("button", { name: "MU" })).toHaveAttribute("aria-pressed", "true");
@@ -182,7 +187,7 @@ test.describe("at 1440 by 900", () => {
     await expect(page.getByTestId("sounding-title")).toHaveText("hrrr_kbvo_20260625_06z.buf");
     const viewer = page.getByTestId("sounding-viewer");
     await expect(page.getByLabel("Sounding details", { exact: true })).toHaveCount(0);
-    await page.getByRole("button", { name: "Show sounding controls", exact: true }).click();
+    await page.getByRole("tab", { name: "Sounding controls", exact: true }).click();
     const time = page.getByRole("combobox", { name: "Sounding time (UTC)" });
     await expect(viewer).toHaveAttribute("aria-description", new RegExp(`time 1 of ${String(BUFKIT_TIMES)}`));
     await time.click();

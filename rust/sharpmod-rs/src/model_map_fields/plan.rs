@@ -8,6 +8,7 @@ pub(super) struct Plan {
     pub identities: HashMap<String, Option<ObjectIdentity>>,
     pub sum: bool,
     pub maximum: bool,
+    pub diff: bool,
 }
 
 pub(super) struct Field {
@@ -47,20 +48,34 @@ pub(super) fn fields(
             ),))?,
         ));
     }
-    let sum = matches!(model, "nam" | "nam-3km-conus") && key == "apcp";
+    let nam_sum = matches!(model, "nam" | "nam-3km-conus") && key == "apcp";
+    let hourly_sum = key.starts_with("qpf-");
+    let hourly_diff = key == "snow-1h";
+    let sum = nam_sum || hourly_sum;
+    let window = if matches!(key.as_str(), "uh-0-3km-run" | "uh-2-5km-run") {
+        hour
+    } else {
+        maximum
+    };
     if key == "apcp" && hour == 0 {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "F000 precipitation is supplied as a zero field by the provider",
         ));
     }
-    let sources: Vec<(&str, u32)> = if sum {
+    let sources: Vec<(&str, u32)> = if nam_sum {
         (3..hour)
             .step_by(3)
             .chain(std::iter::once(hour))
             .map(|hour| ("sfc", hour))
             .collect()
-    } else if maximum > 0 {
-        (hour - maximum + 1..=hour)
+    } else if hourly_diff {
+        if hour == 1 {
+            vec![("sfc", 1)]
+        } else {
+            vec![("sfc", hour - 1), ("sfc", hour)]
+        }
+    } else if window > 0 {
+        (hour - window + 1..=hour)
             .map(|hour| ("sfc", hour))
             .collect()
     } else {
@@ -139,12 +154,14 @@ pub(super) fn fields(
             }));
         };
         for spec in selected {
-            let adjusted = if sum || maximum > 0 {
+            let adjusted = if !hourly_diff && (nam_sum || window > 0) {
                 let kwargs = PyDict::new(py);
                 kwargs.set_item(
                     "forecast",
-                    if sum {
+                    if nam_sum {
                         format!("{}-{step} hour acc fcst", (step - 1) / 3 * 3)
+                    } else if hourly_sum {
+                        format!("{}-{step} hour acc fcst", step - 1)
                     } else {
                         format!("{}-{step} hour max fcst", step - 1)
                     },
@@ -198,6 +215,7 @@ pub(super) fn fields(
         fields,
         identities,
         sum,
-        maximum: maximum > 0 && !sum,
+        maximum: window > 0 && !sum && !hourly_diff,
+        diff: hourly_diff,
     })
 }

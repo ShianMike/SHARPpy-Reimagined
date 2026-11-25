@@ -466,7 +466,7 @@ def test_shallow_helicity_keeps_its_lower_visibility_floor():
     assert list(_alpha([25.0], deep)) == [0]
 
 
-@pytest.mark.parametrize("level", (700, 500, 300, 200))
+@pytest.mark.parametrize("level", (300, 200))
 def test_height_and_wind_matches_the_supplied_knot_table(level):
     palette = hrrr_products.get_product(f"hgt-wind-{level}").palette
     assert (palette.minimum, palette.maximum, palette.units) == (49, 171, "kt")
@@ -563,6 +563,8 @@ def test_a_product_without_an_explicit_chip_falls_back_to_its_key():
     ("shear-0-6km", "0-6 km Shr"),
     ("lapse-700-500", "700-500 LR"),
     ("uh-0-3km", "0-3 km UH"),
+    ("uh-0-3km-run", "0-3km UH Max"),
+    ("uh-2-5km-run", "2-5km UH Max"),
     ("tmp-2m", "2 m Temp"),
 ])
 def test_a_slug_key_is_spelled_the_way_a_forecaster_writes_it(key, expected):

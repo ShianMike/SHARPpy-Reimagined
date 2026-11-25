@@ -46,6 +46,7 @@ const VALID = {
   ...DEFAULT_PREFERENCES,
   graphicsOverride: "low",
   layers: { stations: { visible: false, opacity: 0.5 }, basemap: { visible: true, opacity: 0.8 } },
+  wpcOutlookDay: 2 as const,
   productKey: null,
   panels: [],
   layerPanelCollapsed: true,
@@ -56,12 +57,8 @@ const VALID = {
 describe("the repository", () => {
   it("falls back to memory with one warning when storage throws", () => {
     const broken: PreferenceStorage = {
-      getItem: () => {
-        throw new Error("SecurityError");
-      },
-      setItem: () => {
-        throw new Error("QuotaExceededError");
-      },
+      getItem: () => { throw new Error("SecurityError"); },
+      setItem: () => { throw new Error("QuotaExceededError"); },
     };
     const repository = createPreferencesRepository(() => broken);
     expect(repository.load()).toEqual(DEFAULT_PREFERENCES);
@@ -92,11 +89,12 @@ describe("the repository", () => {
 });
 
 describe("applying and saving", () => {
-  it("starts fresh panels without labels", () => {
+  it("starts fresh Model Viewer panels with station labels, roads, and rivers off", () => {
     applyPreferences(DEFAULT_PREFERENCES);
     for (let panel = 0; panel < 4; panel++) {
       expect(panelLayers(useMapStore.getState(), panel)["station-labels"].visible).toBe(false);
-      expect(panelLayers(useMapStore.getState(), panel).roads.visible).toBe(true);
+      expect(panelLayers(useMapStore.getState(), panel).roads.visible).toBe(false);
+      expect(panelLayers(useMapStore.getState(), panel).rivers.visible).toBe(false);
     }
     expect(warn).not.toHaveBeenCalled();
   });
@@ -206,11 +204,12 @@ describe("applying and saving", () => {
     map.setSatelliteChannel("visible");
     map.setReportWindowS(7200);
     map.setReportFilter("tornado");
+    map.setWpcOutlookDay(3);
     map.setLayerPanelGroup("map");
     map.setCameraSnapshot({ center: [-90, 40], zoom: 5 });
     resetLayerSettings();
     expect(useMapStore.getState()).toMatchObject({ panelLayout: 4, activePanel: 3, radarScope: "mosaic", radarSite: null,
-      radarProduct: null, satelliteChannel: "infrared", reportWindowS: 21600, reportFilter: "all", layerPanelGroup: "weather",
+      radarProduct: null, satelliteChannel: "infrared", wpcOutlookDay: "auto", reportWindowS: 21600, reportFilter: "all", layerPanelGroup: "weather",
       cameraSnapshot: { center: [-90, 40], zoom: 5 }, layerOrder: [...ORDERABLE_LAYER_IDS] });
     for (let panel = 0; panel < 4; panel++) {
       expect(panelLayers(useMapStore.getState(), panel)).toEqual(panelLayers(mapInitial, panel));
@@ -245,6 +244,9 @@ describe("applying and saving", () => {
     expect(useMapStore.getState().layers.stations).toEqual({ visible: false, opacity: 0.5 });
     expect(useMapStore.getState().layers["station-labels"]).toEqual(mapInitial.layers["station-labels"]);
     expect(useMapStore.getState().layerPanelCollapsed).toBe(true);
+    expect(useMapStore.getState().wpcOutlookDay).toBe(2);
+    expect(currentPreferences().wpcOutlookDay).toBe(2);
+    expect(parsePreferences(JSON.stringify({ ...VALID, wpcOutlookDay: 9 })).wpcOutlookDay).toBe("auto");
     expect(useMapStore.getState().cameraSnapshot).toEqual({ center: [-97.4, 35.2], zoom: 6 });
     expect(useAppStore.getState().selectedStationId).toBeNull();
     expect(useAppStore.getState().pendingStationId).toBe("72357");
@@ -268,6 +270,7 @@ describe("applying and saving", () => {
     useMapStore.getState().setFieldSmoothing(true);
     useMapStore.getState().setLayerPanelCollapsed(true);
     useAppStore.getState().selectStation("72357");
+    useMapStore.getState().setWpcOutlookDay(2);
     useMapStore.getState().setCameraSnapshot({ center: [-90, 40], zoom: 4 });
     vi.advanceTimersByTime(SAVE_DEBOUNCE_MS - 1);
     expect(storage.setItem).not.toHaveBeenCalled();
@@ -277,6 +280,7 @@ describe("applying and saving", () => {
     expect(saved).toMatchObject({
       graphicsOverride: "high",
       layerPanelCollapsed: true,
+      wpcOutlookDay: 2,
       lastSelectedStationId: "72357",
       camera: { center: [-90, 40], zoom: 4 },
     });

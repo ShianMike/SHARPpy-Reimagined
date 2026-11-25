@@ -1,13 +1,10 @@
-// Parsers for the map catalogue, SPC outlooks, place labels, and station
-// availability (DESIGN-contracts C8): strict keys, bounded text, finite
-// numbers, and nothing aliased. The binary frames are in frames.ts.
+// Strict parsers for map metadata. Binary frames are parsed in frames.ts.
 
 import type {
   AvailabilityReport,
   FieldProduct,
+  FieldVariant,
   MapCatalog,
-  Outlook,
-  OutlookArea,
   Palette,
   Place,
   PlaceLabels,
@@ -16,9 +13,9 @@ import type {
   RadarSite,
   RadarSiteCatalog,
   RadarTilts,
-  SpcOutlook,
 } from "../../types/map";
 import { RADAR_TILTABLE_PRODUCTS, RADAR_TILTS } from "../../types/map";
+export { parseOutlookArea, parseOutlookDiscussion, parseSpcOutlook, parseWpcOutlook } from "./outlooks";
 import {
   ContractError,
   at,
@@ -51,12 +48,17 @@ function stop(value: unknown, path: string): readonly [number, string] {
 
 export function parsePalette(value: unknown, path: string): Palette {
   const obj = expectObject(value, path);
-  expectExactKeys(obj, path, ["stops", "units", "display", "stepped", "floor", "ceiling", "ticks"]);
+  expectExactKeys(obj, path, ["stops", "units", "display", "stepped", "floor", "ceiling", "ticks"], ["ptypeLabels"]);
   const stops = expectArray(obj.stops, at(path, "stops"), stop);
   if (stops.length < 2 || stops.length > 256 || stops.some((s, i) => i > 0 && s[0] <= (stops[i - 1]?.[0] ?? s[0]))) {
     throw new ContractError(at(path, "stops"), "expected 2 to 256 ascending stops");
   }
   const optional = (v: unknown, p: string): number | null => expectNullable(v, p, expectFiniteNumber);
+  const ptypePath = at(path, "ptypeLabels");
+  const ptypeLabels = obj.ptypeLabels === undefined ? undefined : expectArray(obj.ptypeLabels, ptypePath, key);
+  if (ptypeLabels !== undefined && ptypeLabels.length !== 4) {
+    throw new ContractError(ptypePath, "expected four precipitation type labels");
+  }
   return {
     stops,
     units: expectString(obj.units, at(path, "units"), { maxLength: 40 }),
@@ -65,6 +67,7 @@ export function parsePalette(value: unknown, path: string): Palette {
     floor: optional(obj.floor, at(path, "floor")),
     ceiling: optional(obj.ceiling, at(path, "ceiling")),
     ticks: expectArray(obj.ticks, at(path, "ticks"), expectFiniteNumber),
+    ...(ptypeLabels === undefined ? {} : { ptypeLabels }),
   };
 }
 
@@ -79,17 +82,46 @@ function parseContour(value: unknown, path: string): ProductContour {
   };
 }
 
-function parseProduct(value: unknown, path: string): FieldProduct {
+function parseVariant(value: unknown, path: string): FieldVariant {
   const obj = expectObject(value, path);
-  expectExactKeys(obj, path, ["key", "label", "shortLabel", "category", "description", "caveat", "palette", "contour", "wind"], ["minimumForecastHour"]);
+  expectExactKeys(obj, path, ["key", "label"]);
   return {
     key: key(obj.key, at(path, "key")),
+    label: expectString(obj.label, at(path, "label"), { minLength: 1, maxLength: 80 }),
+  };
+}
+
+function parseProduct(value: unknown, path: string): FieldProduct {
+  const obj = expectObject(value, path);
+  expectExactKeys(obj, path, ["key", "label", "shortLabel", "category", "description", "caveat", "palette", "contour", "wind"], ["minimumForecastHour", "forecastHours", "variants"]);
+  const minimumForecastHour = obj.minimumForecastHour === undefined ? 0 : expectInteger(obj.minimumForecastHour, at(path, "minimumForecastHour"), { min: 0, max: 384 });
+  const hoursPath = at(path, "forecastHours");
+  const forecastHours = obj.forecastHours === undefined ? undefined : expectArray(obj.forecastHours, hoursPath,
+    (hour, entryPath) => expectInteger(hour, entryPath, { min: minimumForecastHour, max: 384 }));
+  if (forecastHours !== undefined && (forecastHours.length === 0 || forecastHours.some((hour, index) => index > 0 && hour <= (forecastHours[index - 1] ?? -1)))) {
+    throw new ContractError(hoursPath, "expected a nonempty schedule in increasing order");
+  }
+  const productKey = key(obj.key, at(path, "key"));
+  const variantsPath = at(path, "variants");
+  const variants = obj.variants === undefined ? undefined : expectArray(obj.variants, variantsPath, parseVariant);
+  if (variants !== undefined) {
+    if (variants.length < 2 || new Set(variants.map((variant) => variant.key)).size !== variants.length) {
+      throw new ContractError(variantsPath, "expected at least two distinct variants");
+    }
+    if (!variants.some((variant) => variant.key === productKey)) {
+      throw new ContractError(variantsPath, "variants must include the default product key");
+    }
+  }
+  return {
+    key: productKey,
     label: label(obj.label, at(path, "label")),
     shortLabel: expectString(obj.shortLabel, at(path, "shortLabel"), { minLength: 1, maxLength: 40 }),
     category: expectString(obj.category, at(path, "category"), { minLength: 1, maxLength: 80 }),
     description: prose(obj.description, at(path, "description")),
     caveat: prose(obj.caveat, at(path, "caveat")),
-    minimumForecastHour: obj.minimumForecastHour === undefined ? 0 : expectInteger(obj.minimumForecastHour, at(path, "minimumForecastHour"), { min: 0, max: 384 }),
+    minimumForecastHour,
+    ...(forecastHours === undefined ? {} : { forecastHours }),
+    ...(variants === undefined ? {} : { variants }),
     palette: parsePalette(obj.palette, at(path, "palette")),
     contour: expectNullable(obj.contour, at(path, "contour"), parseContour),
     wind: expectBoolean(obj.wind, at(path, "wind")),
@@ -138,64 +170,6 @@ export function parseMapCatalog(value: unknown, path = ""): MapCatalog {
       expectExactKeys(product, p, ["key", "label"]);
       return { key: key(product.key, at(p, "key")), label: label(product.label, at(p, "label")) };
     }),
-  };
-}
-
-function lonLat(value: unknown, path: string): readonly [number, number] {
-  if (!Array.isArray(value) || value.length !== 2) {
-    throw new ContractError(path, "expected a [lon, lat] pair");
-  }
-  return [
-    expectFiniteNumber(value[0], at(path, 0), { min: -180, max: 180 }),
-    expectFiniteNumber(value[1], at(path, 1), { min: -90, max: 90 }),
-  ];
-}
-
-export function parseOutlookArea(value: unknown, path: string): OutlookArea {
-  const obj = expectObject(value, path);
-  expectExactKeys(obj, path, ["label", "description", "fill", "stroke", "rank", "hatch", "hatchLevel", "rings"]);
-  return {
-    label: expectString(obj.label, at(path, "label"), { maxLength: 120 }),
-    description: expectString(obj.description, at(path, "description"), { maxLength: 300 }),
-    fill: expectNullable(obj.fill, at(path, "fill"), colour),
-    stroke: colour(obj.stroke, at(path, "stroke")),
-    rank: expectInteger(obj.rank, at(path, "rank")),
-    hatch: expectBoolean(obj.hatch, at(path, "hatch")),
-    hatchLevel: expectInteger(obj.hatchLevel, at(path, "hatchLevel"), { min: 0, max: 255 }),
-    rings: expectArray(obj.rings, at(path, "rings"), (ring, p) => expectArray(ring, p, lonLat)),
-  };
-}
-
-function parseOutlook(value: unknown, path: string): Outlook {
-  const obj = expectObject(value, path);
-  expectExactKeys(obj, path, [
-    "title", "subtitle", "validFrom", "validTo", "issued", "covers", "sourceUrl", "attribution", "areas",
-  ], ["affectedStates"]);
-  const time = (v: unknown, p: string): string | null => expectNullable(v, p, expectTimestamp);
-  return {
-    title: expectString(obj.title, at(path, "title"), { maxLength: 300 }),
-    subtitle: expectString(obj.subtitle, at(path, "subtitle"), { maxLength: 300 }),
-    validFrom: time(obj.validFrom, at(path, "validFrom")),
-    validTo: time(obj.validTo, at(path, "validTo")),
-    issued: time(obj.issued, at(path, "issued")),
-    covers: expectBoolean(obj.covers, at(path, "covers")),
-    sourceUrl: prose(obj.sourceUrl, at(path, "sourceUrl")),
-    attribution: expectString(obj.attribution, at(path, "attribution"), { maxLength: 300 }),
-    ...(obj.affectedStates === undefined ? {} : {
-      affectedStates: expectArray(obj.affectedStates, at(path, "affectedStates"), (state, p) =>
-        expectString(state, p, { minLength: 1, maxLength: 32 })),
-    }),
-    areas: expectArray(obj.areas, at(path, "areas"), parseOutlookArea),
-  };
-}
-
-export function parseSpcOutlook(value: unknown, path = ""): SpcOutlook {
-  const obj = expectObject(value, path);
-  expectExactKeys(obj, path, ["product", "validTime", "outlook"]);
-  return {
-    product: key(obj.product, at(path, "product")),
-    validTime: expectNullable(obj.validTime, at(path, "validTime"), expectTimestamp),
-    outlook: expectNullable(obj.outlook, at(path, "outlook"), parseOutlook),
   };
 }
 

@@ -32,9 +32,13 @@ it("shares the new playback speeds across Settings and navigation", async () => 
   await user.click(screen.getByRole("radio", { name: "3×" }));
   expect(useUiStore.getState().speed).toBe(3);
   await user.click(screen.getByRole("radio", { name: "4×" }));
-  expect(screen.getByRole<HTMLInputElement>("radio", { name: "4×" }).checked).toBe(true);
   expect(useUiStore.getState().speed).toBe(4);
+  await user.click(screen.getByRole("radio", { name: "5×" }));
+  expect(useUiStore.getState().speed).toBe(5);
+  await user.click(screen.getByRole("radio", { name: "6×" }));
+  expect(screen.getByRole<HTMLInputElement>("radio", { name: "6×" }).checked).toBe(true);
+  expect(useUiStore.getState().speed).toBe(6);
   await user.click(screen.getByRole("button", { name: "Appearance" }));
   await user.click(screen.getByRole("button", { name: "Playback" }));
-  expect(screen.getByRole<HTMLInputElement>("radio", { name: "4×" }).checked).toBe(true);
+  expect(screen.getByRole<HTMLInputElement>("radio", { name: "6×" }).checked).toBe(true);
 });

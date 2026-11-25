@@ -113,6 +113,24 @@ it("updates the scale, cursor and point values together while preserving the map
   expect(putImageData).toHaveBeenCalledTimes(colours);
 });
 
+it("shows the REFS QPF color tables in a comparison map panel", async () => {
+  const forecast = useForecastStore.getState();
+  forecast.setModel("refs");
+  forecast.setHour(1);
+  const map = useMapStore.getState();
+  map.setPanelLayout(4);
+  map.setActivePanel(1);
+  map.setProduct("qpf-1h-ptype");
+  map.setLayerVisible("model-field", true);
+  renderWithBackend(<MapPanel panel={1} layout={4} />, createTransport());
+
+  const scale = await screen.findByRole("complementary", { name: "Parameter scale" });
+  expect(scale.getAttribute("aria-description")).toBe("1-h QPF and Dominant Precipitation Type · in · Panel 2");
+  const legend = within(within(scale).getByTestId("field-legend"));
+  expect(legend.getAllByRole("img").map((ramp) => ramp.getAttribute("aria-label"))).toEqual(["Rain", "Snow", "Freezing rain", "Mix"]);
+  expect(legend.getAllByRole("listitem").map((tick) => tick.textContent)).toEqual(["0.5+", "0.2", "0.1", "0.05", "0.01"]);
+});
+
 it("opens parameters from a panel title and changes only that panel, returning keyboard focus", async () => {
   useMapStore.getState().setPanelLayout(2);
   renderWithBackend(<MapPanel panel={1} layout={2} />, createTransport());

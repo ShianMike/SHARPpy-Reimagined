@@ -25,13 +25,23 @@ def _regular(info: os.stat_result) -> bool:
 def _files(root: Path | None, pattern: str | tuple[str, ...] = "*") -> list[tuple[Path, int, bool]]:
     if root is None:
         return []
+    patterns = [pattern] if isinstance(pattern, str) else list(pattern)
+    try:
+        import sharpmod_rs
+    except ImportError:
+        sharpmod_rs = None
+    native = getattr(sharpmod_rs, "storage_scan_files", None)
+    if native is not None:
+        return [
+            (Path(path), size, ready)
+            for path, size, ready in native(root, patterns, time.time())
+        ]
     try:
         if not _regular(root.lstat()):
             return []
     except FileNotFoundError:
         return []
     boundary = root.resolve()
-    patterns = (pattern,) if isinstance(pattern, str) else pattern
     # shortcut: allow an hour for atomic writes; longer writes need explicit leases.
     partial_cutoff = time.time() - 3600
     result = []

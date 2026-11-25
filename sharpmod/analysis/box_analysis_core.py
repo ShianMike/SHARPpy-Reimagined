@@ -146,25 +146,28 @@ class BoxAnalysis:
 
     def statistics(self, key) -> _api.BoxFieldStats | None:
         """Return area statistics for one field, or ``None`` when it is empty."""
+        import sharpmod_rs
+
         item = _api.parameter(key)
         present = [point for point in self.points if item.key in point.values]
         if not present:
             return None
-        numbers = np.asarray([point.values[item.key] for point in present], dtype=float)
-        extreme_index = (
-            int(np.argmax(numbers))
-            if item.notable == "high"
-            else int(np.argmin(numbers))
+        numbers = np.ascontiguousarray(
+            [point.values[item.key] for point in present], dtype=float
         )
+        stats = sharpmod_rs.box_field_statistics(numbers, item.notable == "high")
+        if stats is None:
+            return None
+        count, minimum, maximum, mean, median, p10, p90, extreme_index = stats
         return _api.BoxFieldStats(
             parameter=item,
-            count=int(numbers.size),
-            minimum=float(np.min(numbers)),
-            maximum=float(np.max(numbers)),
-            mean=float(np.mean(numbers)),
-            median=float(np.median(numbers)),
-            p10=float(np.percentile(numbers, 10.0)),
-            p90=float(np.percentile(numbers, 90.0)),
+            count=count,
+            minimum=minimum,
+            maximum=maximum,
+            mean=mean,
+            median=median,
+            p10=p10,
+            p90=p90,
             extreme=present[extreme_index],
         )
 
@@ -396,44 +399,21 @@ class BoxAnalysis:
             raise _api.BoxAnalysisError("envelope levels must all be positive hPa")
         log_ladder = np.log10(ladder)
 
+        import sharpmod_rs
+
         columns = []
         for point in self.points:
             column = _api._interpolated_column(point, field, log_ladder)
             if any(value is not None for value in column):
                 columns.append(tuple(column))
 
-        minimum, low, median, high, maximum, counts = [], [], [], [], [], []
-        for index in range(ladder.size):
-            present = [column[index] for column in columns if column[index] is not None]
-            counts.append(len(present))
-            if not present:
-                for series in (minimum, low, median, high, maximum):
-                    series.append(None)
-                continue
-            values = np.asarray(present, dtype=float)
-            if field == "wdir":
-                # Keep a cluster straddling north contiguous (350, 10 becomes
-                # 350, 370) before reducing it.  Normal scalar percentiles
-                # would instead invent a southerly median and a 340-degree
-                # spread from a narrow northerly cluster.
-                radians = np.deg2rad(np.mod(values, 360.0))
-                center = (
-                    np.degrees(
-                        np.arctan2(
-                            np.mean(np.sin(radians)),
-                            np.mean(np.cos(radians)),
-                        )
-                    )
-                    % 360.0
-                )
-                if center < 180.0 and np.any(values > 180.0):
-                    center += 360.0
-                values = center + ((values - center + 180.0) % 360.0 - 180.0)
-            minimum.append(float(np.min(values)))
-            low.append(float(np.percentile(values, low_pct)))
-            median.append(float(np.median(values)))
-            high.append(float(np.percentile(values, high_pct)))
-            maximum.append(float(np.max(values)))
+        minimum, low, median, high, maximum, counts = sharpmod_rs.box_envelope_stats(
+            [list(column) for column in columns],
+            int(ladder.size),
+            low_pct,
+            high_pct,
+            field == "wdir",
+        )
 
         return _api.EnvelopeResult(
             field=str(field),

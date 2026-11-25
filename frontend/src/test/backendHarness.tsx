@@ -61,6 +61,7 @@ export function scriptedTransport(replies: Partial<Record<CommandName, ScriptedR
     get_map_catalog: 0,
     get_weather_field: 0,
     get_spc_outlook: 0,
+    get_wpc_outlook: 0,
     build_forecast_drawing: 0,
     get_weather_alerts: 0,
     get_radar_frame: 0,

@@ -1,3 +1,6 @@
-.fields.fields { grid-template-columns: repeat(5, minmax(0, 1fr)); flex-basis: calc(var(--forecast-w) * 1.25); }
+.fields.fields { grid-template-columns: repeat(5, minmax(0, 1fr)); flex-basis: calc(var(--forecast-w) * 1.3); }
 .scanSlot { display: contents; }
-.scanSlot > button, .scanSlot + button, .scanSlot + * > button { border-inline-start: var(--hairline) solid var(--border-subtle); }
+:is(.scanSlot > button, .scanSlot + button, .scanSlot + * > button)::before { content: ""; position: absolute; inset-inline-start: calc(var(--fields-gap) / -2); top: 50%; width: var(--hairline); height: 52%; transform: translateY(-50%); background: var(--border-subtle); pointer-events: none; transition: opacity var(--motion-fast) var(--ease-standard); }
+.scanSlot > button:is(:hover, :focus-visible, [aria-expanded="true"]):not(:disabled)::before,
+.scanSlot:has(> button:is(:hover, :focus-visible, [aria-expanded="true"]):not(:disabled)) + button::before,
+.scanSlot:has(> button:is(:hover, :focus-visible, [aria-expanded="true"]):not(:disabled)) + * > button::before { opacity: 0; }

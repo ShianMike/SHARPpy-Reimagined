@@ -28,6 +28,7 @@ export type CommandName =
   | "get_weather_field"
   | "get_cached_forecast_hours"
   | "get_spc_outlook"
+  | "get_wpc_outlook"
   | "build_forecast_drawing"
   | "get_weather_alerts"
   | "get_radar_frame"

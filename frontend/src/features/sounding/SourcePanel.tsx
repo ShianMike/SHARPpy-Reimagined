@@ -1,7 +1,6 @@
 // The sounding source as a tab list over one form.
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
-import { RadioTower, CloudSun, History, FileUp, PanelLeftClose, SlidersHorizontal } from "lucide-react";
-import { IconAction } from "../../ui/Controls";
+import { RadioTower, CloudSun, History, FileUp } from "lucide-react";
 import { useSoundingStore, type SoundingSource } from "../../stores/soundingStore";
 import { FileForm } from "./FileForm";
 import { ModelForm } from "./ModelForm";
@@ -16,7 +15,7 @@ const SOURCES: readonly { id: SoundingSource; label: string }[] = [
   { id: "file", label: "File" },
 ];
 
-export function SourcePanel({ onHide, onControls }: { onHide: () => void; onControls?: () => void }): ReactNode {
+export function SourcePanel(): ReactNode {
   const source = useSoundingStore((state) => state.source);
   const setSource = useSoundingStore((state) => state.setSource);
   const index = SOURCES.findIndex((item) => item.id === source);
@@ -34,10 +33,6 @@ export function SourcePanel({ onHide, onControls }: { onHide: () => void; onCont
   };
   return (
     <section className={styles.section} aria-label="Open a sounding">
-      <header className={styles.sideHeader}><div><h1>Soundings</h1><p>Choose a source</p></div><div className={styles.sideActions}>
-        {onControls === undefined ? null : <IconAction icon={SlidersHorizontal} size="sm" label="Show sounding controls" aria-controls="sounding-controls" onClick={onControls} />}
-        <IconAction icon={PanelLeftClose} size="sm" label="Hide sources" aria-expanded={true} aria-controls="sounding-sources" onClick={onHide} />
-      </div></header>
       <div className={styles.tabs} role="tablist" aria-label="Source" onKeyDown={onKeyDown}
         data-selection-track="horizontal" style={{ "--selection-index": index } as CSSProperties}>
         {SOURCES.map((item) => (

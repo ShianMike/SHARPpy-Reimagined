@@ -1,0 +1,90 @@
+.notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: var(--notice-max-w);
+  padding: var(--space-4);
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  margin-top: var(--space-0-5);
+  color: var(--accent-bright);
+}
+
+.notice[data-state="starred"] .icon {
+  color: var(--success);
+}
+
+.notice[data-state="error"] .icon {
+  color: var(--danger);
+}
+
+.icon svg {
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+  stroke-width: var(--icon-stroke);
+}
+
+.content {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.title {
+  color: var(--text-primary);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.message {
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-body);
+}
+
+.errorText {
+  color: var(--danger);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-body);
+}
+
+.fallbackLink {
+  color: var(--link);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  text-decoration: underline;
+  justify-self: start;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.actions > button {
+  min-height: var(--control-h-md);
+}
+
+.actions > button[data-tone="accent"] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-4);
+}

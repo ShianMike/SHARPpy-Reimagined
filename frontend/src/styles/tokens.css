@@ -284,6 +284,8 @@
 
   /* Map canvas: forecast overlays (model domain, SPC outlook lines and labels, place names) */
   --map-domain: #6fa8dc;
+  --map-height-contour: #ffe0a3;
+  --map-height-contour-halo: #111923;
   --map-place-text: #d4d8d5;
   /* Surface station models: the reading pair and the mark ink around it. */
   --map-obs-upper: #ff8a72;
@@ -360,6 +362,8 @@
 :root[data-theme="light"] {
   color-scheme: light;
   --basemap-border-halo: #fffaf3;
+  --map-height-contour: #101418;
+  --map-height-contour-halo: #fff6e4;
   --workspace-orange-text: #9b4208;
   --surface-0: #f6f6f7;
   --surface-1: #ffffff;

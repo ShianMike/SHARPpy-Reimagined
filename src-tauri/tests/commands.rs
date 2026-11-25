@@ -654,6 +654,30 @@ fn place_labels_and_pre_archive_spc_outlooks_run_natively_without_python() {
     .unwrap();
     assert_eq!(outlook["product"], "cat");
     assert_eq!(outlook["outlook"], Value::Null);
+    let wpc = invoke_args(
+        &webview,
+        "get_wpc_outlook",
+        serde_json::json!({"validTime": "1998-05-20T18:00:00Z"}),
+    )
+    .unwrap();
+    assert_eq!(wpc["product"], "ero");
+    assert_eq!(wpc["outlook"], Value::Null);
+    let wpc_winter = invoke_args(
+        &webview,
+        "get_wpc_outlook",
+        serde_json::json!({"validTime": "1998-05-20T18:00:00Z", "product": "winter-overall"}),
+    )
+    .unwrap();
+    assert_eq!(wpc_winter["product"], "winter-overall");
+    assert_eq!(wpc_winter["outlook"], Value::Null);
+    for bad in [
+        serde_json::json!({"validTime": "not-a-time"}),
+        serde_json::json!({"validTime": "2026-10-04T21:00:00Z", "day": 4}),
+        serde_json::json!({"validTime": "2026-10-04T21:00:00Z", "product": "unknown"}),
+    ] {
+        let error: BackendError = parse(invoke_args(&webview, "get_wpc_outlook", bad).unwrap_err());
+        assert_eq!(error.code, ErrorCode::InvalidArgument);
+    }
     for bad_time in ["2026-10-04T12:30:00Z", "2099-01-01T00:00:00Z"] {
         let error: BackendError = parse(
             invoke_args(

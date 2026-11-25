@@ -1,10 +1,11 @@
 // Same public DTOs and binary frames as Tauri, through the local Vite proxy.
+import { fetchHostedBackendWithEdge } from "./edge";
 import type { Transport } from "./transport";
 
 export function createTransport(): Transport {
   return {
     async call(command, args) {
-      const response = await fetch("/__backend", {
+      const response = await fetchHostedBackendWithEdge(command, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: 1, method: command, params: args ?? {} }),

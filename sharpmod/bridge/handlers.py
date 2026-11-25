@@ -178,6 +178,7 @@ HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "soundings.restore": lambda params: __import__("sharpmod_rs").restore_sounding_snapshot(params),
     "animation.webp_frame": lambda params: __import__("sharpmod_rs").encode_webp_frame(params),
     "outlooks.build_forecast": lambda params: __import__("sharpmod_rs").build_forecast_drawing(params),
+    "outlooks.wpc": lambda params: __import__("sharpmod_rs").wpc_outlook_bridge(params),
     "hello": hello,
     "health": health,
     "fields.cached": frame_cache.cached_hours,

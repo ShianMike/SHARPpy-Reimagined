@@ -86,6 +86,29 @@ describe("independent isobars", () => {
     expect(layers.at(-1)?.props.data).toBe(labels);
   });
 
+  it("shows REFS surface pressure along with model winds when the independent isobars are off", () => {
+    const paths = [[[-100, 35], [-99.75, 35.5], [-99, 36]]] as const;
+    const labels = [{ position: [-99.75, 35.5], value: 1012 }] as const;
+    const context: LayerBuildContext = {
+      ...ctx, isobars: null,
+      contours: { ...pressure, product: "tmp-2m", segments: [], paths, labels },
+      contourSpec: { interval: 4, label: "hPa", colour: "#101418", width: 1.2 },
+      windBarbs: [{ position: [-98, 36], direction: 270, speed: 15 }],
+    };
+    const states = defaultLayerStates();
+    states["model-field"] = { visible: true, opacity: 0.8 };
+    const layers = buildDeckLayers(LAYER_REGISTRY, states, context);
+    expect(layers.find(({ id }) => id === `${CONTOURS_LAYER_ID}-halo`)?.props)
+      .toMatchObject({ data: paths, visible: true, opacity: 0.8, getColor: ctx.tokens.colours.labelHalo });
+    expect(layers.find(({ id }) => id === CONTOURS_LAYER_ID)?.props)
+      .toMatchObject({ data: paths, visible: true, opacity: 0.8, getColor: ctx.tokens.colours.labelText });
+    expect(layers.find(({ id }) => id === `${CONTOURS_LAYER_ID}-labels`)?.props)
+      .toMatchObject({ data: labels, visible: true, opacity: 0.8 });
+    const wind = layers.filter((layer): layer is IconLayer<WindBarb> => layer instanceof IconLayer);
+    expect(wind).toHaveLength(2);
+    expect(wind.every((layer) => layer.props.visible)).toBe(true);
+  });
+
   it("declutters native anchors in screen space and avoids occupied readings and clipped edges", () => {
     const labels = [
       { position: [-100, 35], value: 1000 }, { position: [-99.9, 35.1], value: 1004 },
@@ -126,8 +149,9 @@ describe("independent isobars", () => {
   });
 
   it("keeps product contours and wind separate when toggling, dimming or reordering isobars", () => {
+    const labels = [{ position: [-89.5, 30.5], value: 552 }] as const;
     const productContours: ContourLines = { ...pressure, product: "hgt-wind-500", unit: "dam", interval: 6,
-      segments: [[[-90, 30], [-89, 31]]] };
+      segments: [[[-90, 30], [-89, 31]]], labels };
     const context: LayerBuildContext = { ...ctx, contours: productContours,
       contourSpec: { interval: 6, label: "500 hPa height (dam)", colour: "#ff0000", width: 1 },
       windBarbs: [{ position: [-95, 35], direction: 270, speed: 65 }], weatherBeforeId: "waterway" };
@@ -136,7 +160,21 @@ describe("independent isobars", () => {
     states.isobars = { visible: false, opacity: 0.25 };
     const layers = buildDeckLayers(LAYER_REGISTRY, states, context);
     expect(layers.find(({ id }) => id === ISOBARS_LAYER_ID)?.props).toMatchObject({ visible: false, opacity: 0.25, beforeId: "waterway" });
-    expect(layers.find(({ id }) => id === CONTOURS_LAYER_ID)?.props).toMatchObject({ visible: true, opacity: 0.8 });
+    const heightLine = layers.find((layer): layer is PathLayer => layer instanceof PathLayer && layer.id === CONTOURS_LAYER_ID);
+    const heightHalo = layers.find((layer): layer is PathLayer => layer instanceof PathLayer && layer.id === `${CONTOURS_LAYER_ID}-halo`);
+    if (heightLine === undefined || heightHalo === undefined) throw new Error("Expected outlined height contours");
+    expect(heightLine.props).toMatchObject({ visible: true, opacity: 0.8, getColor: ctx.tokens.colours.heightContour, beforeId: "waterway" });
+    expect(heightHalo.props).toMatchObject({ visible: true, opacity: 0.8, getColor: ctx.tokens.colours.heightContourHalo, beforeId: "waterway" });
+    expect(heightHalo.props.data).toBe(heightLine.props.data);
+    expect(heightHalo.props.getWidth).toBeGreaterThan(Number(heightLine.props.getWidth));
+    expect(layers.indexOf(heightHalo)).toBeLessThan(layers.indexOf(heightLine));
+    const heightLabels = layers.find((layer): layer is TextLayer => layer instanceof TextLayer && layer.id === `${CONTOURS_LAYER_ID}-labels`);
+    expect(heightLabels?.props).toMatchObject({ visible: true, opacity: 0.8, data: labels,
+      getSize: ctx.tokens.lengths.labelSize, getColor: ctx.tokens.colours.heightContour, outlineColor: ctx.tokens.colours.heightContourHalo });
+    expect(layers.at(-1)).toBe(heightLabels);
+    const getText = heightLabels?.props.getText;
+    if (typeof getText !== "function") throw new Error("Expected height contour labels");
+    expect(getText(labels[0], { index: 0, data: labels, target: [] })).toBe("552");
     const wind = layers.filter((layer): layer is IconLayer<WindBarb> => layer instanceof IconLayer);
     expect(wind).toHaveLength(2);
     expect(wind.every((layer) => layer.props.visible && layer.props.opacity === 0.8)).toBe(true);
@@ -145,6 +183,8 @@ describe("independent isobars", () => {
     const reordered = buildDeckLayers(LAYER_REGISTRY, states, context, ["isobars", "model-field"]);
     expect(reordered.find(({ id }) => id === ISOBARS_LAYER_ID)?.props).toMatchObject({ visible: true, opacity: 0.6 });
     expect(reordered.find(({ id }) => id === CONTOURS_LAYER_ID)?.props.visible).toBe(false);
+    expect(reordered.find(({ id }) => id === `${CONTOURS_LAYER_ID}-halo`)?.props.visible).toBe(false);
+    expect(reordered.find(({ id }) => id === `${CONTOURS_LAYER_ID}-labels`)?.props.visible).toBe(false);
     const hiddenWind = reordered.filter((layer): layer is IconLayer<WindBarb> => layer instanceof IconLayer);
     expect(hiddenWind).toHaveLength(2);
     expect(hiddenWind.every((layer) => !layer.props.visible)).toBe(true);

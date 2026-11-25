@@ -18,8 +18,8 @@ REQUEST = {"run_time": "2026-10-27T00:00:00Z", "forecast_hour": 6}
 @pytest.mark.parametrize("model", hp.HRW_MODELS)
 def test_hrw_supported_parameters_and_native_cycles(model):
     products = {p.key: p for p in hp.available_products(model)}
-    assert len(products) == 29
-    assert {"refc", "tmp-2m", "hgt-wind-200", "apcp", "shear-0-1km", "uh-0-3km", "uh-2-5km-1h", "uh-2-5km-3h"} <= products.keys()
+    assert len(products) == 31
+    assert {"refc", "tmp-2m", "hgt-wind-200", "apcp", "shear-0-1km", "uh-0-3km", "uh-0-3km-run", "uh-2-5km-1h", "uh-2-5km-3h", "uh-2-5km-run"} <= products.keys()
     assert not products.keys() & {"ltng", "efhl", "snod", "prate", "prate-frzr", "prate-sleet", "prate-snow", "mucape", "scp", "stp"}
     assert all(p.sources == ("sfc",) for p in products.values())
     assert products["refc"].fields[0].level == "entire atmosphere (considered as a single layer)"
@@ -58,7 +58,7 @@ def test_picker_checks_every_ingredient_at_the_selected_hour(model, monkeypatch,
         return rows[:2] if ".f00." in url else rows
     monkeypatch.setattr(hf, "fetch_inventory", published)
     catalog = fields.catalog({**REQUEST, "model": model})
-    assert {p["key"] for p in catalog["products"]} == {"tmp-2m", "refc", "uh-2-5km-1h", "uh-2-5km-3h", "uh-0-3km"}
+    assert {p["key"] for p in catalog["products"]} == {"tmp-2m", "refc", "uh-2-5km-1h", "uh-2-5km-3h", "uh-2-5km-run", "uh-0-3km", "uh-0-3km-run"}
     assert len(calls) == 1
     analysis = fields.catalog({**REQUEST, "model": model, "forecast_hour": 0})
     assert {p["key"] for p in analysis["products"]} == {"tmp-2m", "refc"}

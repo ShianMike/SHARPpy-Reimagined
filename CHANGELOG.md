@@ -7,7 +7,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Target version: **3.10.0** (not published).
+## [v3.10.0] - 2026-11-25
 
 ### Added
 
@@ -123,8 +123,7 @@ Target version: **3.10.0** (not published).
   across all supported models.
 - Use a 20–140 kt wind scale with 1 kt color steps for 500 mb Height and Wind
   across supported models.
-- Synchronize the application, package, and release metadata for the local
-  3.10.0 candidate.
+- Set the application and package versions to 3.10.0.
 - Migrate additional Python backend compute, planning, and I/O modules into
   Rust (`sharpmod-rs` and `sharpmod-weather`, M9–M14): model field and HTTP
   byte-range planning, NOAA RRFS/REFS NOMADS inventory and provenance handling,

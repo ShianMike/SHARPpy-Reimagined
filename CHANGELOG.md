@@ -192,6 +192,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cache expiry and size limits.
 - Check both accumulation endpoints before offering GDPS and RDPS six-hour
   precipitation-type maps at intermediate forecast hours.
+- Update native desktop contract tests for the expanded forecast product catalog.
 
 ### Removed
 

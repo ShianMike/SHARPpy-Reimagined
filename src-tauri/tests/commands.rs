@@ -382,7 +382,7 @@ fn ecmwf_catalogues_keep_run_hour_availability_and_validate_before_cache() {
         serde_json::json!({"model": "ecmwf-ifs-9km"}),
     )
     .unwrap();
-    assert_eq!(initial["products"].as_array().unwrap().len(), 21);
+    assert_eq!(initial["products"].as_array().unwrap().len(), 25);
     let error: BackendError = parse(
         invoke_args(
             &webview,
@@ -394,7 +394,7 @@ fn ecmwf_catalogues_keep_run_hour_availability_and_validate_before_cache() {
         .unwrap_err(),
     );
     assert_eq!(error.code, ErrorCode::InvalidArgument);
-    for (hour, count) in [(12, 21), (360, 20)] {
+    for (hour, count) in [(12, 25), (360, 24)] {
         let result = invoke_args(
             &webview,
             "get_map_catalog",
@@ -433,7 +433,7 @@ fn aigfs_accepts_f384_for_catalogues_fields_and_contours() {
     let args = serde_json::json!({"model": "aigfs", "product": "hgt-wind-500",
         "runTime": "2026-10-27T00:00:00Z", "forecastHour": 384});
     let catalog = invoke_args(&webview, "get_map_catalog", args.clone()).unwrap();
-    assert_eq!(catalog["products"].as_array().unwrap().len(), 9);
+    assert_eq!(catalog["products"].as_array().unwrap().len(), 11);
     let frame: Vec<u8> = parse(invoke_args(&webview, "get_weather_field", args.clone()).unwrap());
     assert!(!frame.is_empty());
     let contours = invoke_args(&webview, "get_field_contours", args).unwrap();

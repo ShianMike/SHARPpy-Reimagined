@@ -571,7 +571,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                     assert!(surface.wind);
                     let pressure = surface.contour.as_ref().unwrap();
                     assert_eq!(pressure.label, "hPa");
-                    assert_eq!(pressure.interval, 4.0);
+                    assert_eq!(pressure.interval, 2.0);
                 }
                 let qpf_ptype = catalog
                     .products
@@ -1045,9 +1045,9 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
     assert_eq!(lines.product, "hgt-wind-500");
     assert_eq!(lines.interval, 6.0);
     assert_eq!(lines.unit, "dam");
-    assert!(!lines.segments.is_empty());
-    // The fixture height plane crosses two 6 dam levels as straight lines.
-    assert!(lines.segments.len() > 10);
+    assert!(lines.segments.is_empty());
+    // The fixture height plane crosses two 6 dam levels, each as a connected path.
+    assert_eq!(lines.paths.len(), 2);
     let wind = lines.wind.as_ref().unwrap();
     assert_eq!((wind.width, wind.height), (128, 64));
     let mut invalid_wind = wind.clone();

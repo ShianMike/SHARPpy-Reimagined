@@ -21,7 +21,9 @@ in browser mode. The desktop calls the shared Rust weather core directly for
 radar inventory. These migrated operations have no Python implementation.
 UWyo sounding decoding and availability, box-mean soundings, threshold
 controls, radar mosaics and satellite processing also use the native extension.
-Build/install `sharpmod_rs` before running the complete source application.
+The desktop sidecar and browser bridge require a matching `sharpmod_rs` build
+for request validation and framing, including when `SHARPMOD_BACKEND=python`.
+Install it before running the application from source.
 
 Sounding file uploads use Rust for request validation, bounded base64 decoding,
 portable filename handling and staged cache files. The existing decoder registry

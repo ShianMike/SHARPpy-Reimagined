@@ -30,6 +30,79 @@ __all__ = ["lapse_rate", "layer_cape_agl", "layer_cape_isotherm"]
 
 _MAX_NATIVE_SIX_KM_CAPE_LEVEL_GAP_M = 500.0
 
+#: Sentinel distinguishing "no native result is available" (fall back to the
+#: ``interp``-based path) from ``None`` (a computed missing value).
+_NATIVE_UNAVAILABLE = object()
+
+
+def _native_lapse_column(prof, name):
+    """Return one reported-level column as a NaN-filled contiguous float array.
+
+    Masked entries cross the boundary as NaN, which the native interpolation
+    kernel filters. Returns ``None`` when the profile does not expose the
+    column as array data.
+    """
+    field = _get_masked_field(prof, name)
+    if field is None:
+        return None
+    return np.ascontiguousarray(field.filled(np.nan), dtype=float).reshape(-1)
+
+
+def _native_lapse_rate_agl(prof, lower, upper):
+    """Native height-AGL lapse rate, or ``_NATIVE_UNAVAILABLE``.
+
+    The native kernel reproduces the ``interp.temp_at_hght_agl`` path exactly
+    for any profile exposing the raw ``hght``/``tmpc`` columns and a usable
+    ``sfc`` index; any surprise (absent columns, an unusable index) falls back
+    to the ``interp``-based path below.
+    """
+    try:
+        hght = _native_lapse_column(prof, "hght")
+        tmpc = _native_lapse_column(prof, "tmpc")
+        if hght is None or tmpc is None:
+            return _NATIVE_UNAVAILABLE
+        sfc = int(getattr(prof, "sfc", 0))
+        import sharpmod_rs
+
+        return sharpmod_rs.sharptab_lapse_rate_agl(
+            hght, tmpc, sfc, float(lower), float(upper))
+    except Exception:
+        return _NATIVE_UNAVAILABLE
+
+
+def _native_lapse_rate_pres(prof, lower, upper):
+    """Native pressure-coordinate lapse rate, or ``_NATIVE_UNAVAILABLE``.
+
+    ``logp`` follows the ``interp`` convention: the profile's own ``logp``
+    column when it exposes one, ``log10(pres)`` otherwise. Profiles exposing
+    neither, or anything the native call cannot consume, fall back to the
+    ``interp``-based path below.
+    """
+    try:
+        hght = _native_lapse_column(prof, "hght")
+        tmpc = _native_lapse_column(prof, "tmpc")
+        logp = _native_lapse_column(prof, "logp")
+        if logp is None:
+            pres = _native_lapse_column(prof, "pres")
+            if pres is not None:
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    logp = np.log10(pres)
+        if hght is None or tmpc is None or logp is None:
+            return _NATIVE_UNAVAILABLE
+        import sharpmod_rs
+
+        return sharpmod_rs.sharptab_lapse_rate_pres(
+            logp, hght, tmpc, float(lower), float(upper))
+    except Exception:
+        return _NATIVE_UNAVAILABLE
+
+
+def _lapse_bound(value):
+    """A float layer bound for the native combiner, or ``None`` when missing."""
+    if is_missing(value):
+        return None
+    return float(value)
+
 
 def lapse_rate(prof, lower, upper, agl=False):
     """Compute the lapse rate ``(T_lower - T_upper) / depth`` in degrees C/km.
@@ -84,24 +157,30 @@ def lapse_rate(prof, lower, upper, agl=False):
         return MISSING
 
     if agl:
+        native = _native_lapse_rate_agl(prof, lower, upper)
+        if native is not _NATIVE_UNAVAILABLE:
+            return MISSING if native is None else native
         t_lower = interp.temp_at_hght_agl(prof, lower)
         t_upper = interp.temp_at_hght_agl(prof, upper)
-        depth_km = (upper - lower) / 1000.0
+        # The AGL depth is the bound difference, so the bounds themselves
+        # carry the layer heights to the native combiner.
+        z_lower, z_upper = lower, upper
     else:
+        native = _native_lapse_rate_pres(prof, lower, upper)
+        if native is not _NATIVE_UNAVAILABLE:
+            return MISSING if native is None else native
         t_lower = interp.temp(prof, lower)
         t_upper = interp.temp(prof, upper)
         z_lower = interp.hght(prof, lower)
         z_upper = interp.hght(prof, upper)
-        if is_missing(z_lower) or is_missing(z_upper):
-            return MISSING
-        depth_km = (float(z_upper) - float(z_lower)) / 1000.0
 
-    if is_missing(t_lower) or is_missing(t_upper):
-        return MISSING
-    if depth_km == 0.0:
-        return MISSING
+    import sharpmod_rs
 
-    return (float(t_lower) - float(t_upper)) / depth_km
+    value = sharpmod_rs.sharptab_lapse_rate_from_bounds(
+        _lapse_bound(t_lower), _lapse_bound(t_upper),
+        _lapse_bound(z_lower), _lapse_bound(z_upper),
+    )
+    return MISSING if value is None else value
 
 
 # ---------------------------------------------------------------------------
@@ -236,30 +315,20 @@ def _native_six_km_cape_eligible(prof) -> bool:
     the environmental column has kilometre-scale gaps. Include the interpolated
     6-km boundary in the spacing check so a large final gap cannot slip through.
     """
+    import sharpmod_rs
+
     hght = _get_masked_field(prof, "hght")
     if hght is None or hght.size < 2:
         return False
 
     try:
         sfc = int(getattr(prof, "sfc", 0))
-        surface_height = float(hght[sfc])
-    except (IndexError, TypeError, ValueError):
-        return False
-    if not np.isfinite(surface_height):
+    except (TypeError, ValueError):
         return False
 
-    reported_agl = np.asarray(hght.filled(np.nan), dtype=float) - surface_height
-    in_layer = (
-        np.isfinite(reported_agl)
-        & (reported_agl >= 0.0)
-        & (reported_agl <= 6000.0)
-    )
-    levels = np.unique(
-        np.concatenate(([0.0], reported_agl[in_layer], [6000.0])),
-    )
-    return bool(
-        levels.size >= 2
-        and np.max(np.diff(levels)) <= _MAX_NATIVE_SIX_KM_CAPE_LEVEL_GAP_M
+    arr = np.ascontiguousarray(hght.filled(np.nan), dtype=float).reshape(-1)
+    return sharpmod_rs.native_six_km_cape_eligible(
+        arr, sfc, _MAX_NATIVE_SIX_KM_CAPE_LEVEL_GAP_M,
     )
 
 

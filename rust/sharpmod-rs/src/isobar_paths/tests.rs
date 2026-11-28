@@ -13,7 +13,7 @@ fn shuffled_segments_join_and_round_a_long_open_line_with_pinned_ends() {
     let mut segments = at_level(1012., &points);
     segments.swap(0, 2);
     segments[2].1 = (segments[2].1 .1, segments[2].1 .0);
-    let mut paths = smooth_isobars(&segments, &[1012.; 49], 7, 7);
+    let mut paths = smooth_paths(&segments, &[1012.; 49], 7, 7);
     assert_eq!(paths.len(), 1);
     let (level, path) = paths.pop().unwrap();
     assert_eq!(level, 1012.);
@@ -37,7 +37,7 @@ fn shuffled_segments_join_and_round_a_long_open_line_with_pinned_ends() {
 fn matching_uses_level_and_crossing_edge_as_well_as_rounded_position() {
     let epsilon = 2e-10;
     let other_level = f64::from_bits(1000f64.to_bits() + 1);
-    let paths = smooth_isobars(
+    let paths = smooth_paths(
         &[
             (1000., ((0., 1.5), (2.25, 2.))),
             (1000., ((2.25 + epsilon, 2.), (4., 2.5))),
@@ -61,7 +61,7 @@ fn matching_uses_level_and_crossing_edge_as_well_as_rounded_position() {
     ];
     // The four near-coincident endpoints belong to distinct grid edges or
     // an exact vertex. Rounding coordinates alone would create a junction.
-    let paths = smooth_isobars(&segments, &[1000.; 9], 3, 3);
+    let paths = smooth_paths(&segments, &[1000.; 9], 3, 3);
     assert_eq!(paths.len(), segments.len());
     for ((level, path), (expected, (a, b))) in paths.into_iter().zip(segments) {
         assert_eq!(level, expected);
@@ -74,7 +74,7 @@ fn a_junction_pins_all_path_endpoints_even_if_one_path_returns_to_it() {
     let junction = [2., 2.];
     let mut segments = at_level(1004., &[junction, [4., 2.], [4., 4.], [2., 4.], junction]);
     segments.extend(at_level(1004., &[junction, [2., 0.]]));
-    let paths = smooth_isobars(&segments, &[1004.; 25], 5, 5);
+    let paths = smooth_paths(&segments, &[1004.; 25], 5, 5);
     assert_eq!(paths.len(), 2);
     assert_eq!(
         paths[0].1,
@@ -93,25 +93,24 @@ fn a_junction_pins_all_path_endpoints_even_if_one_path_returns_to_it() {
 }
 
 #[test]
-fn closed_rings_round_and_remain_closed_even_when_the_seam_has_no_spare_vertex() {
+fn closed_rings_keep_their_closing_point_at_both_rounding_budgets() {
     let ring = [[1., 1.], [3., 1.], [3., 3.], [1., 3.], [1., 1.]];
     let segments = at_level(1008., &ring);
-    let paths = smooth_isobars(&segments, &[1008.; 16], 4, 4);
+    let paths = smooth_paths(&segments, &[1008.; 16], 4, 4);
     assert_eq!(paths.len(), 1);
     let path = &paths[0].1;
     assert_eq!(path.len(), 8);
     assert_eq!(path.first(), path.last());
-    assert_eq!(path.first(), Some(&ring[0]));
     assert!(path.iter().any(|point| !ring.contains(point)));
 
-    // A redundant point on an edge supplies space to round the closing seam too.
+    // A redundant point on an edge supplies space for every corner.
     let segments = at_level(
         1008.,
         &[ring[0], [2., 1.], ring[1], ring[2], ring[3], ring[4]],
     );
-    let paths = smooth_isobars(&segments, &[1008.; 16], 4, 4);
+    let paths = smooth_paths(&segments, &[1008.; 16], 4, 4);
     let path = &paths[0].1;
-    assert_eq!(path.len(), 9);
+    assert_eq!(path.len(), 10);
     assert_eq!(path.first(), path.last());
     assert!(!path.iter().any(|point| ring.contains(point)));
 }
@@ -119,7 +118,7 @@ fn closed_rings_round_and_remain_closed_even_when_the_seam_has_no_spare_vertex()
 #[test]
 fn collinear_closed_trace_retains_its_reversal_and_repeated_endpoint() {
     let segments = at_level(1008., &[[0., 1.], [1., 1.], [2., 1.], [3., 1.], [0., 1.]]);
-    let paths = smooth_isobars(&segments, &[1008.; 8], 2, 4);
+    let paths = smooth_paths(&segments, &[1008.; 8], 2, 4);
     assert_eq!(paths, [(1008., vec![[0., 1.], [3., 1.], [0., 1.]])]);
 }
 
@@ -130,27 +129,43 @@ fn a_missing_sample_inside_the_cut_footprint_keeps_only_that_corner_intact() {
     for missing in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         let mut values = [1000.; 25];
         values[3 * 5 + 3] = missing;
-        let paths = smooth_isobars(&segments, &values, 5, 5);
+        let paths = smooth_paths(&segments, &values, 5, 5);
         assert_eq!(
             paths[0].1,
-            [[1., 4.], [4., 4.], [4., 1.5], [3.5, 1.], [1., 1.]]
+            [
+                [1., 4.],
+                [4., 4.],
+                [4., 1.5],
+                [3.875, 1.125],
+                [3.5, 1.],
+                [1., 1.]
+            ]
         );
     }
 }
 
 #[test]
-fn long_segments_are_cut_by_at_most_half_a_sample_and_straight_sections_compact() {
+fn tightest_bend_uses_a_curve_with_tangent_ends_within_half_a_sample() {
     let points = [[0., 0.], [60., 0.], [128., 0.], [128., 128.]];
     let mut segments = at_level(1000., &points);
     segments.extend(at_level(1000., &[points[1], points[0], points[0]]));
-    let paths = smooth_isobars(&segments, &vec![1000.; 129 * 129], 129, 129);
+    let paths = smooth_paths(&segments, &vec![1000.; 129 * 129], 129, 129);
+    let (level, path) = &paths[0];
+    assert_eq!(*level, 1000.);
+    assert_eq!((path[0], path[1]), ([0., 0.], [127.5, 0.]));
     assert_eq!(
-        paths,
-        [(
-            1000.,
-            vec![[0., 0.], [127.5, 0.], [128., 0.5], [128., 128.]]
-        )]
+        (path[path.len() - 2], path[path.len() - 1]),
+        ([128., 0.5], [128., 128.])
     );
+    assert!(path.contains(&[127.875, 0.125]));
+    for pair in path.windows(3) {
+        let [a, b, c] = [pair[0], pair[1], pair[2]];
+        let dx = b[0] - a[0];
+        let dy = b[1] - a[1];
+        let ex = c[0] - b[0];
+        let ey = c[1] - b[1];
+        assert!((dx * ey - dy * ex).atan2(dx * ex + dy * ey).to_degrees() < 30.0);
+    }
 }
 
 #[test]
@@ -169,20 +184,18 @@ fn full_input_budget_keeps_every_ring_and_caps_the_complete_frame() {
         })
         .collect();
     assert_eq!(segments.len(), 100_000);
-    let paths = smooth_isobars(&segments, &vec![1000.; width * height], height, width);
+    let paths = smooth_paths(&segments, &vec![1000.; width * height], height, width);
     assert_eq!(paths.len(), 25_000);
     assert_eq!(
         paths.iter().map(|(_, path)| path.len()).sum::<usize>(),
         200_000
     );
     assert!(paths.iter().all(|(level, path)| {
-        *level == 1000. && path.len() >= 5 && path.first() == path.last()
+        *level == 1000. && path.len() == 8 && path.first() == path.last()
     }));
-    assert!(paths.iter().any(|(_, path)| path.len() == 5));
-    assert!(paths.iter().any(|(_, path)| path.len() == 9));
 }
 
 #[test]
 fn an_empty_contour_set_returns_no_paths() {
-    assert!(smooth_isobars(&[], &[], 0, 0).is_empty());
+    assert!(smooth_paths(&[], &[], 0, 0).is_empty());
 }

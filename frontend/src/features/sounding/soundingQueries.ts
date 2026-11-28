@@ -12,6 +12,7 @@ import { BASE_QUERY_OPTIONS, QUERY_KEYS, soundingKeys } from "../../lib/backend/
 import { useAppStore } from "../../stores/appStore";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { useUiStore } from "../../stores/uiStore";
+import { isNsslMpas } from "./soundingTime";
 import type {
   ModelCatalog,
   ForecastModel,
@@ -27,11 +28,12 @@ const IMAGE_GC_MS = 5 * 60_000;
 
 // NWS SCN 26-47 ended NAM production beginning with the 12Z cycle.
 const NAM_ARCHIVE_LAST_RUN = "2026-11-03T06:00:00Z";
-const HIDDEN_RETIRED_MODELS = new Set(["sref", "href", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3"]);
 
 export const NAM_ARCHIVE_NOTICE = "NOAA ended NAM production on 3 Nov 2026. The last archived run is 06Z that day. Coverage varies by date and forecast hour.";
 export const isNamArchive = (modelKey: string): boolean => modelKey === "nam" || modelKey === "nam-3km-conus";
 
+// The choices offered for new forecasts and soundings. Saved soundings can
+// still resolve their underlying model through the complete backend catalog.
 const MODEL_LABELS: Readonly<Record<string, string>> = {
   hrrr: "HRRR",
   rap: "RAP",
@@ -39,9 +41,8 @@ const MODEL_LABELS: Readonly<Record<string, string>> = {
   "nam-3km-conus": "NAM 3km CONUS",
   rdps: "RDPS",
   hrdps: "HRDPS",
-  "hrw-wrf-arw": "HRW WRF-ARW",
-  "hrw-wrf-nssl": "HRW WRF-NSSL",
-  "hrw-fv3": "HRW FV3",
+  "nssl-mpas-htpo": "NSSL MPAS-HTPO",
+  "nssl-mpas-rn": "NSSL MPAS-RN",
   "rrfs-a": "RRFS",
   "refs-m1": "REFSm1",
   "refs-m2": "REFSm2",
@@ -65,7 +66,8 @@ export const modelRegion = (model: Pick<ForecastModel, "key" | "domain">): (type
 const requestedModels = (catalog: ModelCatalog): ModelCatalog => ({
   ...catalog,
   models: catalog.models
-    .filter((model) => !HIDDEN_RETIRED_MODELS.has(model.key) && Object.hasOwn(MODEL_LABELS, model.key))
+    .filter((model) => Object.hasOwn(MODEL_LABELS, model.key)
+      && (!isNsslMpas(model.key) || model.recentRuns.includes(model.suggestedRun)))
     .map((model) => {
       const label = MODEL_LABELS[model.key] ?? model.label;
       return isNamArchive(model.key)

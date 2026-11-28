@@ -34,7 +34,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import math
 import re
 import ssl
 import threading
@@ -208,9 +207,11 @@ class RadarSite:
         anything outside it, and a site near the antimeridian or a pole would
         otherwise produce a box the overlay contract rejects outright.
         """
-        span = self.half_span_deg
-        return (max(-180.0, self.lon - span), min(180.0, self.lon + span),
-                max(-90.0, self.lat - span), min(90.0, self.lat + span))
+        import sharpmod_rs
+
+        return sharpmod_rs.radar_site_bounds(
+            self.lat, self.lon, self.half_span_deg
+        )
 
     def supports(self, product: RadarSiteProduct) -> bool:
         if product.key in LEVEL2_PRODUCTS or product.key == "echo-tops":
@@ -265,13 +266,9 @@ def _distance_km(lat0: float, lon0: float, lat1: float, lon1: float) -> float:
     A degree of longitude is 111 km at the equator and 57 km at 60 N, so
     comparing raw coordinate differences would pick the wrong Alaskan radar.
     """
-    radius = 6371.0
-    phi0, phi1 = math.radians(lat0), math.radians(lat1)
-    dphi = phi1 - phi0
-    dlambda = math.radians(lon1 - lon0)
-    a = (math.sin(dphi / 2.0) ** 2
-         + math.cos(phi0) * math.cos(phi1) * math.sin(dlambda / 2.0) ** 2)
-    return 2.0 * radius * math.asin(min(1.0, math.sqrt(a)))
+    import sharpmod_rs
+
+    return sharpmod_rs.radar_site_distance_km(lat0, lon0, lat1, lon1)
 
 
 def nearest_site(lat: float, lon: float, *,
@@ -283,16 +280,22 @@ def nearest_site(lat: float, lon: float, *,
     ``None`` when nothing is within ``max_km``, which is how a map over the
     ocean or outside the network reports "no radar here" without a request.
     """
-    best: tuple[RadarSite, float] | None = None
-    for site in sites():
-        if product is not None and not site.supports(product):
-            continue
-        distance = _distance_km(lat, lon, site.lat, site.lon)
-        if best is None or distance < best[1]:
-            best = (site, distance)
-    if best is None or best[1] > max_km:
+    import sharpmod_rs
+
+    catalogue = sites()
+    found = sharpmod_rs.radar_site_nearest_index(
+        lat,
+        lon,
+        [
+            (site.lat, site.lon, product is None or site.supports(product))
+            for site in catalogue
+        ],
+        max_km,
+    )
+    if found is None:
         return None
-    return best
+    index, distance = found
+    return catalogue[index], distance
 
 
 def site_for_view(view: tuple[float, float, float, float], *,
@@ -361,18 +364,11 @@ def _frame_size(site: RadarSite, pixels: int) -> tuple[int, int]:
     box keeps it plate carree, which is what the blit assumes; letting the pixel
     aspect follow the degree aspect would stretch it.
     """
-    lon0, lon1, lat0, lat1 = site.bounds()
-    lon_span = max(1e-6, lon1 - lon0)
-    lat_span = max(1e-6, lat1 - lat0)
-    if lon_span >= lat_span:
-        width = pixels
-        height = max(MIN_FRAME_PIXELS,
-                     int(round(pixels * lat_span / lon_span)))
-    else:
-        height = pixels
-        width = max(MIN_FRAME_PIXELS,
-                    int(round(pixels * lon_span / lat_span)))
-    return width, height
+    import sharpmod_rs
+
+    return sharpmod_rs.radar_site_frame_size(
+        site.bounds(), int(pixels), MIN_FRAME_PIXELS
+    )
 
 
 def build_url(product: RadarSiteProduct, site: RadarSite,

@@ -32,18 +32,13 @@ def _bounds(bounds: tuple[float, float, float, float]) -> dict[str, float]:
 
 
 def _field_error(code: str, what: str, exc: Exception, retryable: bool) -> BridgeError:
-    detail = (
-        str(exc).strip().splitlines()[0][:200]
-        if str(exc).strip()
-        else type(exc).__name__
-    )
-    return BridgeError(code, f"{what}: {detail}.", retryable)
+    text = str(exc).strip()
+    return BridgeError(code, f"{what}: {text.splitlines()[0][:200] if text else type(exc).__name__}.", retryable)
 
 
 def _quantize(values: Any) -> tuple[bytes, float, float, float]:
     """uint16 little-endian cells (value = cell * scale + low), scale, low, high."""
     import sharpmod_rs
-
     return sharpmod_rs.quantize_map_field(values)
 
 
@@ -55,14 +50,10 @@ def _resolve_request(params: dict[str, Any], *, require_interval: bool = True):
     if model not in hrrr_products.FIELD_MODELS:
         raise p.invalid(f"model {model!r} has no map fields")
     key = p.text(params, "product", 1, 40)
-    product = next(
-        (
-            item
-            for item in hrrr_products.available_products(model)
-            if item.key == key or any(vkey == key for vkey, _ in getattr(item, "variants", ()))
-        ),
-        None,
-    )
+    product = next((
+        p for p in hrrr_products.available_products(model)
+        if p.key == key or any(vk == key for vk, _ in getattr(p, "variants", ()))
+    ), None)
     if product is None:
         raise p.invalid(f"product {key!r} is not a {model} field product")
     run = p.time(params, "run_time")
@@ -71,6 +62,12 @@ def _resolve_request(params: dict[str, Any], *, require_interval: bool = True):
     hour = p.integer(params, "forecast_hour", 0, 384)
     if require_interval and hour < product.max_hours:
         raise BridgeError("FIELD_UNAVAILABLE", f"{product.label} starts at F{product.max_hours:03d}.", False)
+    if model in hrrr_products.NSSL_MPAS_MODELS:
+        from sharpmod_rs import nssl_mpas_cycle_limits
+        limit = nssl_mpas_cycle_limits(model)[run.hour]
+        if limit == 0 or hour > limit:
+            raise BridgeError("FIELD_UNAVAILABLE", "NSSL MPAS does not publish this cycle or forecast hour.", False)
+        return model, product, key, run, hour
     if model not in {"hrrr", "rap"} and run.hour % 6:
         raise BridgeError("FIELD_UNAVAILABLE", f"{model} publishes 00, 06, 12 and 18Z runs.", False)
     if model in hrrr_products.HRW_MODELS and run.hour not in (0, 12):
@@ -100,9 +97,7 @@ def _resolve_request(params: dict[str, Any], *, require_interval: bool = True):
              else 48 if model in {"hrw-wrf-arw", "hrw-wrf-nssl"}
              else 84 if model in {"rrfs-a", "nam"} else 60)
     if hour > limit:
-        raise BridgeError(
-            "FIELD_UNAVAILABLE", f"{model.upper()} {run:%H}Z runs stop at F{limit:03d}.", False
-        )
+        raise BridgeError("FIELD_UNAVAILABLE", f"{model.upper()} {run:%H}Z runs stop at F{limit:03d}.", False)
     if model == "nam" and hour % 3:
         raise BridgeError("FIELD_UNAVAILABLE", "NAM map fields publish every three forecast hours.", False)
     return model, product, key, run, hour
@@ -160,8 +155,13 @@ def _acquire(model, product, run, hour, requested_key=None):
                 if cached is None:
                     raise
                 if lines is None:
-                    previous = frame_cache.path("contours", model, product.key, run, hour, FRAME, legacy=True)
-                    lines = (frame_cache.read(previous) if previous != auxiliary else None) or error
+                    previous = frame_cache.path("contours", model, product.key, run, hour, FRAME, legacy=1)
+                    older = frame_cache.path("contours", model, product.key, run, hour, FRAME, legacy=2)
+                    if previous != auxiliary:
+                        lines = frame_cache.read(previous)
+                    if lines is None and older != previous:
+                        lines = frame_cache.read(older)
+                    lines = lines or error
         result = (cached, lines)
         flight.set_result(result)
         return result
@@ -187,8 +187,7 @@ def _produce(model, product, grid_key, run, hour, target, stopped):
     cache_key = f"{model}:{grid_key}"
     guidance = product.category == "Guidance"
     refs_zarr = model == "refs" and product.key in {
-        "qpf-1h-ptype", "qpf-3h", "qpf-6h", "qpf-24h", "qpf-48h",
-        "snow-1h",
+        "qpf-1h-ptype", "qpf-3h", "qpf-6h", "qpf-24h", "qpf-48h", "snow-1h",
         "sbcape", "mucape", "srh-0-1km", "ehi-0-1km", "ehi-0-3km", "scp", "stp",
         "refc-4h", "refc-24h", "wind-10m-4h", "wind-10m-24h",
     }
@@ -201,23 +200,14 @@ def _produce(model, product, grid_key, run, hour, target, stopped):
         timeout, _limit = hrrr_field._remote_limits()
         try:
             if guidance:
-                values, source_url = sharpmod_rs.grefs_map_field(
-                    product.key, run, hour, bounds, timeout, stopped,
-                )
+                values, source_url = sharpmod_rs.grefs_map_field(product.key, run, hour, bounds, timeout, stopped)
             else:
                 if refs_zarr:
-                    decoded, source_url = sharpmod_rs.refs_zarr_map_fields(
-                        grid_key, run, hour, timeout, stopped,
-                    )
+                    decoded, source_url = sharpmod_rs.refs_zarr_map_fields(grid_key, run, hour, timeout, stopped)
                 else:
                     decoded = hrrr_field._download_fields(
-                        product,
-                        run,
-                        hour,
-                        opener=hrrr_field._default_opener,
-                        timeout=timeout,
-                        should_cancel=stopped,
-                        model=model,
+                        product, run, hour, opener=hrrr_field._default_opener,
+                        timeout=timeout, should_cancel=stopped, model=model,
                     )
                 if stopped():
                     raise cancellation.Cancelled()
@@ -225,29 +215,34 @@ def _produce(model, product, grid_key, run, hour, target, stopped):
                            and item.name != getattr(product.contour, "name", None)]
                 if missing:
                     raise hrrr_field.HrrrFieldError(f"decoded fields are missing: {', '.join(missing)}")
+                if product.key == "hgt-anom-500" and "__valid_time" not in decoded:
+                    decoded["__valid_time"] = int((run + timedelta(hours=hour)).timestamp())
                 field = np.asarray(product.derive(decoded), dtype=np.float32)
                 if field.shape != hrrr_field.field_grid(model).shape:
                     raise hrrr_field.HrrrFieldError(f"derived a {field.shape} grid")
-                interpolate = product.palette.units != "flag" and not product.key.endswith("-ptype")
-                if interpolate and model in hrrr_field.GLOBAL_MODELS:
+                is_global = model in hrrr_field.GLOBAL_MODELS
+                if product.key.endswith("-ptype"):
+                    stride = 100.0 if product.palette.units == "dBZ" else 10.0
+                    floor = float(0.01 if product.palette.floor is None else product.palette.floor)
+                    clamp = 80.0 if stride == 100.0 else 9.9
+                    if is_global:
+                        values = sharpmod_rs.reproject_global_ptype_map_field(field, FRAME, bounds, stride, floor, clamp)
+                    else:
+                        mapping = hrrr_field.index_map(FRAME, bounds, model=model, interpolate=True)
+                        values = sharpmod_rs.reproject_regional_ptype_map_field(field, *mapping.fractional, FRAME, stride, floor, clamp)
+                elif product.palette.units != "flag" and is_global:
                     values = sharpmod_rs.reproject_global_map_field(field, FRAME, bounds)
                 else:
-                    mapping = hrrr_field.index_map(FRAME, bounds, model=model, interpolate=interpolate)
+                    mapping = hrrr_field.index_map(FRAME, bounds, model=model, interpolate=product.palette.units != "flag")
                     values = hrrr_field.reproject(field, mapping)
         except DownloadCancelled:
             raise cancellation.Cancelled() from None
         except hrrr_field.HrrrFieldUnavailable as exc:
-            raise _field_error(
-                "FIELD_UNAVAILABLE", f"{what} is not published", exc, False
-            ) from None
+            raise _field_error("FIELD_UNAVAILABLE", f"{what} is not published", exc, False) from None
         except hrrr_field.HrrrFieldOffline as exc:
-            raise _field_error(
-                "FIELD_FETCH_FAILED", f"{what} could not be downloaded", exc, True
-            ) from None
+            raise _field_error("FIELD_FETCH_FAILED", f"{what} could not be downloaded", exc, True) from None
         except hrrr_field.HrrrFieldError as exc:
-            raise _field_error(
-                "FIELD_FETCH_FAILED", f"{what} could not be read", exc, False
-            ) from None
+            raise _field_error("FIELD_FETCH_FAILED", f"{what} could not be read", exc, False) from None
         if not guidance:
             hrrr_field.remember_derived(cache_key, run, hour, FRAME, values)
     data, scale, low, high = _quantize(np.asarray(values, dtype=np.float32))
@@ -283,6 +278,7 @@ def _produce(model, product, grid_key, run, hour, target, stopped):
                         else hrrr_field.ATTRIBUTION if model == "hrrr"
                         else "NOAA/NCEP NAM via AWS Open Data" if model in {"nam", "nam-3km-conus"}
                         else "NOAA/NCEP HiResW via NOMADS" if model in hrrr_field.HRW_MODELS
+                        else "NOAA/NSSL MPAS via NSSL THREDDS" if model in hrrr_field.NSSL_MPAS_MODELS
                         else "NOAA/NCEP RRFS via NOMADS"),
         "data_base64": base64.b64encode(data).decode("ascii"),
     })

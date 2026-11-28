@@ -73,7 +73,7 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
   </div>;
   return <><aside data-motion="fade" className={scaleStyles.panel} aria-label="Radar scale" aria-description={`${label} · ${shownUnits || (palette === null ? "Categories" : "Unitless")} · Panel ${String(panel + 1)}${scan === "" ? "" : ` · ${scan}`}`} data-testid="radar-scale">
     {palette === null ? <div className={cx(styles.provider, hints.target)} tabIndex={0} role="img" aria-label={`${label} color scale, ${units || "categories"}`} aria-description="Focus or hover to see the provider's labelled color key.">
-      <div className={styles.ramp} aria-hidden="true">{frame?.legendPng === undefined || frame.legendPng === null ? null : <img src={frame.legendPng} alt="" />}</div>
+      <div className={styles.ramp} data-glass-ramp="" aria-hidden="true">{frame?.legendPng === undefined || frame.legendPng === null ? null : <img src={frame.legendPng} alt="" />}</div>
       <span className={cx(hints.hint, styles.key)} data-side="left" role="tooltip"><strong>{label}{units ? ` · ${units}` : ""}</strong>{frame?.legendPng ? <img src={frame.legendPng} alt={`${label} · NOAA color scale`} /> : <span>{status ?? (visible ? "Provider color key unavailable." : "Enable the layer to load its color key.")}</span>}</span>
     </div> : <FieldLegend palette={palette} vertical description={`${description}${scan === "" ? "" : ` ${scan}.`}`} />}
     <Surface className={scaleStyles.controls}>

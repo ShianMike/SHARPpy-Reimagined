@@ -92,14 +92,63 @@
     assert(Math.max(...reds) >= 149, "Smoothing erased the isolated peak");
     lines.push("PASS: isolated peak retained, no range overshoot or ringing.");
 
+    const center = (128 * 256 + 128) * 4;
+    const scalarValley = [1000, 1000, 1000, 300, 220, 1000, 1000, 1000];
+    const steepGradient = Array.from({ length: 64 }, (_, i) => scalarValley[i % 8]);
+    const scalar = await render(scene(steepGradient, grayscale), "smooth", 7, [0, 0, 0]);
+    const scalarBand = { ...palette, stops: [[0, "#000000"], [230, "#ffffff"], [1000, "#ffffff"]] };
+    const stepped = await render(scene(steepGradient, scalarBand), "smooth", 7, [0, 0, 0]);
+    assert(scalar[center] >= 60 && scalar[center] <= 64 && stepped[center] === 255,
+      `Steep neighbors flattened the scalar gradient before its contour band (${scalar[center]})`);
+    assert(scalar[center - 96] > scalar[center] && scalar[center] > scalar[center + 96],
+      "The reconstructed scalar values did not descend through the central interval");
+    lines.push("PASS: steep gradients stay monotone through continuous and stepped scalar palettes.");
+
+    const rates = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.1,
+      0.12, 0.15, 0.17, 0.2, 0.23, 0.3, 0.4, 0.5];
+    const typeColors = ["#006644", "#2041a8", "#a82959", "#8d45dd"];
+    const ptype = { ...palette, units: "in/h", floor: 0.01,
+      stops: typeColors.flatMap((color, category) => rates.map(rate =>
+        [Number((category * 10 + rate).toFixed(2)), category === 0 && rate >= 0.23 ? "#eaa632" : color])) };
+    const valley = [100, 100, 100, 30, 22, 100, 100, 100];
+    const bands = await render(scene(Array.from({ length: 64 }, (_, i) => valley[i % 8]), ptype, 0.01),
+      "smooth", 7, [0, 0, 0]);
+    assert(bands[center] === 234 && bands[center + 3] === 255,
+      "Steep neighbors flattened the descending rate band before its threshold");
+    lines.push("PASS: precipitation rate bands keep a smooth, bounded gradient near steep neighbors.");
+
+    const wet = scene(Array.from({ length: 64 }, (_, i) => i % 8 < 4 ? 65535 : 2), ptype, 0.01);
+    const wetEdge = await render(wet, "smooth", 6, [0.004, 0, 0]);
+    const edgeCoverage = wetEdge[center - 1];
+    assert(edgeCoverage > 0 && edgeCoverage < 255 && wetEdge[center - 5] === 0 && wetEdge[center + 3] === 255,
+      "The precipitation floor did not antialias the edge within one screen pixel");
+    const mixedTypes = scene(Array.from({ length: 64 }, (_, i) => i % 8 < 4 ? 15 : 1015), ptype, 0.01);
+    const typeEdge = await render(mixedTypes, "smooth", 6, [0.006, 0, 0]);
+    const mixedRed = typeEdge[center - 4];
+    assert(typeEdge[center - 8] === 0 && mixedRed > 0 && mixedRed < 32 && typeEdge[center] === 32,
+      "Rain and snow colors spread beyond the antialiased type boundary");
+    lines.push("PASS: precipitation coverage and type transitions stay antialiased and distinct.");
+
     const masked = scene(Array.from({ length: 64 }, (_, i) => i === 27 ? 65535 : 600), grayscale);
     const maskSharp = await render(masked, "sharp", 5);
     const maskSmooth = await render(masked, "smooth", 5);
-    for (let i = 0; i < maskSharp.length; i += 4) {
-      assert(maskSharp[i + 3] === maskSmooth[i + 3], "Smoothing filled or expanded missing data");
-      if (maskSmooth[i + 3] === 255) assert(Math.abs(maskSmooth[i] - 153) <= 1, "No-data sentinel contaminated neighboring values");
+    const maskNeighbors = [-1028, -1024, -1020, -4, 4, 1020, 1024, 1028];
+    let maskAntialias = false;
+    for (let y = 1; y < 255; y++) {
+      for (let x = 1; x < 255; x++) {
+        const i = (y * 256 + x) * 4;
+        const sharpAlpha = maskSharp[i + 3];
+        const smoothAlpha = maskSmooth[i + 3];
+        if (sharpAlpha !== smoothAlpha) {
+          assert(maskNeighbors.some(offset => maskSharp[i + 3 + offset] !== sharpAlpha),
+            `Smoothing changed the missing-data footprint away from the edge at ${x}, ${y} (${sharpAlpha} → ${smoothAlpha})`);
+          maskAntialias ||= smoothAlpha > 0 && smoothAlpha < 255;
+        }
+        if (smoothAlpha === 255) assert(Math.abs(maskSmooth[i] - 153) <= 1, "No-data sentinel contaminated neighboring values");
+      }
     }
-    lines.push("PASS: missing data stays empty and cannot contaminate valid neighbors.");
+    assert(maskAntialias, "The missing-data edge has no subpixel coverage");
+    lines.push("PASS: missing data keeps its footprint with subpixel edge coverage.");
 
     const world = scene(Array.from({ length: 64 }, (_, i) => i % 8 < 4 ? 200 : 800),
       grayscale, 1, 0, { west: -180, south: -4, east: 180, north: 4 });

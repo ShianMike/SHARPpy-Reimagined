@@ -671,6 +671,117 @@ fn accumulation_and_nan_maxima_remain_correct_across_bounded_batches() {
 }
 
 #[test]
+fn hrrr_reflectivity_ptype_uses_instantaneous_records_from_f001() {
+    let _guard = crate::lock_python_backend_test();
+    Python::initialize();
+    clear_model_field_cache();
+    let records = [
+        ("REFD", "1000 m above ground", "refd1km"),
+        ("CRAIN", "surface", "crain"),
+        ("CSNOW", "surface", "csnow"),
+        ("CFRZR", "surface", "cfrzr"),
+        ("CICEP", "surface", "cicep"),
+        ("MSLMA", "mean sea level", "mslp"),
+        ("HGT", "500 mb", "hgt500"),
+        ("HGT", "1000 mb", "hgt1000"),
+    ];
+    let body = (1..=8)
+        .flat_map(|value| message(value, 24))
+        .collect::<Vec<_>>();
+    let inventory = |hour| {
+        records
+            .iter()
+            .enumerate()
+            .map(|(position, (variable, level, _))| {
+                format!(
+                    "{}:{}:d:{variable}:{level}:{hour} hour fcst:\n",
+                    position + 1,
+                    position * 24
+                )
+            })
+            .collect::<String>()
+            .into_bytes()
+    };
+    let server = Server::start(body.clone(), inventory(1));
+    Python::attach(|py| -> PyResult<()> {
+        let _provider = Provider::new(
+            py,
+            &server,
+            Some(wrap_pyfunction!(fixture_decode, py)?.into_any()),
+        )?;
+        let composite = product(py, "refd-1km-ptype")?;
+        assert_eq!(composite.getattr("max_hours")?.extract::<u32>()?, 1);
+        let early =
+            download_map_fields(py, &composite, &run(py)?, 0, 5., None, "hrrr".into()).unwrap_err();
+        assert!(early
+            .to_string()
+            .contains("needs 1 complete forecast hours"));
+        for hour in [1, 2] {
+            if hour == 2 {
+                server.replace(body.clone(), inventory(hour), "\"hrrr-ptype-f002\"");
+            }
+            let grids =
+                download_map_fields(py, &composite, &run(py)?, hour, 5., None, "hrrr".into())?;
+            for (position, (_, _, name)) in records.iter().enumerate() {
+                assert_eq!(value(py, &grids, name)?, (position + 1) as f32, "{name}");
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+    clear_model_field_cache();
+}
+
+#[test]
+fn refs_member_qpf_ptype_reads_one_accumulation_plus_instantaneous_records() {
+    let _guard = crate::lock_python_backend_test();
+    Python::initialize();
+    clear_model_field_cache();
+    let body = (1..=8).flat_map(|value| message(value, 24)).collect();
+    let index = concat!(
+        "1:0:d:APCP:surface:5-6 hour acc fcst:\n",
+        "2:24:d:CRAIN:surface:6 hour fcst:\n",
+        "3:48:d:CSNOW:surface:6 hour fcst:\n",
+        "4:72:d:CFRZR:surface:6 hour fcst:\n",
+        "5:96:d:CICEP:surface:6 hour fcst:\n",
+        "6:120:d:MSLET:mean sea level:6 hour fcst:\n",
+        "7:144:d:HGT:500 mb:6 hour fcst:\n",
+        "8:168:d:HGT:1000 mb:6 hour fcst:\n",
+    )
+    .as_bytes()
+    .to_vec();
+    let server = Server::start(body, index);
+    Python::attach(|py| -> PyResult<()> {
+        let _provider = Provider::new(py, &server, None)?;
+        let catalogue = PyModule::import(py, "sharpmod.providers.hrrr_products")?;
+        let member_products = catalogue.call_method1("available_products", ("refs-m1",))?;
+        let mut composite = None;
+        for entry in member_products.try_iter()? {
+            let entry = entry?;
+            if entry.getattr("key")?.extract::<String>()? == "qpf-1h-ptype" {
+                composite = Some(entry.unbind());
+            }
+        }
+        let composite = composite.expect("REFS members publish the 1-h QPF p-type composite");
+        let composite = composite.bind(py);
+        assert_eq!(composite.getattr("max_hours")?.extract::<u32>()?, 1);
+        let plan = plan::fields(py, composite, &run(py)?, 6, 5., "refs-m1", None)?;
+        assert!(!plan.sum && !plan.maximum && !plan.diff);
+        let names: Vec<String> = plan.fields.iter().map(|field| field.name.clone()).collect();
+        assert_eq!(
+            names,
+            ["apcp", "crain", "csnow", "cfrzr", "cicep", "mslp", "hgt500", "hgt1000",]
+        );
+        // Fixture grib_url maps sfc and prs onto one URL, so plan.rs reuses one inventory request.
+        assert_eq!(plan.identities.len(), 1);
+        assert_eq!(server.requests.load(Ordering::Relaxed), 2);
+        Ok(())
+    })
+    .unwrap();
+    clear_model_field_cache();
+}
+
+#[test]
 fn source_revision_subfield_and_model_are_part_of_shared_field_identity() {
     let key = Key {
         url: "https://aws/model".into(),

@@ -8,6 +8,7 @@ import { useMemo } from "react";
 import { useForecastContext, type ForecastContext } from "../features/forecast/useForecast";
 import { panelLayers, panelProduct, useMapStore } from "../stores/mapStore";
 import type { FieldFrame, FieldProduct, FieldVariant, MapCatalog } from "../types/map";
+import { useSupportedMapCatalog } from "./catalogQuery";
 import { useFieldFrame, useMapCatalog, type FrameRequest } from "./mapQueries";
 
 /**
@@ -35,6 +36,8 @@ export interface PanelField {
   product: FieldProduct | null;
   /** The active variant for products with selectable sub-fields, else null. */
   variant: FieldVariant | null;
+  /** Products in the run inventory plus precipitation type choices starting later. */
+  selectableProducts: readonly FieldProduct[];
   /** The frame to draw; null when blocked. */
   request: FrameRequest | null;
   blocked: FieldBlock | null;
@@ -94,17 +97,34 @@ function blockOf(visible: boolean, catalog: MapCatalog | undefined, context: For
 export function usePanelField(panel: number): PanelField {
   const catalog = useMapCatalog();
   const context = useForecastContext();
+  const supported = useSupportedMapCatalog(context?.model.key ?? "hrrr", context !== null).data;
   const chosen = useMapStore((state) => panelProduct(state, panel));
   const visible = useMapStore((state) => panelLayers(state, panel)["model-field"].visible);
   const live = useMapStore((state) => state.view === "live");
-  const product = productOf(catalog.data, chosen, panel);
+  const awaitingProduct = catalog.isPending || catalog.isPlaceholderData;
+  const selected = chosen?.endsWith("-ptype") === true
+    ? catalog.data?.products.find(({ key }) => key === chosen)
+      ?? (awaitingProduct ? supported?.products.find(({ key }) => key === chosen) : undefined)
+    : undefined;
+  const product = selected ?? productOf(catalog.data, chosen, panel);
   const variant = selectedVariant(product, chosen);
   const blocked = blockOf(visible && !live, catalog.data, context);
+  const selectableProducts = useMemo(() => {
+    const current = catalog.data?.products ?? [];
+    if (context?.fieldsAvailable !== true || supported === undefined) return current;
+    const end = context.hours.at(-1) ?? context.hour;
+    const upcoming = supported.products.filter((item) =>
+      item.palette.ptypeLabels !== undefined && item.minimumForecastHour > context.hour
+      && item.minimumForecastHour <= end && !current.some(({ key }) => key === item.key),
+    );
+    return upcoming.length === 0 ? current : [...current, ...upcoming];
+  }, [catalog.data, context, supported]);
   const request =
     blocked === null && !catalog.isPlaceholderData && product !== null && context !== null
+      && context.hour >= product.minimumForecastHour
       ? { model: context.model.key, product: variant?.key ?? product.key, runTime: context.run, forecastHour: context.hour }
       : null;
-  return { product, variant, request, blocked, frame: useFieldFrame(request), catalog };
+  return { product, variant, selectableProducts, request, blocked, frame: useFieldFrame(request), catalog };
 }
 
 /**

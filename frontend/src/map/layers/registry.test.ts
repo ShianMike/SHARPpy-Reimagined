@@ -107,6 +107,21 @@ describe("layer registry", () => {
     }
   });
 
+  it.each([[10, "in/h", [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.1, 0.12, 0.15, 0.17, 0.2, 0.25, 0.3, 0.4, 0.5]], [100, "dBZ", [5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 33.3, 36.7, 40, 43.3, 46.7, 50]]] as const)("routes p-type palettes (stride=%i, units=%s) through category-aware smoothing only when Smooth", (stride, units, thresholds) => {
+    vi.stubGlobal("ImageData", class { constructor(public data: Uint8ClampedArray, public width: number, public height: number) {} });
+    const image: ImageBitmap = { width: 2, height: 2, close: vi.fn() }, sharpImage = vi.fn(() => image), states = defaultLayerStates();
+    const frame = { ...parseFieldFrame(Uint8Array.from(atob(fieldFixture.split(",")[1] ?? ""), (c) => c.charCodeAt(0)).buffer), width: 2, height: 2, cells: new Uint16Array([0, 255, 256, 65535]), nodata: 65535 };
+    const palette = { display: "auto" as const, stops: [0, stride, stride * 2, stride * 3].flatMap((o) => thresholds.map((v) => [Number((o + v).toFixed(2)), "#38bdf8"] as const)), units, stepped: true, floor: thresholds[0], ceiling: null, ticks: [] };
+    const context = { ...ctx, field: { image, bounds: { west: -100, south: 30, east: -90, north: 40 }, frame, palette } };
+    Object.defineProperty(context.field, "image", { get: sharpImage });
+    const render = (smoothing: boolean) => { states["model-field"] = { visible: true, opacity: 0.7, smoothing }; return buildDeckLayers(LAYER_REGISTRY, states, context).filter((l): l is BitmapLayer => l instanceof BitmapLayer); };
+    const smooth = render(true), smoothProps = smooth[0]?.props as { fieldPtypeStride?: number; fieldPalette?: ImageData };
+    expect([smooth[0]?.id, smoothProps.fieldPtypeStride, smoothProps.fieldPalette?.width, smoothProps.fieldPalette?.height]).toEqual(["model-field-smooth", stride, 68, 3]);
+    expect(sharpImage).toHaveBeenCalledTimes(0);
+    expect(render(false)[0]?.id).toBe("model-field");
+    expect(sharpImage).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps surface glyph buffers on opacity changes and rebuilds when observations change", () => {
     const plots = parseSurfacePlots(surfaceFixture).plots;
     const context = { ...ctx, surfacePlots: plots };
@@ -255,10 +270,7 @@ describe("layer registry", () => {
     expect(layers.find((layer) => layer.id === "probe-layer")?.props.opacity).toBe(0.5);
     expect(controllableLayers(registry).map((d) => d.id)).toContain("probe-layer");
 
-    const ero: Outlook = {
-      title: "WPC", subtitle: "", validFrom: null, validTo: null, issued: null, covers: true, sourceUrl: "", attribution: "",
-      areas: [{ label: "SLGT", description: "Slight (At Least 15%)", fill: "#FFFE00", stroke: "#E69800", rank: 2, hatch: false, hatchLevel: 0, rings: [[[0, 0], [10, 0], [10, 10], [0, 10]]] }],
-    };
+    const ero: Outlook = { title: "WPC", subtitle: "", validFrom: null, validTo: null, issued: null, covers: true, sourceUrl: "", attribution: "", areas: [{ label: "SLGT", description: "Slight (At Least 15%)", fill: "#FFFE00", stroke: "#E69800", rank: 2, hatch: false, hatchLevel: 0, rings: [[[0, 0], [10, 0], [10, 10], [0, 10]]] }] };
     const eroStates = defaultLayerStates();
     eroStates["wpc-ero"].visible = true;
     const eroLayers = buildDeckLayers(LAYER_REGISTRY, eroStates, { ...ctx, outlooks: { ero } });
@@ -268,12 +280,7 @@ describe("layer registry", () => {
   });
 
   it("lists only the user-controllable layers for the panel, in zOrder", () => {
-    expect(controllableLayers(LAYER_REGISTRY).map((d) => d.id)).toEqual([
-      "basemap", "roads", "rivers", "model-field", "satellite", "radar", "storm-reports",
-      "spc-cat", "spc-torn", "spc-wind", "spc-hail", "wpc-ero", "wpc-winter", "isobars",
-      "surface-plots", "watches", "warnings", "spotter-network", "model-domain", "place-labels",
-      "stations", "radar-site-labels", "station-labels",
-    ]);
+    expect(controllableLayers(LAYER_REGISTRY).map((d) => d.id)).toEqual(["basemap", "roads", "rivers", "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "wpc-ero", "wpc-winter", "isobars", "surface-plots", "watches", "warnings", "spotter-network", "model-domain", "place-labels", "stations", "radar-site-labels", "station-labels"]);
   });
 
   it("has a descriptor and a default for every layer id", () => {

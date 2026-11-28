@@ -150,28 +150,22 @@ class ThresholdCondition:
     units: str = ""
 
     def __post_init__(self):
-        metric = str(self.metric).strip()
-        operator = str(self.operator).strip()
-        value = _finite(self.value)
-        upper = _finite(self.upper)
-        if not metric:
-            raise ThresholdError("a threshold metric is required")
-        if operator not in OPERATORS:
-            raise ThresholdError(f"unsupported threshold operator: {operator}")
-        if value is None:
-            raise ThresholdError("threshold value must be finite")
-        if operator == "between":
-            if upper is None or upper < value:
-                raise ThresholdError(
-                    "between requires an upper value at least as large"
-                )
-        elif upper is not None:
-            raise ThresholdError("upper is only valid with the between operator")
+        import sharpmod_rs
+
+        metric, operator, value, upper, units = (
+            sharpmod_rs.threshold_validate_condition(
+                str(self.metric),
+                str(self.operator),
+                _finite(self.value),
+                _finite(self.upper),
+                str(self.units or ""),
+            )
+        )
         object.__setattr__(self, "metric", metric)
         object.__setattr__(self, "operator", operator)
         object.__setattr__(self, "value", value)
         object.__setattr__(self, "upper", upper)
-        object.__setattr__(self, "units", str(self.units or ""))
+        object.__setattr__(self, "units", units)
 
     def evaluate(self, candidate) -> bool | None:
         import sharpmod_rs
@@ -208,14 +202,12 @@ class ThresholdDefinition:
     conditions: tuple[ThresholdCondition, ...]
 
     def __post_init__(self):
-        name = str(self.name).strip()
+        import sharpmod_rs
+
         conditions = tuple(self.conditions)
-        if not name:
-            raise ThresholdError("a threshold name is required")
-        if not conditions:
-            raise ThresholdError("at least one threshold condition is required")
-        if len({condition.metric for condition in conditions}) != len(conditions):
-            raise ThresholdError("a metric may appear only once in a joint threshold")
+        name = sharpmod_rs.threshold_validate_definition(
+            str(self.name), [condition.metric for condition in conditions]
+        )
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "conditions", conditions)
 
@@ -264,19 +256,15 @@ class ThresholdMemberResult:
     state: str = ""
 
     def __post_init__(self):
-        if self.state:
-            if self.state not in MEMBER_STATES:
-                raise ThresholdError(f"unsupported member state {self.state!r}")
-            return
-        if self.satisfied is True:
-            derived = MEMBER_QUALIFYING
-        elif self.satisfied is False:
-            derived = MEMBER_NONQUALIFYING
-        elif not self.loaded:
-            derived = MEMBER_NOT_LOADED
-        else:
-            derived = MEMBER_UNUSABLE
-        object.__setattr__(self, "state", derived)
+        import sharpmod_rs
+
+        object.__setattr__(
+            self,
+            "state",
+            sharpmod_rs.threshold_derive_member_state(
+                self.state, self.loaded, self.satisfied
+            ),
+        )
 
     @property
     def state_label(self) -> str:
@@ -315,6 +303,20 @@ class ThresholdResult:
             return None
         return self.usable_member_count / self.requested_member_count
 
+    def _reconciled_counts(self):
+        """The reconciliation row: ``(reconciles, nonqualifying,
+        loaded_unusable, not_loaded, not_evaluated, resolved,
+        state_counts)``."""
+        import sharpmod_rs
+
+        return sharpmod_rs.threshold_result_counts_reconcile(
+            self.requested_member_count,
+            self.loaded_member_count,
+            self.usable_member_count,
+            self.qualifying_member_count,
+            [item.state for item in self.members],
+        )
+
     @property
     def nonqualifying_member_count(self) -> int:
         """Usable members that failed a condition.
@@ -323,21 +325,21 @@ class ThresholdResult:
         one number that mattered most for reading an agreement fraction -- how many
         usable members said no -- was the one never shown.
         """
-        return self.usable_member_count - self.qualifying_member_count
+        return self._reconciled_counts()[1]
 
     @property
     def loaded_unusable_member_count(self) -> int:
         """Members that downloaded but produced no verdict."""
-        return self.loaded_member_count - self.usable_member_count
+        return self._reconciled_counts()[2]
 
     @property
     def not_loaded_member_count(self) -> int:
-        return self.requested_member_count - self.loaded_member_count
+        return self._reconciled_counts()[3]
 
     @property
     def not_evaluated_member_count(self) -> int:
         """Members withheld because the run was cancelled before reaching them."""
-        return sum(item.state == MEMBER_NOT_EVALUATED for item in self.members)
+        return self._reconciled_counts()[4]
 
     @property
     def resolved_member_count(self) -> int:
@@ -347,7 +349,7 @@ class ThresholdResult:
         without any diagnostic being run, and counting those as evaluated would
         overstate how much of a cancelled run actually completed.
         """
-        return self.requested_member_count - self.not_evaluated_member_count
+        return self._reconciled_counts()[5]
 
     @property
     def reconciles(self) -> bool:
@@ -358,20 +360,12 @@ class ThresholdResult:
         agreement denominator is precisely the failure mode that makes a threshold
         result untrustworthy.
         """
-        return (
-            self.qualifying_member_count
-            + self.nonqualifying_member_count
-            + self.loaded_unusable_member_count
-            + self.not_loaded_member_count
-        ) == self.requested_member_count == len(self.members)
+        return self._reconciled_counts()[0]
 
     @property
     def state_counts(self) -> Mapping[str, int]:
         """How many members are in each state, including the zeros."""
-        tally = dict.fromkeys(MEMBER_STATES, 0)
-        for item in self.members:
-            tally[item.state] = tally.get(item.state, 0) + 1
-        return MappingProxyType(tally)
+        return MappingProxyType(dict(self._reconciled_counts()[6]))
 
     def members_in(self, *states: str) -> tuple[ThresholdMemberResult, ...]:
         """Return the member results in any of ``states``, in requested order."""
@@ -497,6 +491,8 @@ def evaluate_threshold(
     only be interrupted between valid times, so a single evaluation ran to
     completion however long it took and discarded nothing because it kept nothing.
     """
+    import sharpmod_rs
+
     if not isinstance(definition, ThresholdDefinition):
         definition = ThresholdDefinition.from_dict(definition)
     valid_time, index = _date_index(collection, valid_time)
@@ -528,16 +524,13 @@ def evaluate_threshold(
             raise ThresholdError("threshold resume definition does not match")
         if resume.valid_time != valid_time:
             raise ThresholdError("threshold resume valid time does not match")
-        if tuple(item.member for item in resume.members) != requested:
-            raise ThresholdError("threshold resume member request does not match")
+        sharpmod_rs.threshold_validate_resume_members(
+            list(requested),
+            [(item.member, item.loaded, item.state) for item in resume.members],
+            [member in loaded_set and member in profiles for member in requested],
+            [member in available_profiles for member in requested],
+        )
         previous = {item.member: item for item in resume.members}
-        for member, item in previous.items():
-            is_loaded = member in loaded_set and member in profiles
-            has_profile = member in available_profiles
-            if item.loaded != is_loaded:
-                raise ThresholdError("threshold resume loaded-member set does not match")
-            if item.loaded and (item.state == MEMBER_NO_PROFILE) == has_profile:
-                raise ThresholdError("threshold resume profile availability does not match")
 
     total = len(requested)
     processed = 0
@@ -575,6 +568,10 @@ def evaluate_threshold(
     members = []
     empty = MappingProxyType({key: None for key in definition.metrics})
     was_cancelled = False
+    condition_rows = [
+        (condition.metric, condition.operator, condition.value, condition.upper)
+        for condition in definition.conditions
+    ]
     for member in requested:
         prior = previous.get(member)
         if prior is not None and prior.state not in (
@@ -660,25 +657,12 @@ def evaluate_threshold(
         values = MappingProxyType(
             {key: _finite(computed.get(key)) for key in definition.metrics}
         )
-        outcomes = tuple(
-            condition.evaluate(values[condition.metric])
-            for condition in definition.conditions
-        )
-        usable = all(outcome is not None for outcome in outcomes)
-        satisfied = all(outcomes) if usable else None
-        if not usable:
-            # Name the diagnostics that were missing, not just that some were. A
-            # joint rule over three ingredients gave one message for all three.
-            absent = ", ".join(
-                condition.metric
-                for condition, outcome in zip(definition.conditions, outcomes)
-                if outcome is None
+        usable, satisfied, state, reason = (
+            sharpmod_rs.threshold_evaluate_member_conditions(
+                condition_rows,
+                [values[condition.metric] for condition in definition.conditions],
             )
-            state = MEMBER_UNUSABLE
-            reason = f"no value for {absent}"
-        else:
-            state = MEMBER_QUALIFYING if satisfied else MEMBER_NONQUALIFYING
-            reason = None
+        )
         members.append(
             ThresholdMemberResult(
                 member, True, usable, satisfied, values, reason, state

@@ -1,10 +1,13 @@
 //! Native additions to the shared forecast map product catalogue.
 
 mod convection;
+mod height_anomaly;
 mod hrdps;
 mod icon;
 mod palettes;
+pub(crate) mod ptype;
 mod regional;
+mod surface_wind;
 
 use numpy::{
     ndarray::ArrayD, AllowTypeChange, IntoPyArray, PyArrayDyn, PyArrayLikeDyn,
@@ -174,6 +177,9 @@ fn map_pressure_products(
             *product = replace.call((entry,), Some(&updates))?.unbind();
         }
     }
+    if model == "hrrr" {
+        products.push(ptype::hrrr_refd_ptype_product(py)?);
+    }
     products.push(pressure_product(py, variable, None)?);
     Ok(products)
 }
@@ -255,8 +261,14 @@ fn map_product_catalogue(
     model: &str,
     products: Vec<Py<PyAny>>,
 ) -> PyResult<Vec<Py<PyAny>>> {
+    if crate::nssl_mpas_archive::is_model(model) {
+        return crate::model_map_fields::nssl_mpas::catalogue(py);
+    }
     let mut products = catalogue_for_model(py, model, products)?;
     convection::extend_catalogue(py, model, &mut products)?;
+    ptype::extend_catalogue(py, model, &mut products)?;
+    height_anomaly::extend_catalogue(py, model, &mut products)?;
+    surface_wind::extend_catalogue(py, model, &mut products)?;
     Ok(products)
 }
 
@@ -297,7 +309,7 @@ fn catalogue_for_model(
     for product in products {
         let entry = product.bind(py);
         let key = entry.getattr("key")?.extract::<String>()?;
-        if key == "mslp" || (is_gfs && key == "refc") {
+        if matches!(key.as_str(), "mslp" | "refd-1km-ptype") || (is_gfs && key == "refc") {
             continue;
         }
         if let Some((catalogue, replace)) = &refs_helpers {
@@ -345,6 +357,7 @@ fn catalogue_for_model(
                 updates.set_item("label", "Total QPF")?;
                 updates.set_item("chip", "Total QPF")?;
                 result.push(replace.call((entry,), Some(&updates))?.unbind());
+                result.push(ptype::refs_member_qpf_ptype_product(py)?);
                 continue;
             }
             if key == "pwat" {
@@ -548,6 +561,11 @@ fn gdps_catalogue(py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
     let shared = catalogue.getattr("PRODUCTS")?;
     let replace = PyModule::import(py, "dataclasses")?.getattr("replace")?;
     crate::gdps_fields::PRODUCTS.iter().map(|&key| {
+        if key == "prate-ptype" {
+            // The precipitation-type composite is native; there is no shared
+            // HRRR product to adapt.
+            return ptype::gdps_prate_ptype_product(py);
+        }
         let template = shared.get_item(if key == "cape" { "sbcape" } else { key })?;
         let updates = PyDict::new(py);
         match key {

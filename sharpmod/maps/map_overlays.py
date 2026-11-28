@@ -48,43 +48,6 @@ def _finite(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
-def _ring_from_coordinates(
-    raw_ring: Any,
-) -> tuple[tuple[float, float], ...] | None:
-    """Decode one GeoJSON linear ring into validated ``(lon, lat)`` points.
-
-    Returns ``None`` when the ring is not usable.  Consecutive duplicate
-    vertices are dropped: SPC rings repeat the first point to close the ring,
-    and a polygon path closes itself, so keeping them would add a zero-length
-    segment that shows up as a stroking artefact at every joint.
-    """
-    if not isinstance(raw_ring, (list, tuple)):
-        return None
-    if len(raw_ring) > MAX_POINTS_PER_RING:
-        return None
-
-    points: list[tuple[float, float]] = []
-    for raw_point in raw_ring:
-        if not isinstance(raw_point, (list, tuple)) or len(raw_point) < 2:
-            continue
-        lon = _finite(raw_point[0])
-        lat = _finite(raw_point[1])
-        if lon is None or lat is None:
-            continue
-        if not -180.0 <= lon <= 180.0 or not -90.0 <= lat <= 90.0:
-            continue
-        if points and points[-1] == (lon, lat):
-            continue
-        points.append((lon, lat))
-
-    # A closed ring repeats its first vertex last; drop it for the same reason.
-    if len(points) > 1 and points[0] == points[-1]:
-        points.pop()
-    if len(points) < MIN_RING_POINTS:
-        return None
-    return tuple(points)
-
-
 def rings_from_geometry(
     geometry: Any,
 ) -> tuple[tuple[tuple[tuple[float, float], ...], ...], ...]:
@@ -99,32 +62,9 @@ def rings_from_geometry(
     a higher category applies, which is what lets the paint path fill each
     category exactly once instead of blending stacked translucent layers.
     """
-    if not isinstance(geometry, dict):
-        return ()
-    kind = geometry.get("type")
-    coordinates = geometry.get("coordinates")
-    if not isinstance(coordinates, (list, tuple)):
-        return ()
+    import sharpmod_rs
 
-    if kind == "Polygon":
-        raw_polygons: tuple[Any, ...] = (coordinates,)
-    elif kind == "MultiPolygon":
-        raw_polygons = tuple(coordinates)
-    else:
-        return ()
-
-    groups: list[tuple[tuple[tuple[float, float], ...], ...]] = []
-    for raw_polygon in raw_polygons:
-        if not isinstance(raw_polygon, (list, tuple)):
-            continue
-        rings: list[tuple[tuple[float, float], ...]] = []
-        for raw_ring in raw_polygon[:MAX_RINGS_PER_SHAPE]:
-            ring = _ring_from_coordinates(raw_ring)
-            if ring is not None:
-                rings.append(ring)
-        if rings:
-            groups.append(tuple(rings))
-    return tuple(groups)
+    return sharpmod_rs.overlay_rings_from_geometry(geometry)
 
 
 def bounds_of(
@@ -135,17 +75,9 @@ def bounds_of(
     The tuple order matches the basemap's prepared geometry so overlay shapes
     can be culled by the same comparison the basemap layers already use.
     """
-    min_lon = min_lat = float("inf")
-    max_lon = max_lat = float("-inf")
-    for ring in rings:
-        for lon, lat in ring:
-            min_lon = min(min_lon, lon)
-            max_lon = max(max_lon, lon)
-            min_lat = min(min_lat, lat)
-            max_lat = max(max_lat, lat)
-    if min_lon > max_lon or min_lat > max_lat:
-        return None
-    return (min_lon, max_lon, min_lat, max_lat)
+    import sharpmod_rs
+
+    return sharpmod_rs.overlay_bounds_of(rings)
 
 
 @dataclass(frozen=True)
@@ -341,24 +273,11 @@ def build_layer(
 #: reflectivity is a few hundred kilobytes; this only refuses a hostile body.
 MAX_RASTER_BYTES = 16 * 1024 * 1024
 
-#: Leading bytes of the encoded formats a raster overlay may carry. WMS servers
-#: report failure as an XML ``ServiceException`` **with HTTP 200**, so the status
-#: code cannot be trusted and the payload must identify itself. Checking this
-#: here means a service error can never reach the paint path as a broken image.
-_IMAGE_MAGIC: tuple[bytes, ...] = (
-    b"\x89PNG\r\n\x1a\n",  # PNG
-    b"GIF87a",
-    b"GIF89a",
-    b"\xff\xd8\xff",  # JPEG
-)
-
-
 def looks_like_image(payload: bytes) -> bool:
     """Report whether ``payload`` begins with a supported image signature."""
-    if not isinstance(payload, (bytes, bytearray)) or not payload:
-        return False
-    head = bytes(payload[:16])
-    return any(head.startswith(magic) for magic in _IMAGE_MAGIC)
+    import sharpmod_rs
+
+    return sharpmod_rs.overlay_looks_like_image(payload)
 
 
 def format_age(seconds: float | None) -> str:
@@ -371,17 +290,9 @@ def format_age(seconds: float | None) -> str:
     Lives here rather than on a widget so the map legend and the overlay control
     panel word it identically; the two sit on screen at the same time.
     """
-    if seconds is None:
-        return ""
-    # A clock that has stepped backwards is not worth explaining on a map.
-    if seconds < 0.0:
-        return "just now"
-    if seconds < 90.0:
-        return "%d s old" % int(seconds)
-    minutes = seconds / 60.0
-    if minutes < 90.0:
-        return "%d min old" % int(round(minutes))
-    return "%.1f h old" % (minutes / 60.0)
+    import sharpmod_rs
+
+    return sharpmod_rs.overlay_format_age(None if seconds is None else float(seconds))
 
 
 @dataclass(frozen=True)
@@ -470,16 +381,9 @@ class OverlayRaster:
         somewhere the product does not cover, which for a CONUS radar mosaic is
         most of the world.
         """
-        try:
-            lon0, lon1, lat0, lat1 = (float(value) for value in view)
-        except (TypeError, ValueError):
-            return False
-        min_lon, max_lon, min_lat, max_lat = self.bounds
-        if max(lon0, lon1) < min_lon or min(lon0, lon1) > max_lon:
-            return False
-        if max(lat0, lat1) < min_lat or min(lat0, lat1) > max_lat:
-            return False
-        return True
+        import sharpmod_rs
+
+        return sharpmod_rs.overlay_raster_intersects(self.bounds, view)
 
     def age_seconds(self, now: datetime | None = None) -> float | None:
         """Return how old this frame is, or ``None`` if that is unknown.
@@ -664,24 +568,11 @@ def shape_contains(shape: OverlayShape, lon: float, lat: float) -> bool:
     an even crossing count for the lower category's shape, so it correctly
     belongs to the higher one alone.
     """
-    min_lon, max_lon, min_lat, max_lat = shape.bounds
-    if not (min_lon <= lon <= max_lon and min_lat <= lat <= max_lat):
-        return False
+    import sharpmod_rs
 
-    crossings = 0
-    for ring in shape.rings:
-        count = len(ring)
-        for index in range(count):
-            lon1, lat1 = ring[index]
-            lon2, lat2 = ring[(index + 1) % count]
-            # Excludes edges that do not straddle the ray, and with it the
-            # horizontal edges that would divide by zero below.
-            if (lat1 > lat) == (lat2 > lat):
-                continue
-            lon_at = lon1 + (lat - lat1) * (lon2 - lon1) / (lat2 - lat1)
-            if lon < lon_at:
-                crossings += 1
-    return crossings % 2 == 1
+    return sharpmod_rs.overlay_shape_contains(
+        shape.rings, shape.bounds, float(lon), float(lat),
+    )
 
 
 def describe_at(
@@ -712,6 +603,8 @@ def describe_at(
     ``include_markers=False`` is for picker-map area clicks; point markers
     have their own screen-pixel hit test before this geographic query.
     """
+    import sharpmod_rs
+
     marker_filter = None if include_markers else False
     band = shape_at(layers, lon, lat, hatch=False, marker=marker_filter)
     qualifier = shape_at(layers, lon, lat, hatch=True, marker=marker_filter)
@@ -725,26 +618,17 @@ def describe_at(
             owner = layer
             break
 
-    lines: list[str] = []
-    heading = ""
-    if owner is not None and owner.title:
-        heading = owner.title
-    if subject.label:
-        heading = f"{heading} \u2014 {subject.label}" if heading else subject.label
-    if heading:
-        lines.append(heading)
-    if subject.description:
-        lines.append(subject.description)
-
-    if qualifier is not None and qualifier is not subject:
-        # Graded qualifiers say how strong the hazard could become if it occurs,
-        # so the level is named; the pre-2026 ungraded area has no level.
-        level = getattr(qualifier, "hatch_level", 0)
-        note = qualifier.label or ("Significant severe" if not level else "")
-        graded = f"conditional intensity group {level}" if level else "significant"
-        lines.append(f"Also {graded}{': ' + note if note else ''}")
-
-    return "\n".join(lines) if lines else None
+    has_distinct_qualifier = qualifier is not None and qualifier is not subject
+    # Graded qualifiers say how strong the hazard could become if it occurs, so
+    # the level is named; the pre-2026 ungraded area has no level.
+    return sharpmod_rs.overlay_format_description(
+        owner.title if owner is not None else "",
+        subject.label,
+        subject.description,
+        has_distinct_qualifier,
+        getattr(qualifier, "hatch_level", 0) if has_distinct_qualifier else 0,
+        qualifier.label if has_distinct_qualifier else "",
+    )
 
 
 def describe_markers_at(
@@ -791,13 +675,13 @@ class OverlayMarkerHit:
 
     @property
     def label(self) -> str:
-        product = str(self.layer.title or "").strip()
-        item = str(self.shape.label or "").strip()
-        if getattr(self.shape, "marker_kind", "") == "report" and item:
-            return item
-        if product and item:
-            return f"{product} — {item}"
-        return product or item or "Map marker"
+        import sharpmod_rs
+
+        return sharpmod_rs.overlay_marker_hit_label(
+            str(self.layer.title or "").strip(),
+            str(self.shape.label or "").strip(),
+            str(getattr(self.shape, "marker_kind", "") or ""),
+        )
 
     @property
     def description(self) -> str:
@@ -823,34 +707,42 @@ def marker_hits_at(
     filter: every returned marker can be chosen even when another draws later.
     """
 
-    found: list[tuple[int, int, int, OverlayMarkerHit]] = []
+    import sharpmod_rs
+
+    point = tuple(point_px) if point_px is not None else None
+    candidates = []
+    hits: dict[tuple[int, int], OverlayMarkerHit] = {}
     for layer_index, layer in enumerate(layers):
         for shape_index, shape in enumerate(layer.shapes):
-            if not getattr(shape, "marker", False):
-                continue
+            is_marker = bool(getattr(shape, "marker", False))
             radius = float(getattr(shape, "marker_radius_px", 0.0) or 0.0)
             marker_lon = getattr(shape, "marker_lon", None)
             marker_lat = getattr(shape, "marker_lat", None)
-            if (radius > 0.0 and marker_lon is not None
-                    and marker_lat is not None and point_px is not None
-                    and project is not None):
-                center_x, center_y = project(marker_lon, marker_lat)
-                hit_radius = max(6.0, radius + 2.5)
-                if ((point_px[0] - center_x) ** 2
-                        + (point_px[1] - center_y) ** 2 > hit_radius ** 2):
-                    continue
-            elif not shape_contains(shape, lon, lat):
-                continue
-            found.append(
+            projected = None
+            contains = False
+            if is_marker:
+                # The screen-pixel grab radius takes precedence over the
+                # geographic ring whenever both can be consulted.
+                if (radius > 0.0 and marker_lon is not None
+                        and marker_lat is not None and point is not None
+                        and project is not None):
+                    projected = tuple(project(marker_lon, marker_lat))
+                else:
+                    contains = shape_contains(shape, lon, lat)
+                hits[(layer_index, shape_index)] = OverlayMarkerHit(layer, shape)
+            candidates.append(
                 (
-                    -int(getattr(shape, "rank", 0) or 0),
+                    int(getattr(shape, "rank", 0) or 0),
                     layer_index,
                     shape_index,
-                    OverlayMarkerHit(layer, shape),
+                    is_marker,
+                    radius,
+                    projected,
+                    contains,
                 )
             )
-    found.sort(key=lambda item: item[:3])
-    return tuple(item[3] for item in found)
+    selected = sharpmod_rs.overlay_marker_hits_select(candidates, point)
+    return tuple(hits[pair] for pair in selected)
 
 
 def shape_at(

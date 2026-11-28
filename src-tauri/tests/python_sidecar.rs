@@ -23,7 +23,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 #[tokio::test]
 #[ignore = "needs a Python interpreter with sharpmod (SHARPPY_PYTHON or .gribenv)"]
-async fn bridge_starts_without_the_optional_native_map_extension() {
+async fn bridge_serves_requests_with_the_python_scientific_backend() {
     let interpreter = sharppy_reimagined_lib::python::interpreter::discover_from_environment(
         &std::path::PathBuf::new(),
     )
@@ -35,9 +35,9 @@ async fn bridge_starts_without_the_optional_native_map_extension() {
             "-X",
             "utf8",
             "-c",
-            "import sys; sys.modules['sharpmod_rs'] = None; from sharpmod.bridge.server import main; from sharpmod.providers.hrrr_products import available_products; assert available_products(); assert 'sharpmod.providers.hrrr_field' not in sys.modules; raise SystemExit(main())",
+            "import sys; from sharpmod.bridge.server import main; from sharpmod.providers.hrrr_products import available_products; assert available_products(); assert 'sharpmod.providers.hrrr_field' not in sys.modules; raise SystemExit(main())",
         ])
-        .env("SHARPMOD_BACKEND", "auto")
+        .env("SHARPMOD_BACKEND", "python")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -78,7 +78,7 @@ async fn bridge_starts_without_the_optional_native_map_extension() {
             "health" => {
                 assert_eq!(result["scientific_backend"]["status"], "ok");
                 assert_eq!(result["scientific_backend"]["active_backend"], "python");
-                assert_eq!(result["scientific_backend"]["rust_installed"], false);
+                assert_eq!(result["scientific_backend"]["rust_installed"], true);
             }
             "storage.usage" => assert_eq!(result["caches"].as_array().unwrap().len(), 7),
             "shutdown" => assert_eq!(result["ok"], true),

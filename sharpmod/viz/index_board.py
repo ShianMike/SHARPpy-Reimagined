@@ -68,35 +68,33 @@ def _mag(v):
 
 
 def i0(x):
-    return MISS if x is None else str(int(round(x)))
+    import sharpmod_rs
+
+    return sharpmod_rs.board_format_i0(x)
 
 
 def f1(x):
-    return MISS if x is None else "%.1f" % x
+    import sharpmod_rs
+
+    return sharpmod_rs.board_format_f1(x)
 
 
 def f2(x):
-    return MISS if x is None else "%.2f" % x
+    import sharpmod_rs
+
+    return sharpmod_rs.board_format_f2(x)
 
 
 def dirspd(v):
-    if not isinstance(v, (tuple, list)) or len(v) < 2:
-        return MISS
-    d, s = _f(v[0]), _f(v[1])
-    if d is None or s is None:
-        return MISS
-    return "%03d/%02d" % (int(round(d)) % 360, int(round(s)))
+    import sharpmod_rs
+
+    return sharpmod_rs.board_format_dirspd(v)
 
 
 def uv_dirspd(v):
-    if not isinstance(v, (tuple, list)) or len(v) < 2:
-        return MISS
-    u, w = _f(v[0]), _f(v[1])
-    if u is None or w is None:
-        return MISS
-    spd = math.hypot(u, w)
-    d = (270.0 - math.degrees(math.atan2(w, u))) % 360.0
-    return "%03d/%02d" % (int(round(d)) % 360, int(round(spd)))
+    import sharpmod_rs
+
+    return sharpmod_rs.board_format_uv_dirspd(v)
 
 
 KT_TO_MS = 0.514444
@@ -265,39 +263,24 @@ class IndexBoard(IndexColumnsMixin, QFrame):
         return i0(self._wind_speed(knots))
 
     def _dirspd(self, v):
-        if not isinstance(v, (tuple, list)) or len(v) < 2:
-            return MISS
-        d, s = _f(v[0]), self._wind_speed(v[1])
-        if d is None or s is None:
-            return MISS
-        return "%03d/%02d" % (int(round(d)) % 360, int(round(s)))
+        import sharpmod_rs
+
+        return sharpmod_rs.board_format_dirspd(v, wind_units=self.wind_units)
 
     def _uv_dirspd(self, v):
-        if not isinstance(v, (tuple, list)) or len(v) < 2:
-            return MISS
-        u, w = _f(v[0]), _f(v[1])
-        if u is None or w is None:
-            return MISS
-        spd = self._wind_speed(math.hypot(u, w))
-        d = (270.0 - math.degrees(math.atan2(w, u))) % 360.0
-        return "%03d/%02d" % (int(round(d)) % 360, int(round(spd)))
+        import sharpmod_rs
+
+        return sharpmod_rs.board_format_uv_dirspd(v, wind_units=self.wind_units)
 
     def _temp(self, fahrenheit):
-        v = _f(fahrenheit)
-        if v is None:
-            return MISS
-        if self.temp_units == "Celsius":
-            return "%d\u00b0C" % int(round((v - 32.0) * 5.0 / 9.0))
-        return "%d \u00b0F" % int(round(v))
+        import sharpmod_rs
+
+        return sharpmod_rs.board_format_temp(fahrenheit, temp_units=self.temp_units)
 
     def _pwat(self, inches):
-        v = _f(inches)
-        if v is None:
-            return MISS
-        if self.pw_units == "cm":
-            return "%.1f cm" % (v * IN_TO_CM)
-        # Keep PWAT inches joined to the value in one full-size text run.
-        return "%.2f\u00a0in" % v
+        import sharpmod_rs
+
+        return sharpmod_rs.board_format_pwat(inches, pw_units=self.pw_units)
 
     def _peskov_color(self, v):
         return self._theme_qcolor(colors.peskov_color(v))
@@ -318,29 +301,32 @@ class IndexBoard(IndexColumnsMixin, QFrame):
         # Build a wind-barb painter path (staff + barbs/flags) in local
         # coordinates with the plotted point at the origin, already rotated to
         # ``wdir`` and scaled by ``scale``. Returns ``None`` on bad input.
+        import sharpmod_rs
+
         try:
             from sharpmod.viz import custom_barbs as cb
-            wdir = float(wdir); wspd = float(wspd)
-        except (TypeError, ValueError, Exception):
+            parts = sharpmod_rs.board_barb_components(wdir, wspd)
+        except Exception:
             return None
-        if not (math.isfinite(wdir) and math.isfinite(wspd)):
+        if parts is None:
             return None
-        spd = int(round(wspd / 5.) * 5)
+        spd, flags, fulls, halves = parts
+        wdir_f = float(wdir)
         path = QtGui.QPainterPath()
         if spd > 0:
             path.moveTo(0, 0)
             path.lineTo(25, 0)
-            while spd >= 50:
-                cb.drawFlag(path, shemis=shemis); spd -= 50
-            while spd >= 10:
-                cb.drawFullBarb(path, shemis=shemis); spd -= 10
-            while spd >= 5:
-                cb.drawHalfBarb(path, shemis=shemis); spd -= 5
+            for _ in range(flags):
+                cb.drawFlag(path, shemis=shemis)
+            for _ in range(fulls):
+                cb.drawFullBarb(path, shemis=shemis)
+            for _ in range(halves):
+                cb.drawHalfBarb(path, shemis=shemis)
         else:
             path.addEllipse(-3, -3, 6, 6)
         t = QtGui.QTransform()
         t.scale(scale, scale)
-        t.rotate(wdir - 90)
+        t.rotate(wdir_f - 90)
         return t.map(path)
 
     def _draw_agl_barbs(self, qp, rx, top, rw, h):
@@ -439,13 +425,12 @@ class IndexBoard(IndexColumnsMixin, QFrame):
         #   >= -50  -> green (little inhibition)
         #   -100..-50 -> orange (moderate cap)
         #   < -100  -> red (strong cap)
-        if cin is None:
-            return self.fg
-        if cin >= -50:
-            return self.green
-        if cin >= -100:
-            return self.orange
-        return self.red
+        import sharpmod_rs
+
+        tier = sharpmod_rs.board_cinh_legacy_tier(
+            None if cin is None else float(cin)
+        )
+        return (self.fg, self.green, self.orange, self.red)[tier]
 
     def _wyrp(self, v, yellow, red, pink, higher=True):
         """4-color intensity scale: white -> yellow -> red -> pink.
@@ -489,19 +474,12 @@ class IndexBoard(IndexColumnsMixin, QFrame):
     def _cape3_color(self, v):
         # 3CAPE color table (from thermo.py, by MLCAPE 0-3 km):
         # magenta>125, red>100, orange>75, yellow>50, green>25, else fg.
-        if v is None:
-            return self.fg
-        if v > 125:
-            return self.magenta
-        if v > 100:
-            return self.red
-        if v > 75:
-            return self.orange
-        if v > 50:
-            return self.yellow
-        if v > 25:
-            return self.green
-        return self.fg
+        import sharpmod_rs
+
+        tier = sharpmod_rs.board_cape3_tier(None if v is None else float(v))
+        return (
+            self.fg, self.green, self.yellow, self.orange, self.red, self.magenta
+        )[tier]
 
     def _mcs_color(self, v):
         return self._theme_qcolor(colors.mcs_color(v))

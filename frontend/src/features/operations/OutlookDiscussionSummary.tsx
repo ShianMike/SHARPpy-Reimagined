@@ -1,5 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { cx } from "../../lib/cx";
 import type { OutlookDiscussion } from "../../types/map";
 import styles from "./OutlookDiscussionSummary.module.css";
@@ -37,6 +37,7 @@ function formatHeadline(raw: string): string {
 export function OutlookDiscussionSummary({ discussion, compact = false }: OutlookDiscussionSummaryProps): ReactNode {
   const [open, setOpen] = useState(false);
   const [selectedHeading, setSelectedHeading] = useState("all");
+  const bodyId = useId();
 
   if (discussion === undefined) return null;
   const headline = formatHeadline(discussion.headline);
@@ -66,6 +67,7 @@ export function OutlookDiscussionSummary({ discussion, compact = false }: Outloo
             type="button"
             className={styles.toggle}
             aria-expanded={open}
+            aria-controls={bodyId}
             onClick={() => { setOpen((wasOpen) => !wasOpen); }}
           >
             {open ? "Hide full discussion" : expandLabel}
@@ -75,8 +77,8 @@ export function OutlookDiscussionSummary({ discussion, compact = false }: Outloo
       </div>
       {showHeadline ? <p className={styles.headline}>{headline}</p> : null}
       {showSummary ? <p className={styles.summary}>{discussion.summary}</p> : null}
-      {!open || sections.length === 0 ? null : (
-        <div className={styles.expanded}>
+      {sections.length === 0 ? null : (
+        <div id={bodyId} className={styles.expanded} data-motion="disclosure" hidden={!open} inert={!open}>
           {showSectionFilters ? (
             <div className={styles.sectionFilters} role="group" aria-label="Discussion sections">
               <button

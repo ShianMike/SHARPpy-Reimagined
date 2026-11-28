@@ -101,9 +101,9 @@ def normalize_state(value) -> str:
     from a batch runner's event stream, and a new status word there must degrade
     into "we do not know" instead of taking the timeline down.
     """
-    text = str(value or "").strip().lower()
-    text = _STATE_ALIASES.get(text, text)
-    return text if text in FRAME_STATES else "unknown"
+    import sharpmod_rs
+
+    return sharpmod_rs.timeline_normalize_state(value)
 
 
 @dataclass(frozen=True)
@@ -142,10 +142,11 @@ class TimelineFrame:
 
     def describe(self) -> str:
         """One line naming the hour, its state, and any reason given."""
-        text = f"{self.label}: {STATE_LABELS[self.state]}"
-        if self.reason:
-            text += f" \u2014 {self.reason}"
-        return text
+        import sharpmod_rs
+
+        return sharpmod_rs.timeline_frame_describe(
+            self.forecast_hour, self.state, self.reason,
+        )
 
 
 @dataclass(frozen=True)
@@ -365,14 +366,11 @@ class TimelineCoverage:
 
     def summary(self) -> str:
         """State the coverage in one sentence, counting every category present."""
-        if not self.frames:
-            return "No forecast hours were requested."
-        parts = [f"{len(self.loaded_hours)} of {len(self.frames)} requested hour(s) loaded"]
-        for state in ("loading", "requested", "failed", "canceled", "unavailable", "unknown"):
-            hours = self.hours_in(state)
-            if hours:
-                parts.append(f"{len(hours)} {STATE_LABELS[state]}")
-        return "; ".join(parts) + "."
+        import sharpmod_rs
+
+        return sharpmod_rs.timeline_coverage_summary(
+            [frame.state for frame in self.frames],
+        )
 
     def explain(self) -> tuple[str, ...]:
         """One line per hour that is not loaded, for a status list or a report."""

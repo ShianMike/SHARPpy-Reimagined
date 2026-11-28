@@ -243,7 +243,7 @@ it.each(["rrfs-a", "nam", "nam-3km-conus", "refs-m1", "refs-m2", "refs-m3", "ref
       }
       const catalogue = parseMapCatalog((modelCatalogs as Readonly<Record<string, unknown>>)[model]);
       expect(catalogue.fieldModel).toBe(model);
-      expect(catalogue.products).toHaveLength(model.startsWith("refs-") ? 36 : model === "nam" ? 37 : model === "nam-3km-conus" ? 42 : 45);
+      expect(catalogue.products).toHaveLength(model.startsWith("refs-") ? 39 : model === "nam" ? 39 : model === "nam-3km-conus" ? 44 : 47);
       expect(catalogue.products.some(({ key }) => key === "ltng")).toBe(!["nam", "nam-3km-conus"].includes(model));
       const secondaryProduct = defaultProductFor(parseMapCatalog(catalog), 1)?.key;
       expect(catalogue.products.some(({ key }) => key === secondaryProduct)).toBe(!model.startsWith("refs-"));

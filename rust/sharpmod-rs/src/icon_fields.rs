@@ -102,10 +102,10 @@ fn record(name: &str) -> Result<Record, Error> {
                 name.find(|ch: char| ch.is_ascii_digit())
                     .unwrap_or(name.len()),
             );
-            let pressure = pressure
-                .parse()
-                .ok()
-                .filter(|value| PRESSURES.contains(value));
+            let pressure = pressure.parse().ok().filter(|value| {
+                // Only geopotential reaches 1000 hPa: the thickness base.
+                PRESSURES.contains(value) || (prefix == "hgt" && *value == 1000)
+            });
             match (prefix, pressure) {
                 ("tmp", Some(p @ (500 | 700))) => ("T", 0, 0, Isobaric(p)),
                 ("hgt", Some(p)) => ("FI", 3, 4, Isobaric(p)),
@@ -185,6 +185,8 @@ impl Frame {
                 let step = if hour <= LAST_HOURLY_HOUR { 1 } else { 3 };
                 (step, 1.0 / (f32::from(step) * 3600.0))
             }
+            // The published 3-h average rate, in millimetres over the window.
+            "prate3h" => (3, 1.0),
             "qpf6h" => (6, 1.0),
             "qpf24h" => (24, 1.0),
             "qpf48h" => (48, 1.0),
@@ -355,6 +357,8 @@ pub(crate) async fn inventory(
                 .into_iter()
                 .flat_map(|name| PRESSURES.map(|pressure| Directory(name, Some(pressure)))),
         )
+        // FI also publishes at 1000 hPa for the 1000-500 mb thickness.
+        .chain([1000].map(|pressure| Directory("FI", Some(pressure))))
         .chain([500, 700].map(|pressure| Directory("T", Some(pressure))));
     let entries: HashMap<_, _> = stream::iter(directories)
         .map(|directory| {
@@ -416,6 +420,10 @@ mod tests {
         assert!(file
             .url(frame.run)
             .ends_with("/FI/lvt1/100/lv1/92500/r/2026-11-23T06%3A00/s/PT024H00M.grib2"));
+        let [file] = frame.plan("hgt1000").unwrap().files.try_into().unwrap();
+        assert!(file
+            .url(frame.run)
+            .ends_with("/FI/lvt1/100/lv1/100000/r/2026-11-23T06%3A00/s/PT024H00M.grib2"));
         assert!(coordinates()[0]
             .url(frame.run)
             .ends_with("/CLAT/r/2026-11-23T06%3A00/s/PT000H00M.grib2"));
@@ -439,6 +447,12 @@ mod tests {
         assert_eq!(hours(get("prate", 78).unwrap()), [78, 77]);
         assert_eq!(hours(get("prate", 81).unwrap()), [81, 78]);
         assert!(matches!(get("prate", 0), Err(Error::Unavailable(404))));
+        // The 3-h average rate pairs this hour with the hour three steps back.
+        assert_eq!(hours(get("prate3h", 78).unwrap()), [78, 75]);
+        assert_eq!(hours(get("prate3h", 81).unwrap()), [81, 78]);
+        assert_eq!(hours(get("prate3h", 6).unwrap()), [6, 3]);
+        assert!(matches!(get("prate3h", 2), Err(Error::Unavailable(404))));
+        assert!((get("prate3h", 81).unwrap().reduction.combine(21.6, 10.8) - 10.8).abs() < 1e-8);
         assert_eq!(hours(get("gust", 78).unwrap()), [78, 77, 76, 75, 74, 73]);
         assert!(matches!(get("gust", 5), Err(Error::Unavailable(404))));
         assert_eq!(hours(get("gust", 81).unwrap()), [81, 80, 79, 78, 77, 76]);

@@ -165,7 +165,7 @@ test.describe("installed native acceptance", () => {
         const image = page.getByTestId("sounding-viewer").getByTestId("sounding-image");
         await expect(image).toBeVisible({ timeout: 240_000 });
         await expect.poll(async () => image.evaluate((element) => (element as HTMLImageElement).naturalWidth), { timeout: 240_000 }).toBeGreaterThan(0);
-        await page.getByRole("tab", { name: "Sounding controls", exact: true }).click();
+        await page.getByRole("tab", { name: "Controls", exact: true }).click();
         const time = page.getByRole("combobox", { name: "Sounding time (UTC)" });
         await time.click();
         await page.keyboard.press("End");

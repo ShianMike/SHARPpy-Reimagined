@@ -3,7 +3,18 @@
 // flat. A portalled popover floats as
 // its own surface, so it starts a new context with <GlassContextBoundary>.
 
-import { createContext, createElement, useContext, type HTMLAttributes, type ReactNode, type Ref } from "react";
+import {
+  createContext,
+  createElement,
+  useContext,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  type HTMLAttributes,
+  type ReactNode,
+  type Ref,
+} from "react";
+import { registerGlassSurface } from "../lib/liquidGlass/surfaceRegistry";
 
 const InsideGlass = createContext(false);
 
@@ -26,6 +37,17 @@ export function GlassSurface({
   ...rest
 }: GlassSurfaceProps): ReactNode {
   const nested = useContext(InsideGlass);
+  const elementRef = useRef<HTMLElement | null>(null);
+  useImperativeHandle<HTMLElement | null, HTMLElement | null>(ref, () => elementRef.current, []);
+
+  useLayoutEffect(() => {
+    const element = elementRef.current;
+    if (nested || element === null) {
+      return;
+    }
+    return registerGlassSurface(element, elevation);
+  }, [nested, elevation]);
+
   const classes = nested ? [className] : ["glass", `glass--${elevation}`, className];
   return (
     <InsideGlass value={true}>
@@ -33,7 +55,7 @@ export function GlassSurface({
         as,
         {
           ...rest,
-          ref,
+          ref: elementRef,
           className: classes.filter((name) => name !== undefined && name !== "").join(" ") || undefined,
           "data-surface": nested ? "flat" : "glass",
           "data-material": nested ? undefined : "glass",

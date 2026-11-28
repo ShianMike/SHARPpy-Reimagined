@@ -175,34 +175,22 @@ class HGZOverlay:
         or when the resulting band has no visible extent inside the plot area.
         """
         # 19.11: no HGZ CAPE -> no overlay.
-        if prof is None or is_missing(getattr(prof, "hgz_cape", None)):
+        hgz_cape = getattr(prof, "hgz_cape", None) if prof is not None else None
+        if prof is None or is_missing(hgz_cape):
             return None
 
         p_warm = interp.pres_at_isotherm(prof, HGZ_TOP_ISOTHERM)
         p_cold = interp.pres_at_isotherm(prof, HGZ_BOTTOM_ISOTHERM)
-        if is_missing(p_warm) or is_missing(p_cold):
-            # The profile does not span the -10 / -30 degrees C layer.
-            return None
+        import sharpmod_rs
 
-        try:
-            y_warm = float(self.pres_to_pix(float(p_warm)))
-            y_cold = float(self.pres_to_pix(float(p_cold)))
-        except (TypeError, ValueError):
-            return None
-
-        if not (y_warm == y_warm and y_cold == y_cold):  # NaN guard
-            return None
-
-        y_top = min(y_warm, y_cold)
-        y_bottom = max(y_warm, y_cold)
-
-        # 19.10: clamp the band to the plot rectangle's vertical extent.
-        top = max(y_top, float(self.plot_rect.top()))
-        bottom = min(y_bottom, float(self.plot_rect.bottom()))
-        if bottom <= top:
-            # Band lies entirely outside the plot area (or is degenerate).
-            return None
-        return top, bottom
+        return sharpmod_rs.skew_hgz_band_pixels(
+            hgz_cape,
+            p_warm,
+            p_cold,
+            self.pres_to_pix,
+            float(self.plot_rect.top()),
+            float(self.plot_rect.bottom()),
+        )
 
     # -- drawing ----------------------------------------------------------
 
@@ -378,62 +366,40 @@ def draw_cape_fill(
     p_tv, p_p = parcel
     e_tv, e_p = env
 
-    # Interpolate the environment Tv onto the parcel's pressure levels. np.interp
-    # requires ascending sample coordinates; mark out-of-range as NaN so segments
-    # outside the sounding are skipped rather than clamped.
-    order = np.argsort(e_p)
-    env_on_parcel = np.interp(
-        p_p, e_p[order], e_tv[order], left=np.nan, right=np.nan
+    import sharpmod_rs
+
+    p_tv_arr = np.ascontiguousarray(np.ma.filled(p_tv, np.nan), dtype=np.float64)
+    p_p_arr = np.ascontiguousarray(np.ma.filled(p_p, np.nan), dtype=np.float64)
+    e_tv_arr = np.ascontiguousarray(np.ma.filled(e_tv, np.nan), dtype=np.float64)
+    e_p_arr = np.ascontiguousarray(np.ma.filled(e_p, np.nan), dtype=np.float64)
+    env_on_parcel = np.ascontiguousarray(
+        sharpmod_rs.skew_interp_env_on_parcel(p_p_arr, e_p_arr, e_tv_arr),
+        dtype=np.float64,
     )
-    valid = np.isfinite(env_on_parcel)
-    if np.count_nonzero(valid) < 2:
+    if np.count_nonzero(np.isfinite(env_on_parcel)) < 2:
         return False
 
-    dt = p_tv - env_on_parcel  # >0 -> parcel warmer -> CAPE; <0 -> CIN
-    x_par = np.asarray(to_x(p_tv, p_p), dtype=float)
-    x_env = np.asarray(to_x(env_on_parcel, p_p), dtype=float)
-    y = np.asarray(to_y(p_p), dtype=float)
+    x_par = np.ascontiguousarray(
+        np.ma.filled(to_x(p_tv, p_p), np.nan), dtype=np.float64
+    )
+    x_env = np.ascontiguousarray(
+        np.ma.filled(to_x(env_on_parcel, p_p), np.nan), dtype=np.float64
+    )
+    y = np.ascontiguousarray(
+        np.ma.filled(to_y(p_p), np.nan), dtype=np.float64
+    )
+    polygons = sharpmod_rs.skew_cape_fill_polygons(
+        p_tv_arr, env_on_parcel, x_par, x_env, y
+    )
 
     drew = False
     qp.save()
     try:
         qp.setClipRect(QtCore.QRectF(plot_rect))
         qp.setPen(Qt.NoPen)
-        for k in range(len(p_p) - 1):
-            if not (valid[k] and valid[k + 1]):
-                continue
-            d0 = float(dt[k])
-            d1 = float(dt[k + 1])
-            if d0 == 0.0 and d1 == 0.0:
-                continue
-            if d0 * d1 >= 0.0:
-                # Whole segment has one sign (treat a lone zero endpoint with
-                # its neighbour's sign).
-                color = pos_color if (d0 + d1) > 0.0 else neg_color
-                _fill_poly(qp, color, [
-                    (x_par[k], y[k]),
-                    (x_par[k + 1], y[k + 1]),
-                    (x_env[k + 1], y[k + 1]),
-                    (x_env[k], y[k]),
-                ])
-                drew = True
-            else:
-                # Sign change within the segment: split at the crossing, where
-                # the parcel and environment traces meet (dt == 0).
-                f = d0 / (d0 - d1)
-                ym = y[k] + f * (y[k + 1] - y[k])
-                xm = x_par[k] + f * (x_par[k + 1] - x_par[k])
-                _fill_poly(qp, pos_color if d0 > 0 else neg_color, [
-                    (x_par[k], y[k]),
-                    (xm, ym),
-                    (x_env[k], y[k]),
-                ])
-                _fill_poly(qp, pos_color if d1 > 0 else neg_color, [
-                    (xm, ym),
-                    (x_par[k + 1], y[k + 1]),
-                    (x_env[k + 1], y[k + 1]),
-                ])
-                drew = True
+        for is_positive, pts in polygons:
+            _fill_poly(qp, pos_color if is_positive else neg_color, pts)
+            drew = True
     finally:
         qp.restore()
     return drew

@@ -1,7 +1,7 @@
 // The field's colour scale (Phase 4 palette handling): the same lookup table
 // the map colours with, drawn horizontally or vertically with labelled endpoints.
 
-import { Fragment, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useCallback, useId, useState, type CSSProperties, type ReactNode } from "react";
 import type { Palette } from "../../types/map";
 import { VisuallyHidden } from "../../components/VisuallyHidden";
 import { cx } from "../../lib/cx";
@@ -49,22 +49,20 @@ export function FieldLegend({ palette, vertical = false, description, compact = 
   const preferences = useUiStore((state) => state.units);
   const categorical = palette.units === "flag";
   const ptypeGroups = ptypePaletteGroups(palette);
-  const ptypeIcons = vertical && ptypeGroups !== null && palette.units === "in";
+  const ptypeIcons = vertical && ptypeGroups !== null;
   const ptypeStops = ptypeGroups?.[0]?.stops ?? null;
   const unit = displayUnit(palette.units, preferences, palette.display);
   const shown = (value: number): number => convertUnit(value, palette.units, unit, palette.display);
-  const ref = useRef<HTMLCanvasElement | null>(null);
   const [at, setAt] = useState(0.5);
   const [active, setActive] = useState(false);
   const descriptionId = useId();
-  useEffect(() => {
-    const context = ref.current?.getContext("2d") ?? null;
-    if (context !== null) {
-      const pixels = new Uint8ClampedArray(buildLut(palette));
-      // Reverse whole RGBA pixels: the highest value belongs at the top.
-      if (vertical) new Uint32Array(pixels.buffer).reverse();
-      context.putImageData(new ImageData(pixels, vertical ? 1 : LUT_SIZE, vertical ? LUT_SIZE : 1), 0, 0);
-    }
+  const drawRamp = useCallback((canvas: HTMLCanvasElement | null): void => {
+    const context = canvas?.getContext("2d") ?? null;
+    if (context === null) return;
+    const pixels = new Uint8ClampedArray(buildLut(palette));
+    // Reverse whole RGBA pixels: the highest value belongs at the top.
+    if (vertical) new Uint32Array(pixels.buffer).reverse();
+    context.putImageData(new ImageData(pixels, vertical ? 1 : LUT_SIZE, vertical ? LUT_SIZE : 1), 0, 0);
   }, [palette, vertical]);
   const { low, high } = ptypeStops !== null
     ? { low: ptypeStops[0]?.[0] ?? 0.01, high: ptypeStops.at(-1)?.[0] ?? 0.5 }
@@ -72,19 +70,21 @@ export function FieldLegend({ palette, vertical = false, description, compact = 
   const ptypeTicks = ptypeStops === null ? null : ptypePaletteTicks(palette.ticks, ptypeStops);
   const bands = vertical && unit === "%" && palette.display === "fixed" && palette.stepped && palette.ceiling === null ? palette.stops : null;
   const overflow = bands?.at(-1);
-  const fixedMph = palette.display === "fixed" && palette.stepped && unit === "mph";
+  const fixedTicks = palette.display === "fixed" && palette.stepped && (unit === "mph" || unit === "dam");
   const verticalTicks = bands !== null
     ? bands.map(([value], index) => ({ at: index / (bands.length - 1), value })).reverse()
     : ptypeTicks !== null
       ? [...ptypeTicks].reverse()
-      : fixedMph ? [...palette.ticks].reverse().map((value) => ({ at: (value - low) / (high - low), value }))
+      : fixedTicks ? [...palette.ticks].reverse().map((value) => ({ at: (value - low) / (high - low), value }))
         : (categorical ? [1, 0] : [1, 0.75, 0.5, 0.25, 0]).map((at) => ({ at, value: low + at * (high - low) }));
   const verticalTickDigits = unit === "in" || unit === "in/h" ? 2 : 0;
   const hidden = description ?? (
     ptypeStops !== null ? `Shading starts at ${tickText(shown(low))} ${unit}. The top band includes higher amounts.`
       : categorical ? "1 = present; 0 = absent. Only present cells are drawn." : palette.ceiling !== null
         ? `Values above ${tickText(shown(palette.ceiling))} are not drawn.`
-        : `Values below ${tickText(shown(palette.floor ?? low))} are not drawn.`);
+        : palette.floor !== null && palette.floor < low
+          ? "Values outside the scale retain the end colours."
+          : `Values below ${tickText(shown(palette.floor ?? low))} are not drawn.`);
   const bandPosition = bands === null ? at : at * (bands.length - 1);
   const band = bands === null ? 0 : Math.min(Math.floor(bandPosition), bands.length - 2);
   const from = bands?.[band]?.[0] ?? low;
@@ -120,20 +120,23 @@ export function FieldLegend({ palette, vertical = false, description, compact = 
           strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d={PRECIPITATION_ICON_PATHS[index]} />
         </svg>
-        <div className={styles.ptypeColumn}>{swatches}</div>
+        <div className={styles.ptypeColumn} data-glass-ramp="">{swatches}</div>
         <span className={hints.hint} data-side="left" aria-hidden="true">{label}</span>
       </div>;
     }
-    return <Fragment key={label}>
-      {vertical ? null : <span className={styles.ptypeLabel} aria-hidden="true">{label}</span>}
-      <div className={vertical ? styles.ptypeColumn : styles.ptypeBoxes} role="img" aria-label={label}>{swatches}</div>
-    </Fragment>;
-  });
-  const ramp = bands !== null ? <div className={cx(styles.ramp, styles.probabilityRamp)} aria-hidden="true" style={{ "--probability-overflow": overflow?.[1] } as CSSProperties}>
+      return <Fragment key={label}>
+        <span className={styles.ptypeLabel} aria-hidden="true">{label}</span>
+        <div className={styles.ptypeBoxes} role="img" aria-label={label}>{swatches}</div>
+      </Fragment>;
+    });
+  const ramp = bands !== null ? <div className={cx(styles.ramp, styles.probabilityRamp)} data-glass-ramp="" aria-hidden="true" style={{ "--probability-overflow": overflow?.[1] } as CSSProperties}>
     {bands.slice(0, -1).reverse().map(([value, colour]) => <span key={value} style={{ "--probability-band": colour } as CSSProperties} />)}
   </div> : ptypeGroups !== null ? (vertical ? <div className={styles.ptypeVerticalRamp}>{ptypeRamps}</div>
     : <div className={styles.ptypeGrid}>{tickList}{ptypeRamps}</div>)
-    : <canvas ref={ref} className={styles.ramp} width={vertical ? RAMP_THICKNESS : LUT_SIZE} height={vertical ? LUT_SIZE : RAMP_THICKNESS} aria-hidden="true" />;
+    : vertical ? <div className={styles.rampFrame} data-glass-ramp="">
+        <canvas ref={drawRamp} className={styles.ramp} width={RAMP_THICKNESS} height={LUT_SIZE} aria-hidden="true" />
+      </div>
+      : <canvas ref={drawRamp} className={styles.ramp} width={LUT_SIZE} height={RAMP_THICKNESS} aria-hidden="true" />;
   const verticalRamp = vertical ? (
     <>
         {ramp}
@@ -178,10 +181,7 @@ export function FieldLegend({ palette, vertical = false, description, compact = 
       title={vertical ? undefined : hidden}>
       {verticalRamp === null ? <>{ramp}{ptypeGroups === null ? tickList : null}</>
         : ptypeGroups === null ? verticalRamp : <div className={styles.ptypeVerticalScale}>{verticalRamp}</div>}
-      {vertical && ptypeGroups !== null && !ptypeIcons ? <div className={styles.ptypeVerticalLabels} aria-hidden="true">
-        {ptypeGroups.map(({ label }) => <span key={label} className={styles.ptypeLabel}>{label}</span>)}
-      </div> : null}
-      {vertical && (fixedMph || ptypeGroups !== null && !ptypeIcons) ? <figcaption className={styles.verticalUnit}>{unit}</figcaption> : null}
+      {vertical && fixedTicks ? <figcaption className={styles.verticalUnit}>{unit}</figcaption> : null}
       {vertical ? null : compact ? <figcaption className={styles.compactUnit}>{unit || "Unitless"}<VisuallyHidden id={descriptionId}>{hidden}</VisuallyHidden></figcaption> : <figcaption className={styles.hint}>{`${unit === "" ? "No units" : unit}. ${hidden}`}</figcaption>}
     </figure>
   );

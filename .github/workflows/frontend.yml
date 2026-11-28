@@ -41,6 +41,14 @@ jobs:
       - run: npm ci
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with: { python-version: "3.13", cache: pip }
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/sharpmod-rs/target
+          key: sharpmod-rs-bridge-${{ runner.os }}-${{ hashFiles('rust/sharpmod-rs/Cargo.lock') }}
+          restore-keys: sharpmod-rs-bridge-${{ runner.os }}-
       - name: Install Python bridge for browser lifecycle checks
         working-directory: .
         shell: pwsh
@@ -49,6 +57,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Sidecar dependencies failed" }
           python scripts/install_sharppy_compat.py --sharppy-only
           if ($LASTEXITCODE -ne 0) { throw "SHARPpy compatibility install failed" }
+          python -m pip install "maturin==1.16.0"
+          if ($LASTEXITCODE -ne 0) { throw "Native sidecar build tool install failed" }
+          $nativeDirectory = Join-Path $env:RUNNER_TEMP 'sidecar-native-wheel'
+          python -m maturin build --locked --manifest-path rust/sharpmod-rs/Cargo.toml --interpreter python --out $nativeDirectory
+          if ($LASTEXITCODE -ne 0) { throw "Native sidecar backend build failed" }
+          $nativeWheel = @(Get-ChildItem -LiteralPath $nativeDirectory -Filter '*.whl' -File)
+          if ($nativeWheel.Count -ne 1) { throw "Native sidecar backend wheel is not unique" }
+          python -m pip install --no-deps $nativeWheel[0].FullName
+          if ($LASTEXITCODE -ne 0) { throw "Native sidecar backend install failed" }
           "SHARPPY_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
       - run: npm run build
       - run: npm run lint

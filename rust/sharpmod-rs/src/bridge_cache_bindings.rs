@@ -306,6 +306,42 @@ fn live_cache_write(
 }
 
 #[pyfunction]
+fn frame_cache_version(kind: &str, model: &str, product: &str, legacy: usize) -> PyResult<u8> {
+    let precipitation_type = matches!(product, "prate-ptype" | "qpf-1h-ptype" | "refd-1km-ptype");
+    if kind == "contours" {
+        let versions = match product {
+            // Do not satisfy a pressure-and-wind request with a saved wind-only frame.
+            "tmp-2m-wind" | "dpt-2m-wind" | "thetae-2m" => [8, 7, 7],
+            "tmp-2m" | "dpt-2m" if model == "refs" => [8, 7, 6],
+            _ if product == "mslp" || precipitation_type => [8, 6, 5],
+            _ if product.starts_with("hgt-wind-") => [6, 3, 1],
+            _ => [1, 1, 1],
+        };
+        return versions
+            .get(legacy)
+            .copied()
+            .ok_or_else(|| PyValueError::new_err("invalid contour cache revision"));
+    }
+    Ok(match kind {
+        "grid" if precipitation_type => {
+            if legacy == 0 {
+                4
+            } else {
+                3
+            }
+        }
+        "grid" => {
+            if legacy == 0 {
+                3
+            } else {
+                2
+            }
+        }
+        _ => 1,
+    })
+}
+
+#[pyfunction]
 #[pyo3(signature = (compressed, max_bytes = 64 * 1024 * 1024))]
 fn frame_cache_read_gzip<'py>(
     py: Python<'py>,
@@ -360,6 +396,7 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(live_cache_ttl, module)?)?;
     module.add_function(wrap_pyfunction!(live_cache_read, module)?)?;
     module.add_function(wrap_pyfunction!(live_cache_write, module)?)?;
+    module.add_function(wrap_pyfunction!(frame_cache_version, module)?)?;
     module.add_function(wrap_pyfunction!(frame_cache_read_gzip, module)?)?;
     module.add_function(wrap_pyfunction!(frame_cache_compress_gzip, module)?)?;
     module.add_function(wrap_pyfunction!(storage_scan_files, module)?)?;
@@ -369,6 +406,36 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pressure_frames_refresh_and_fall_back_only_to_saved_pressure_geometry() {
+        for product in ["tmp-2m-wind", "dpt-2m-wind", "thetae-2m"] {
+            for legacy in 0..3 {
+                assert_eq!(
+                    frame_cache_version("contours", "hrrr", product, legacy).unwrap(),
+                    [8, 7, 7][legacy]
+                );
+            }
+            assert_eq!(frame_cache_version("grid", "hrrr", product, 0).unwrap(), 3);
+        }
+        for (model, product, expected) in [
+            ("refs", "tmp-2m", [8, 7, 6]),
+            ("refs-m5", "qpf-1h-ptype", [8, 6, 5]),
+            ("gfs", "prate-ptype", [8, 6, 5]),
+            ("hrrr", "refd-1km-ptype", [8, 6, 5]),
+            ("icon", "mslp", [8, 6, 5]),
+            ("gfs", "hgt-wind-500", [6, 3, 1]),
+            ("hrrr", "tmp-2m", [1, 1, 1]),
+        ] {
+            for (legacy, version) in expected.into_iter().enumerate() {
+                assert_eq!(
+                    frame_cache_version("contours", model, product, legacy).unwrap(),
+                    version,
+                    "{model} {product}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn canonical_json_digest_is_order_independent() {

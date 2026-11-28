@@ -17,8 +17,6 @@ PROTOCOL_VERSION = 1
 MAX_FRAME_BYTES = 8 * 1024 * 1024
 MAX_REQUEST_ID = 2**53 - 1
 
-_ENVELOPE_KEYS = frozenset({"id", "method", "params"})
-
 
 class ProtocolError(Exception):
     """A request frame that cannot be served, with the id to answer it under.
@@ -40,35 +38,15 @@ class Request:
     params: dict[str, Any]
 
 
-def _reject_constant(token: str) -> Any:
-    raise ValueError(f"non-finite JSON token {token}")
-
-
-def _protocol(message: str, request_id: int | None = None) -> ProtocolError:
-    return ProtocolError(BridgeError("BRIDGE_PROTOCOL", message, False), request_id)
-
-
-def _invalid(what: str, request_id: int) -> ProtocolError:
-    return ProtocolError(
-        BridgeError("INVALID_ARGUMENT", f"The request was not valid: {what}.", False),
-        request_id,
-    )
-
-
 def encode_frame(obj: Any) -> bytes:
     """Serialize ``obj`` as one frame, including the ``\\n`` terminator.
 
     Raises ``ValueError`` for a non-finite number or a frame over the cap.
     """
+    import sharpmod_rs
+
     text = json.dumps(obj, allow_nan=False, ensure_ascii=False, separators=(",", ":"))
-    data = text.encode("utf-8")
-    if len(data) > MAX_FRAME_BYTES:
-        raise ValueError(f"frame of {len(data)} bytes exceeds {MAX_FRAME_BYTES}")
-    return data + b"\n"
-
-
-def _valid_id(value: Any) -> bool:
-    return type(value) is int and 1 <= value <= MAX_REQUEST_ID
+    return sharpmod_rs.bridge_encode_frame_check(text.encode("utf-8"))
 
 
 def decode_request(line: bytes) -> Request:
@@ -77,35 +55,9 @@ def decode_request(line: bytes) -> Request:
     Accepts a trailing ``\\r\\n``. Raises :class:`ProtocolError` for anything
     that is not a well-formed request envelope.
     """
-    if line.endswith(b"\n"):
-        line = line[:-1]
-    if line.endswith(b"\r"):
-        line = line[:-1]
-    if len(line) > MAX_FRAME_BYTES:
-        raise _protocol("Request frame exceeds the 8 MiB limit.")
-    try:
-        obj = json.loads(line.decode("utf-8"), parse_constant=_reject_constant)
-    except (UnicodeDecodeError, ValueError):
-        raise _protocol("Request frame is not valid JSON.") from None
-    if not isinstance(obj, dict):
-        raise _protocol("Request frame is not a JSON object.")
-    request_id = obj.get("id")
-    if not _valid_id(request_id):
-        raise _protocol("Request frame has no valid id.")
-    keys = set(obj)
-    if keys != _ENVELOPE_KEYS:
-        missing = sorted(_ENVELOPE_KEYS - keys)
-        extra = sorted(keys - _ENVELOPE_KEYS)
-        raise _protocol(
-            f"Request envelope keys are wrong (missing {missing}, unexpected {extra}).",
-            request_id,
-        )
-    method = obj["method"]
-    if not isinstance(method, str) or not method:
-        raise _protocol("Request method must be a non-empty string.", request_id)
-    params = obj["params"]
-    if not isinstance(params, dict):
-        raise _invalid("params must be an object", request_id)
+    import sharpmod_rs
+
+    request_id, method, params = sharpmod_rs.bridge_decode_request_frame(line)
     return Request(request_id, method, params)
 
 
@@ -160,21 +112,6 @@ def check_params(request: Request) -> None:
     :data:`HANDLER_VALIDATED` check their own parameters; every other method
     takes no parameters.
     """
-    params = request.params
-    if request.method in HANDLER_VALIDATED:
-        return
-    if request.method == "hello":
-        version = params.get("protocol_version")
-        if set(params) != {"protocol_version"} or type(version) is not int:
-            raise _invalid(
-                "hello takes exactly an integer protocol_version", request.id
-            )
-        if version != PROTOCOL_VERSION:
-            raise _invalid(
-                f"protocol_version {version} is not supported "
-                f"(this bridge speaks {PROTOCOL_VERSION})",
-                request.id,
-            )
-        return
-    if params:
-        raise _invalid(f"{request.method} takes no parameters", request.id)
+    import sharpmod_rs
+
+    sharpmod_rs.bridge_check_request_params(request.id, request.method, request.params)

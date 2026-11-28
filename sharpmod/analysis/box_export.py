@@ -45,7 +45,9 @@ _IDENTITY_COLUMNS = ("request_id", "row", "col", "lat", "lon", "status")
 
 
 def _normalize_lon180(lon) -> float:
-    return ((float(lon) + 180.0) % 360.0) - 180.0
+    import sharpmod_rs
+
+    return sharpmod_rs.box_export_normalize_lon180(float(lon))
 
 
 def _as_sequence(source) -> tuple[tuple[int | None, BoxAnalysis], ...]:
@@ -91,9 +93,11 @@ def _status(point) -> str:
 
 def _number(value) -> str:
     """Format one value for CSV, or an empty field when it is absent."""
-    if value is None:
-        return ""
-    return f"{float(value):.6g}"
+    import sharpmod_rs
+
+    return sharpmod_rs.box_export_format_number(
+        None if value is None else float(value)
+    )
 
 
 def box_csv_rows(source, *, keys=None, criteria=None) -> Iterable[list]:
@@ -102,37 +106,40 @@ def box_csv_rows(source, *, keys=None, criteria=None) -> Iterable[list]:
     A sequence gains a leading ``fxx`` column so every hour lands in one file
     that can be pivoted, rather than one file per hour.
     """
-    pairs = _as_sequence(source)
-    field_keys = _shared_keys(pairs, keys)
-    sequence = len(pairs) > 1 or pairs[0][0] is not None
-    header = list(_IDENTITY_COLUMNS) + list(field_keys)
-    if sequence:
-        header.insert(0, "fxx")
-    if criteria is not None:
-        header.append("matches")
-    yield header
+    import sharpmod_rs
 
+    pairs = _as_sequence(source)
+    field_keys = list(_shared_keys(pairs, keys))
+    sequence = len(pairs) > 1 or pairs[0][0] is not None
+    include_matches = criteria is not None
+    points = []
     for hour, analysis in pairs:
-        verdicts = None
-        if criteria is not None:
-            verdicts = analysis.mask(criteria)
+        verdicts = analysis.mask(criteria) if include_matches else None
+        hour_arg = None if hour is None else int(hour)
         for point in analysis.points:
-            row = [
-                point.request_id,
-                point.row,
-                point.col,
-                f"{point.lat:.6f}",
-                f"{_normalize_lon180(point.lon):.6f}",
-                _status(point),
+            values = [
+                None if (value := point.value(key)) is None else float(value)
+                for key in field_keys
             ]
-            row.extend(_number(point.value(key)) for key in field_keys)
-            if sequence:
-                row.insert(0, hour if hour is not None else "")
-            if verdicts is not None:
+            if verdicts is None:
+                verdict_arg = None
+            else:
                 verdict = verdicts[point.row][point.col]
-                row.append(
-                    "" if verdict is None else ("yes" if verdict else "no"))
-            yield row
+                verdict_arg = None if verdict is None else bool(verdict)
+            points.append((
+                hour_arg,
+                str(point.request_id),
+                int(point.row),
+                int(point.col),
+                float(point.lat),
+                float(point.lon),
+                _status(point),
+                values,
+                verdict_arg,
+            ))
+    yield from sharpmod_rs.box_export_csv_rows(
+        sequence, field_keys, include_matches, points
+    )
 
 
 def write_box_csv(source, path, *, keys=None, criteria=None) -> int:
@@ -171,33 +178,23 @@ def _cell_geometry(west, east, south, north) -> dict:
     would is emitted as its two halves instead of a polygon that appears to wrap
     the wrong way round the world.
     """
-    south = max(-90.0, min(90.0, float(south)))
-    north = max(-90.0, min(90.0, float(north)))
-    west = _normalize_lon180(west)
-    east = _normalize_lon180(east)
-    if west <= east:
-        return {"type": "Polygon", "coordinates": [_ring(
-            west, east, south, north)]}
-    return {
-        "type": "MultiPolygon",
-        "coordinates": [
-            [_ring(west, 180.0, south, north)],
-            [_ring(-180.0, east, south, north)],
-        ],
-    }
+    import sharpmod_rs
+
+    return sharpmod_rs.box_export_cell_geometry(
+        float(west), float(east), float(south), float(north)
+    )
 
 
 def _cell_steps(analysis: BoxAnalysis) -> tuple[float, float]:
+    import sharpmod_rs
+
     region = analysis.plan.region
-    dlat = (
-        region.lat_span / float(analysis.rows - 1)
-        if analysis.rows > 1 else region.lat_span
+    return sharpmod_rs.box_export_cell_steps(
+        float(region.lat_span),
+        float(region.lon_span),
+        int(analysis.rows),
+        int(analysis.cols),
     )
-    dlon = (
-        region.lon_span / float(analysis.cols - 1)
-        if analysis.cols > 1 else region.lon_span
-    )
-    return dlat, dlon
 
 
 def _stamp(value) -> str | None:
@@ -317,13 +314,12 @@ def write_box_geojson(source, path, *, keys=None, criteria=None) -> int:
 
 def summarize_export(source) -> str:
     """Return a one-line description of what an export will contain."""
+    import sharpmod_rs
+
     pairs = _as_sequence(source)
     field_keys = _shared_keys(pairs, None)
     nodes = sum(len(analysis.points) for _hour, analysis in pairs)
-    if len(pairs) > 1:
-        return (
-            f"{nodes} rows ({len(pairs)} forecast hours x "
-            f"{pairs[0][1].rows * pairs[0][1].cols} points), "
-            f"{len(field_keys)} fields"
-        )
-    return f"{nodes} points, {len(field_keys)} fields"
+    first_grid = pairs[0][1].rows * pairs[0][1].cols
+    return sharpmod_rs.box_export_summarize(
+        len(pairs), nodes, first_grid, len(field_keys)
+    )

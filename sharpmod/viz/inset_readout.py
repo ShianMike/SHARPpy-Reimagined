@@ -57,19 +57,22 @@ def thetae_readout_lines(self, x, y):
     span = float(self.bry - self.tpad)
     if span <= 0:
         return None
-    p = self.pmax - ((self.bry - y) / span) * (self.pmax - self.pmin)
-    if not np.isfinite(p) or p <= 0:
-        return None
-    pres = np.ma.masked_invalid(np.ma.asarray(self.pres, dtype=float))
-    thte = np.ma.masked_invalid(np.ma.asarray(self.thetae, dtype=float))
-    mask = np.ma.getmaskarray(pres) | np.ma.getmaskarray(thte)
-    pres = np.asarray(pres[~mask], dtype=float)
-    thte = np.asarray(thte[~mask], dtype=float)
-    if pres.size < 2:
-        return None
-    order = np.argsort(pres)  # np.interp needs ascending sample points
-    thte_val = float(np.interp(p, pres[order], thte[order]))
-    return ["%.0f hPa" % p, "\u03b8e %.0f K" % thte_val]
+    pres = np.ascontiguousarray(
+        np.ma.masked_invalid(np.ma.asarray(self.pres, dtype=float)).filled(np.nan),
+        dtype=np.float64,
+    )
+    thte = np.ascontiguousarray(
+        np.ma.masked_invalid(np.ma.asarray(self.thetae, dtype=float)).filled(np.nan),
+        dtype=np.float64,
+    )
+    import sharpmod_rs
+
+    return sharpmod_rs.inset_thetae_readout(
+        float(x), float(y),
+        float(self.tlx), float(self.brx), float(self.tpad), float(self.bry),
+        float(self.pmax), float(self.pmin),
+        pres, thte,
+    )
 
 
 def srwinds_readout_lines(self, x, y):
@@ -82,28 +85,31 @@ def srwinds_readout_lines(self, x, y):
     span = float(self.bry - self.tpad)
     if span <= 0:
         return None
-    h = ((self.bry - 2 - y) / span) * (self.hmax - self.hmin) - self.hmin
-    if not np.isfinite(h):
-        return None
-    h = max(h, 0.0)
     try:
         sfc_h = float(prof.hght[prof.sfc])
     except Exception:
         return None
-    sru = np.ma.masked_invalid(np.ma.asarray(self.sru, dtype=float))
-    srv = np.ma.masked_invalid(np.ma.asarray(self.srv, dtype=float))
-    hght = np.ma.masked_invalid(np.ma.asarray(prof.hght, dtype=float))
-    mask = (np.ma.getmaskarray(sru) | np.ma.getmaskarray(srv)
-            | np.ma.getmaskarray(hght))
-    sru = np.asarray(sru[~mask], dtype=float)
-    srv = np.asarray(srv[~mask], dtype=float)
-    agl = np.asarray(hght[~mask], dtype=float) - sfc_h
-    if agl.size < 2:
-        return None
-    spd = np.hypot(sru, srv)
-    order = np.argsort(agl)
-    spd_val = float(np.interp(h * 1000.0, agl[order], spd[order]))
-    return ["%.1f km" % h, "%.0f kt" % spd_val]
+    sru = np.ascontiguousarray(
+        np.ma.masked_invalid(np.ma.asarray(self.sru, dtype=float)).filled(np.nan),
+        dtype=np.float64,
+    )
+    srv = np.ascontiguousarray(
+        np.ma.masked_invalid(np.ma.asarray(self.srv, dtype=float)).filled(np.nan),
+        dtype=np.float64,
+    )
+    hght = np.ascontiguousarray(
+        np.ma.masked_invalid(np.ma.asarray(prof.hght, dtype=float)).filled(np.nan),
+        dtype=np.float64,
+    )
+    import sharpmod_rs
+
+    return sharpmod_rs.inset_srwinds_readout(
+        float(x), float(y),
+        float(self.tlx), float(self.brx), float(self.tpad), float(self.bry),
+        float(self.hmax), float(self.hmin),
+        sfc_h,
+        sru, srv, hght,
+    )
 
 
 def slinky_readout_lines(self, x, y):
@@ -113,25 +119,12 @@ def slinky_readout_lines(self, x, y):
     traj = getattr(self, "slinky_traj", None)
     if traj is None or traj is np.ma.masked:
         return None
-    try:
-        from sharppy.sharptab import utils as sp_utils
-        qc = sp_utils.QC
-    except Exception:
-        qc = lambda v: v is not None and np.isfinite(v)  # noqa: E731
-    best_z = None
-    best_d2 = _SLINKY_HIT_RADIUS ** 2
-    for pt in traj:
-        tx, ty, tz = pt[0], pt[1], pt[2]
-        if not qc(tx) or not qc(ty):
-            continue
-        px, py = self.xy_to_pix(tx, ty)
-        d2 = (px - x) ** 2 + (py - y) ** 2
-        if d2 < best_d2:
-            best_d2 = d2
-            best_z = tz
-    if best_z is None or not np.isfinite(best_z):
-        return None
-    return ["%.1f km" % (float(best_z) / 1000.0)]
+    import sharpmod_rs
+
+    return sharpmod_rs.inset_slinky_nearest_height(
+        float(x), float(y), traj, self.xy_to_pix,
+        hit_radius=float(_SLINKY_HIT_RADIUS),
+    )
 
 
 def apply() -> bool:
@@ -166,22 +159,13 @@ def apply() -> bool:
         except AttributeError:  # very old Qt bindings
             text_w = max(fm.width(t) for t in lines)
         pad = 4
-        box_w = text_w + 2 * pad
-        box_h = line_h * len(lines) + 2 * pad
+        import sharpmod_rs
 
-        w = self.width()
-        hgt = self.height()
-        # Prefer up-and-to-the-right of the cursor; flip/clamp to stay inside.
-        bx = cx + 12
-        by = cy - box_h - 6
-        if bx + box_w > w:
-            bx = cx - box_w - 12
-        bx = max(0, min(bx, w - box_w))
-        if by < 0:
-            by = cy + 12
-        by = max(0, min(by, hgt - box_h))
-
-        rect = QtCore.QRectF(float(bx), float(by), float(box_w), float(box_h))
+        bx, by, box_w, box_h = sharpmod_rs.inset_readout_box_rect(
+            float(cx), float(cy), float(text_w), float(line_h), len(lines),
+            float(self.width()), float(self.height()),
+        )
+        rect = QtCore.QRectF(bx, by, box_w, box_h)
         qp.setPen(QtGui.QPen(QtGui.QColor(120, 150, 180, 220), 1))
         qp.setBrush(QtGui.QBrush(QtGui.QColor(16, 20, 28, 214)))
         qp.drawRoundedRect(rect, 3.0, 3.0)

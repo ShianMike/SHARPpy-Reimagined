@@ -21,7 +21,7 @@ def test_nam_only_offers_supported_nest_parameters_with_native_record_addresses(
     products = {product.key: product for product in hp.available_products("nam")}
     nest = {product.key: product for product in hp.available_products("nam-3km-conus")}
     assert products.keys() == nest.keys() - {"uh-0-3km", "uh-0-3km-run", "uh-2-5km-1h", "uh-2-5km-3h", "uh-2-5km-run"}
-    assert len(products) == 37
+    assert len(products) == 39
     assert {"refd-1km", "sbcin", "lcl"} <= products.keys()
     catalog = fields.catalog({"model": "nam"})
     assert catalog["field_model"] == "nam"

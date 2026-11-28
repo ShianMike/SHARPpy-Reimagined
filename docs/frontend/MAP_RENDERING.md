@@ -197,15 +197,18 @@ says so.
   with `_imageCoordinateSystem: "lnglat"`: deck.gl finds
   each screen pixel's place in the equirectangular image, so rows land at
   their latitudes in Web Mercator. **Pixel rendering** in the Model field
-  controls offers Sharp (nearest sampling, the default) and Smooth (bounded
-  Catmull–Rom interpolation of model values before palette lookup). Smooth
-  reconstructs field shapes instead of blending the finished RGBA image.
+  controls offers Sharp (nearest sampling) and Smooth (the default). Smooth
+  reconstructs field values with monotone cubic interpolation before palette
+  lookup. Precipitation-type fields interpolate intensity and use a separate
+  weighted vote for the type.
   It retains source sample values, clamps interpolation to the surrounding
-  cell range, and applies the same 1024-entry color table. Palette boundaries
-  receive only one screen pixel of antialiasing. Missing cells stay empty;
-  near missing neighbors the valid bilinear weights replace cubic sampling.
-  The choice applies to every model parameter in that panel;
-  the main panel's choice persists across reloads. Smooth uploads a cached,
+  cell range, and uses the product's original palette. Palette boundaries
+  receive one screen pixel of antialiasing, including precipitation coverage
+  and type boundaries. Scalar interpolation uses valid bilinear weights near
+  missing neighbors.
+  The choice applies to scalar and precipitation-type parameters in that panel.
+  Binary occurrence flags use nearest-neighbour sampling in either mode. The
+  main panel's choice persists across reloads. Smooth uploads a cached,
   lossless RG encoding of the uint16 grid with a separate validity channel;
   deck.gl owns and releases both grid and palette textures.
   `fieldImages.ts` shares lazy and prepared images by immutable frame identity.
@@ -213,7 +216,8 @@ says so.
   yields between short packing tasks, and publishes no partial canceled image.
   With the dev server running, `/tooling/raster-smoothing-check.html` checks
   the real GPU shader against Sharp and the former color-space linear filter
-  at three zooms, plus peaks, missing data, and palette display limits.
+  at three zooms, plus isolated peaks, steep scalar gradients, precipitation
+  bands, missing data, and palette display limits.
   See [NVIDIA's cubic filtering discussion](https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-20-fast-third-order-texture-filtering)
   and [Matplotlib's data versus RGBA interpolation](https://matplotlib.org/3.11.2/api/_as_gen/matplotlib.pyplot.imshow.html).
 - **Legend and values** (`controls/FieldLegend.tsx`, `panels/MapPanel.tsx`).
@@ -261,13 +265,13 @@ says so.
   ring and cross for a checked station, a dashed ring and question for a failed
   query, and a dashed ring over a stale plot. Hover reads the provider's
   description (`hover/ReportTooltip.tsx`).
-- **Contour lines** (`layers/ContourLayer.ts`, `map/contourQueries.ts`). The
-  product's contour field as lon/lat segments (`get_field_contours`), drawn
-  with the catalogue's own `ContourSpec` (colour, width, interval) over its
-  coloured field. They ride with `model-field`: one row, one product, and the
-  row states the interval. The level set is the multiples of the interval, the
-  same lines `draw_contours` stamps into the legacy PNG; cells with a
-  non-finite corner contribute nothing, so holes stay empty.
+- **Contour lines** (`layers/ContourLayer.ts`, `map/contourQueries.ts`). Rust
+  traces the catalogue's contour interval on the interpolated display grid.
+  Sea-level pressure, 1000–500 mb thickness, and geopotential height use joined
+  paths with locally rounded bends and labels on their respective levels.
+  Missing-data cells contribute no segments. The frontend antialiases the
+  strokes and applies the thickness dashes to the joined paths. Product contours
+  ride with `model-field`, and Isobars can supply pressure independently.
 - **SPC outlooks** (`layers/SPCOutlookLayer.ts`, `layers/outlookGeometry.ts`).
   Four layers, each its own query at the forecast valid time. An area draws
   SPC's fill as a wash (alpha 0.4) and its stroke, a label inside it

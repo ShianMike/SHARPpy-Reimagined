@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { cx } from "../../lib/cx";
 import { convertUnit, displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
@@ -7,6 +7,30 @@ import { decodePtypeValue, drawnRangeNote, formatValue, sampleAt } from "../fiel
 import type { PanelField } from "../panelField";
 import { useHoverStore, type PointerPosition } from "./hoverStore";
 import styles from "./StationTooltip.module.css";
+
+const coord = (value: number): string => (Number(value.toFixed(4)) || 0).toFixed(4);
+
+/** Writes --tooltip-w/-h when the box changes, never on every pointer move. */
+export function useTooltipSize(ref: RefObject<HTMLElement | null>, key: unknown): void {
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (element === null) return;
+    let width = -1;
+    let height = -1;
+    const measure = (): void => {
+      const box = element.getBoundingClientRect();
+      if (box.width === width && box.height === height) return;
+      width = box.width;
+      height = box.height;
+      element.style.setProperty("--tooltip-w", `${String(width)}px`);
+      element.style.setProperty("--tooltip-h", `${String(height)}px`);
+    };
+    measure();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    observer?.observe(element);
+    return () => { observer?.disconnect(); };
+  }, [ref, key]);
+}
 
 /** Reads one cached raw cell; pointer movement never updates the map scene. */
 export function FieldTooltip({ panel, field }: { panel: number; field: PanelField }): ReactNode {
@@ -22,24 +46,17 @@ export function FieldTooltip({ panel, field }: { panel: number; field: PanelFiel
   const unit = displayUnit(source, units, palette?.display);
   const suffix = [decoded?.ptypeLabel, note === "" ? null : note].filter((part): part is string => part != null && part !== "").join(", ");
   const text = decoded === null ? "No data here" : `${formatValue(convertUnit(decoded.amount, source, unit, palette?.display))} ${unit}${suffix === "" ? "" : ` (${suffix})`}`;
-  const label = field.product === null ? undefined
-    : field.variant === null ? field.product.label : `${field.product.shortLabel} · ${field.variant.label}`;
+  const label = pointer === null ? undefined : `${coord(pointer.latitude)}, ${coord(pointer.longitude)}`;
   return <PointerValue pointer={visible ? pointer : null} label={label} text={text} />;
 }
 
 export function PointerValue({ pointer, label, text }: { pointer: PointerPosition | null; label: string | undefined; text: string }): ReactNode {
   const ref = useRef<HTMLElement | null>(null);
   const visible = pointer !== null;
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (element === null) return;
-    const box = element.getBoundingClientRect();
-    element.style.setProperty("--tooltip-w", `${String(box.width)}px`);
-    element.style.setProperty("--tooltip-h", `${String(box.height)}px`);
-  }, [visible, text, label]);
+  useTooltipSize(ref, visible);
   if (!visible) return null;
   return <Surface ref={ref} elevation="popover" role="tooltip" className={cx(styles.tooltip, styles.field)} data-testid="pointer-value"
     style={{ "--tooltip-x": `${String(pointer.x)}px`, "--tooltip-y": `${String(pointer.y)}px` } as CSSProperties}>
-    <span className={styles.meta}>{label}</span><strong className="tabular">{text}</strong>
+    <span className={cx(styles.meta, "tabular")}>{label}</span><strong className="tabular">{text}</strong>
   </Surface>;
 }

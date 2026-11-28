@@ -2,6 +2,7 @@ import { Check, LoaderCircle, Star, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { recordLog } from "../../stores/logStore";
 import { GITHUB_STAR_BROWSER_SNOOZE_MS, GITHUB_STAR_NOT_NOW_MS } from "../../stores/githubStarPreferences";
+import { useAppStore } from "../../stores/appStore";
 import { useUiStore } from "../../stores/uiStore";
 import { useUpdateStore } from "../../stores/updateStore";
 import { Action, IconAction } from "../../ui/Controls";
@@ -15,9 +16,10 @@ type StarNoticePhase = "idle" | "starring" | "starred" | "error";
 const STARRED_THANK_YOU_MS = 3_000;
 
 export function GitHubStarNotice(): ReactNode {
+  const overviewActive = useAppStore((state) => state.activeWorkspace === "overview");
   const whatsNewOpen = useUiStore((state) => state.whatsNewOpen);
   const reviewOpen = useUpdateStore((state) => state.installReview !== null);
-  const promptVisible = useGitHubStarPrompt(whatsNewOpen || reviewOpen);
+  const promptVisible = useGitHubStarPrompt(overviewActive || whatsNewOpen || reviewOpen);
   const [phase, setPhase] = useState<StarNoticePhase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [sessionClosed, setSessionClosed] = useState(false);

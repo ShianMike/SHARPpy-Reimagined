@@ -68,7 +68,7 @@ export function composeForecast(canvas: HTMLCanvasElement, captured: CapturedFor
   const top = 100 * scale, bottom = 60 * scale;
   const columnWidth = 12 * scale, gap = 4 * scale;
   const rampRight = width - padding - 2 * scale;
-  if (ptypeGroups !== null && palette.units === "in") {
+  if (ptypeGroups !== null) {
     const paths = precipitationIconPaths ??= PRECIPITATION_ICON_PATHS.map((path) => new Path2D(path));
     const iconSize = 20 * scale;
     const iconScale = iconSize / 24;
@@ -77,7 +77,8 @@ export function composeForecast(canvas: HTMLCanvasElement, captured: CapturedFor
     const rampHeight = blockHeight - iconSize - gap;
     const left = rampRight - columnWidth;
     const iconLeft = left + (columnWidth - iconSize) / 2;
-    context.font = `${String(Math.max(8, font * 0.85))}px ${family}`;
+    const tickFont = Math.max(8, font * 0.85);
+    context.font = `${String(tickFont)}px ${family}`;
     context.textAlign = "right";
     context.textBaseline = "middle";
     context.lineJoin = "round";
@@ -105,38 +106,26 @@ export function composeForecast(canvas: HTMLCanvasElement, captured: CapturedFor
       context.fillStyle = foreground;
       context.strokeStyle = background;
       context.lineWidth = 3 * scale;
-      drawPtypeTicks(context, palette.ticks, stops, ramp, 8 * scale, 44 * scale);
+      drawPtypeTicks(context, palette.ticks, stops, ramp, 8 * scale, 44 * scale, tickFont + context.lineWidth);
     });
   } else {
-    const ptypeStops = ptypeGroups?.[0]?.stops;
-    const legendWidth = (ptypeGroups === null ? 90 : 100) * scale;
-    const rampWidth = ptypeGroups === null ? columnWidth : ptypeGroups.length * (columnWidth + gap) - gap;
-    const rampLeft = rampRight - rampWidth, rampTop = top + font * 2;
-    const availableHeight = height - top - bottom - font * 4;
-    context.font = `${String(font * 0.85)}px ${family}`;
-    const labelHeight = ptypeGroups === null ? 0 : Math.min(availableHeight / 3,
-      Math.max(...ptypeGroups.map(({ label }) => context.measureText(label).width)));
-    const rampHeight = availableHeight - (ptypeGroups === null ? 0 : labelHeight + gap);
-    const rampBounds = { left: rampLeft, top: rampTop, width: columnWidth, height: rampHeight };
+    const legendWidth = 90 * scale;
+    const rampLeft = rampRight - columnWidth, rampTop = top + font * 2;
+    const rampHeight = height - top - bottom - font * 4;
+    const ramp = document.createElement("canvas");
+    ramp.width = 1; ramp.height = LUT_SIZE;
+    const pixels = new Uint8ClampedArray(buildLut(palette));
+    new Uint32Array(pixels.buffer).reverse();
+    ramp.getContext("2d")?.putImageData(new ImageData(pixels, 1, LUT_SIZE), 0, 0);
+    context.imageSmoothingEnabled = false;
+    context.drawImage(ramp, rampLeft, rampTop, columnWidth, rampHeight);
     context.strokeStyle = muted;
     context.lineWidth = scale;
-    if (ptypeGroups === null) {
-      const ramp = document.createElement("canvas");
-      ramp.width = 1; ramp.height = LUT_SIZE;
-      const pixels = new Uint8ClampedArray(buildLut(palette));
-      new Uint32Array(pixels.buffer).reverse();
-      ramp.getContext("2d")?.putImageData(new ImageData(pixels, 1, LUT_SIZE), 0, 0);
-      context.imageSmoothingEnabled = false;
-      context.drawImage(ramp, rampLeft, rampTop, columnWidth, rampHeight);
-      context.strokeRect(rampLeft, rampTop, columnWidth, rampHeight);
-    } else {
-      ptypeGroups.forEach(({ stops }, column) => {
-        drawPtypeRamp(context, stops, { ...rampBounds, left: rampLeft + column * (columnWidth + gap) });
-      });
-    }
+    context.strokeRect(rampLeft, rampTop, columnWidth, rampHeight);
     const unit = displayUnit(palette.units, options.units, palette.display);
     const unitLabel = unit || (palette.units === "flag" ? "Present" : "Unitless");
     context.fillStyle = foreground;
+    context.font = `${String(font * 0.85)}px ${family}`;
     context.textAlign = "right";
     context.strokeStyle = background;
     context.lineWidth = 3 * scale;
@@ -145,26 +134,17 @@ export function composeForecast(canvas: HTMLCanvasElement, captured: CapturedFor
     context.fillText(unitLabel, width - padding, top, legendWidth);
     context.textBaseline = "middle";
     const tickGap = 8 * scale;
-    if (ptypeGroups !== null && ptypeStops !== undefined) {
-      drawPtypeTicks(context, palette.ticks, ptypeStops, rampBounds, tickGap, legendWidth - rampWidth - tickGap);
-      ptypeGroups.forEach(({ label }, column) => {
-        context.save();
-        context.translate(rampLeft + column * (columnWidth + gap) + columnWidth / 2, rampTop + rampHeight + gap);
-        context.rotate(Math.PI / 2);
-        context.textAlign = "left";
-        context.strokeText(label, 0, 0, labelHeight);
-        context.fillText(label, 0, 0, labelHeight);
-        context.restore();
-      });
-    } else {
-      const { low, high } = paletteRange(palette);
-      const span = convertUnit(high, palette.units, unit, palette.display) - convertUnit(low, palette.units, unit, palette.display);
-      for (const at of palette.units === "flag" ? [1, 0] : [1, 0.75, 0.5, 0.25, 0]) {
-        const value = convertUnit(low + at * (high - low), palette.units, unit, palette.display);
-        const text = palette.units === "flag" ? at === 1 ? "Present" : "Absent" : formatScaleTick(value, span);
-        context.strokeText(text, rampLeft - tickGap, rampTop + (1 - at) * rampHeight);
-        context.fillText(text, rampLeft - tickGap, rampTop + (1 - at) * rampHeight);
-      }
+    const { low, high } = paletteRange(palette);
+    const span = convertUnit(high, palette.units, unit, palette.display) - convertUnit(low, palette.units, unit, palette.display);
+    const fixedTicks = palette.display === "fixed" && palette.stepped && (unit === "mph" || unit === "dam");
+    const tickMarks = fixedTicks
+      ? [...palette.ticks].reverse().map((raw) => ({ at: (raw - low) / (high - low), raw }))
+      : (palette.units === "flag" ? [1, 0] : [1, 0.75, 0.5, 0.25, 0]).map((at) => ({ at, raw: low + at * (high - low) }));
+    for (const { at, raw } of tickMarks) {
+      const value = convertUnit(raw, palette.units, unit, palette.display);
+      const text = palette.units === "flag" ? at === 1 ? "Present" : "Absent" : formatScaleTick(value, span);
+      context.strokeText(text, rampLeft - tickGap, rampTop + (1 - at) * rampHeight);
+      context.fillText(text, rampLeft - tickGap, rampTop + (1 - at) * rampHeight);
     }
   }
   context.textAlign = "left";
@@ -185,12 +165,21 @@ function drawPtypeRamp(context: CanvasRenderingContext2D, stops: Palette["stops"
 }
 
 function drawPtypeTicks(context: CanvasRenderingContext2D, ticks: Palette["ticks"], stops: Palette["stops"],
-  { left, top, height }: LegendRamp, gap: number, maxWidth: number): void {
+  { left, top, height }: LegendRamp, gap: number, maxWidth: number, minSpacing = 0): void {
   const high = stops.at(-1)?.[0];
-  for (const { value, at } of ptypePaletteTicks(ticks, stops)) {
-    const text = `${String(value)}${value === high ? "+" : ""}`;
-    const y = Math.round(top + (1 - at) * height);
-    context.strokeText(text, left - gap, y, maxWidth);
-    context.fillText(text, left - gap, y, maxWidth);
+  const positioned = ptypePaletteTicks(ticks, stops).map(({ value, at }) => ({
+    text: `${String(value)}${value === high ? "+" : ""}`,
+    y: Math.round(top + (1 - at) * height),
+  }));
+  const last = positioned.at(-1);
+  let previousY = Infinity;
+  for (const [index, tick] of positioned.entries()) {
+    const interior = index > 0 && tick !== last;
+    if (minSpacing > 0 && interior && (previousY - tick.y <= minSpacing || (last !== undefined && tick.y - last.y <= minSpacing))) {
+      continue;
+    }
+    context.strokeText(tick.text, left - gap, tick.y, maxWidth);
+    context.fillText(tick.text, left - gap, tick.y, maxWidth);
+    previousY = tick.y;
   }
 }

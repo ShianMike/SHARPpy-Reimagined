@@ -128,22 +128,13 @@ def parse(text: str | None) -> tuple[Selection, ...]:
     which is the default: an inset that reaches for the network before being
     asked is a surprise, not a feature.
     """
-    if text is None:
-        return ()
-    cleaned = text.strip()
-    if not cleaned or cleaned.casefold() == "none":
-        return ()
+    import sharpmod_rs
 
-    selections: list[Selection] = []
-    for part in cleaned.split(","):
-        token = part.strip()
-        if not token:
-            continue
-        family, separator, product = token.partition(":")
-        family = family.strip().casefold()
-        product = product.strip() if separator else ""
-        selections.append(Selection(family, product or None))
-    return enforce_exclusivity(tuple(selections))
+    try:
+        items = sharpmod_rs.locator_parse_overlay_spec(text)
+    except ValueError as exc:
+        raise LocatorOverlayError(str(exc)) from None
+    return tuple(Selection(family, product) for family, product in items)
 
 
 def enforce_exclusivity(selections) -> tuple[Selection, ...]:
@@ -156,28 +147,14 @@ def enforce_exclusivity(selections) -> tuple[Selection, ...]:
     A family whose prerequisite is not also selected is dropped, so a dependent
     overlay can never end up on screen without the thing it is read against.
     """
-    ordered: list[Selection] = []
-    seen_families: set[str] = set()
-    for selection in selections:
-        if selection.family in seen_families:
-            continue  # one slot per family; the first mention wins
-        seen_families.add(selection.family)
-        ordered.append(selection)
+    import sharpmod_rs
 
-    radar = [item for item in ordered if item.family in EXCLUSIVE]
-    if radar:
-        # Radar displaces the composable families, and a prerequisite that has
-        # just been displaced cannot satisfy anything either.
-        return (radar[0],)
-
-    kept = [item for item in ordered if item.family in COMBINABLE]
-    present = {item.family for item in kept}
-    satisfied = [item for item in kept if REQUIRES.get(item.family) in (None, *present)]
-    # Returned in FAMILIES order rather than the order they were named, because
-    # the inset draws them in the order it receives them. Point markers have to
-    # land on top of the areas they annotate, and which of the two the user
-    # happened to type first is not a statement about draw order.
-    return tuple(sorted(satisfied, key=lambda item: FAMILIES.index(item.family)))
+    pairs = [(selection.family, selection.product) for selection in selections]
+    try:
+        items = sharpmod_rs.locator_enforce_overlay_exclusivity(pairs)
+    except ValueError as exc:
+        raise LocatorOverlayError(str(exc)) from None
+    return tuple(Selection(family, product) for family, product in items)
 
 
 def missing_prerequisite(family: str, selections) -> str | None:

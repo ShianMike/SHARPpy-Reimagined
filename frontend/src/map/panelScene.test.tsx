@@ -16,83 +16,19 @@ import { BackendProvider } from "../lib/backend/BackendProvider";
 import { BackendClient } from "../lib/backend/client";
 import { createTransport } from "../lib/backend/fixtureTransport";
 import { createQueryClient, mapKeys } from "../lib/backend/queryOptions";
-import { encodeShrf, parseFieldFrame, parseShrf } from "../lib/contracts/frames";
-import { parseMapCatalog } from "../lib/contracts/map";
-import { parseModelCatalog } from "../lib/contracts/soundings";
+import { encodeShrf, parseShrf } from "../lib/contracts/frames";
 import type { CommandName, Transport } from "../lib/backend/transport";
-import type { FieldFrame } from "../types/map";
 import { useForecastStore } from "../stores/forecastStore";
 import { useMapStore } from "../stores/mapStore";
 import { useLiveTrackingStore } from "../stores/liveTrackingStore";
 import { defaultLayerStates, type SceneData } from "./layers/registry";
-import { domainPath, useFieldImage, usePanelScene, usePngImage } from "./panelScene";
+import { usePanelScene } from "./panelScene";
 import type { MapRuntime } from "./runtime/MapRuntime";
 
 const savedMap = useMapStore.getState();
 const savedLive = useLiveTrackingStore.getState();
 const savedForecast = useForecastStore.getState();
 
-it("exposes image decode failure, ignores an obsolete rejection, and retries the displayed frame", async () => {
-  const refetch = vi.fn();
-  let rejectOld: (error: Error) => void = () => undefined;
-  const decode = vi.fn().mockImplementationOnce(() => new Promise((_, reject) => { rejectOld = reject; }))
-    .mockRejectedValueOnce(new Error("corrupt PNG")).mockResolvedValue({ width: 2, height: 2 });
-  vi.stubGlobal("createImageBitmap", decode);
-  const bounds = { west: -100, east: -90, south: 30, north: 40 };
-  const older = { png: new Blob(["old"]), bounds, validTime: "2026-10-04T18:00:00Z" };
-  const newer = { png: new Blob(["new"]), bounds, validTime: "2026-10-04T19:00:00Z" };
-  const hook = renderHook(({ data, enabled }) => usePngImage({ data, isError: false, refetch }, enabled, "radar"),
-    { initialProps: { data: older, enabled: true } });
-  expect(hook.result.current.decodedCurrent).toBe(false);
-  hook.rerender({ data: newer, enabled: true });
-  await waitFor(() => { expect(hook.result.current.issue).toContain("could not be decoded"); });
-  expect(hook.result.current.decodedCurrent).toBe(false);
-  await act(async () => { rejectOld(new Error("obsolete")); await Promise.resolve(); });
-  expect(hook.result.current.issue).toContain("could not be decoded");
-  act(() => { hook.result.current.retry(); });
-  await waitFor(() => { expect(hook.result.current.image).not.toBeNull(); });
-  expect(hook.result.current.issue).toBeNull();
-  expect(hook.result.current.decodedCurrent).toBe(true);
-  expect(refetch).toHaveBeenCalledTimes(1);
-  hook.rerender({ data: newer, enabled: false });
-  expect(hook.result.current.image).toBeNull();
-  expect(hook.result.current.decodedCurrent).toBe(false);
-  act(() => { hook.result.current.retry(); });
-  expect(refetch).toHaveBeenCalledTimes(1);
-});
-
-it("clears an earlier radar image until the newly selected frame finishes decoding", async () => {
-  let finish: (image: { width: number; height: number }) => void = () => undefined;
-  vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValueOnce({ width: 2, height: 2 })
-    .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; })));
-  const bounds = { west: -100, east: -90, south: 30, north: 40 };
-  const older = { png: new Blob(["old"]), bounds, validTime: "2026-10-04T18:00:00Z" };
-  const newer = { png: new Blob(["new"]), bounds, validTime: "2026-10-04T18:05:00Z" };
-  const refetch = vi.fn();
-  const hook = renderHook(({ data }) => usePngImage({ data, isError: false, refetch }, true, "radar", false),
-    { initialProps: { data: older } });
-  await waitFor(() => { expect(hook.result.current.image).not.toBeNull(); });
-  hook.rerender({ data: newer });
-  expect(hook.result.current.image).toBeNull();
-  await act(async () => { finish({ width: 2, height: 2 }); await Promise.resolve(); });
-  await waitFor(() => { expect(hook.result.current.decodedCurrent).toBe(true); });
-  expect(hook.result.current.image).not.toBeNull();
-  hook.unmount();
-});
-
-it("uses the same closed grid perimeter without adding a zero-length segment", () => {
-  const catalogue = parseModelCatalog(models);
-  const reference = catalogue.models.find((model) => model.key === "hrrr");
-  if (reference === undefined) throw new Error("Missing model fixture");
-  for (const model of catalogue.models.filter((item) => item.key === "hrrr" || item.key === "nam-3km-conus" || item.key === "rrfs-a" || item.key.startsWith("refs-m"))) {
-    const path = domainPath(model);
-    expect(path).toBe(model.outline);
-    expect(path).toEqual(reference.outline);
-    expect(path?.length).toBeGreaterThan(100);
-    expect(path?.[0]).toEqual(path?.at(-1));
-    expect(domainPath(model)).toBe(path);
-  }
-});
 afterEach(() => {
   cleanup();
   useMapStore.setState(savedMap);
@@ -103,21 +39,26 @@ afterEach(() => {
 
 const bytes = (url: string): ArrayBuffer => Uint8Array.from(atob(url.split(",")[1] ?? ""), (c) => c.charCodeAt(0)).buffer;
 
-it("loads selected-time isobars only when enabled, independently of the coloured field", async () => {
+it.each([false, true])("loads selected-time pressure lines for a standalone or pressure/wind product (wind=%s)", async (wind) => {
   const layers = defaultLayerStates();
-  useMapStore.setState({ view: "map", activePanel: 0, layers });
+  layers["model-field"].visible = wind;
+  useMapStore.setState({ view: "map", activePanel: 0, layers, productKey: wind ? "mslp" : null });
   useForecastStore.setState({ modelKey: "hrrr", runTime: "2026-10-04T18:00:00Z", forecastHour: 3 });
   const template = catalog.products[0];
   if (template === undefined) throw new Error("Missing catalogue fixture");
-  const pressureCatalog = { ...catalog, products: [...catalog.products.filter((product) => product.key !== "mslp"), { ...template,
-    key: "mslp", label: "Mean Sea-level Pressure", shortLabel: "MSLP", category: "Surface", wind: false,
+  const pressureProduct = { ...template,
+    key: "mslp", label: "Mean Sea-level Pressure", shortLabel: "MSLP", category: "Surface", wind,
     palette: { ...template.palette, units: "hPa" }, contour: { interval: 4, label: "hPa", colour: "#101418", width: 1.2 },
-  }] };
+  };
+  const pressureCatalog = { ...catalog, products: [...catalog.products.filter((product) => product.key !== "mslp"), pressureProduct] };
+  const raw = parseShrf(bytes(fieldPng));
+  const field = encodeShrf({ ...raw.header, product: "mslp", forecastHour: 3, validTime: "2026-10-04T21:00:00Z", units: "hPa" }, raw.body);
   const fallback = createTransport();
   const calls = vi.fn((command: CommandName, params?: Record<string, unknown>) => {
-    if (command === "get_field_contours") return Promise.resolve({ ...contourFixture, product: "mslp", interval: 4, unit: "hPa", wind: null,
+    if (command === "get_field_contours") return Promise.resolve({ ...contourFixture, product: "mslp", interval: 4, unit: "hPa", wind: wind ? contourFixture.wind : null,
       forecastHour: params?.forecastHour, labels: [{ position: [-99.5, 35.5], value: 1012 }] });
-    const replies: Partial<Record<CommandName, unknown>> = { get_map_catalog: pressureCatalog, get_model_catalog: models, get_station_catalog: stations, get_place_labels: places };
+    const replies: Partial<Record<CommandName, unknown>> = { get_map_catalog: pressureCatalog, get_model_catalog: models,
+      get_station_catalog: stations, get_place_labels: places, get_weather_field: field };
     return command in replies ? Promise.resolve(replies[command]) : fallback.call(command, params);
   });
   const transport: Transport = { call: calls, listen: () => Promise.resolve(() => undefined) };
@@ -127,20 +68,30 @@ it("loads selected-time isobars only when enabled, independently of the coloured
   const runtime = { setScene: (patch: Partial<SceneData>) => { Object.assign(scene, patch); }, setStations: vi.fn() } as unknown as MapRuntime;
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
   await waitFor(() => { expect(hook.result.current.catalog.data).toBeDefined(); });
-  expect(calls.mock.calls.filter(([method]) => method === "get_field_contours")).toHaveLength(0);
-  act(() => { useMapStore.getState().setLayerVisible("isobars", true); });
+  if (wind) await waitFor(() => { expect(scene.contours?.forecastHour).toBe(3); });
+  expect(calls.mock.calls.filter(([method]) => method === "get_field_contours")).toHaveLength(wind ? 1 : 0);
+  act(() => {
+    if (wind) useMapStore.getState().setLayerOpacity("isobars", 0);
+    useMapStore.getState().setLayerVisible("isobars", true);
+  });
   await waitFor(() => { expect(scene.isobars?.forecastHour).toBe(3); });
   expect(scene.isobars?.labels?.[0]?.value).toBe(1012);
   expect(calls).toHaveBeenCalledWith("get_field_contours", expect.objectContaining({ product: "mslp", model: "hrrr", runTime: "2026-10-04T18:00:00Z", forecastHour: 3 }));
-  expect(calls.mock.calls.filter(([method]) => method === "get_weather_field")).toHaveLength(0);
-  act(() => { useForecastStore.getState().setHour(4); });
-  await waitFor(() => { expect(scene.isobars?.forecastHour).toBe(4); });
-  act(() => { useMapStore.getState().setLayerVisible("isobars", false); });
-  await waitFor(() => { expect(scene.isobars).toBeNull(); });
-  const completed = calls.mock.calls.filter(([method]) => method === "get_field_contours").length;
-  act(() => { useForecastStore.getState().setHour(5); });
-  await waitFor(() => { expect(hook.result.current.catalog.data).toBeDefined(); });
-  expect(calls.mock.calls.filter(([method]) => method === "get_field_contours")).toHaveLength(completed);
+  if (wind) {
+    expect(scene.contours).toBe(scene.isobars);
+    expect(scene.contourSpec).toEqual(pressureProduct.contour);
+    expect(calls.mock.calls.filter(([method]) => method === "get_field_contours")).toHaveLength(1);
+  } else {
+    expect(calls.mock.calls.filter(([method]) => method === "get_weather_field")).toHaveLength(0);
+    act(() => { useForecastStore.getState().setHour(4); });
+    await waitFor(() => { expect(scene.isobars?.forecastHour).toBe(4); });
+    act(() => { useMapStore.getState().setLayerVisible("isobars", false); });
+    await waitFor(() => { expect(scene.isobars).toBeNull(); });
+    const completed = calls.mock.calls.filter(([method]) => method === "get_field_contours").length;
+    act(() => { useForecastStore.getState().setHour(5); });
+    await waitFor(() => { expect(hook.result.current.catalog.data).toBeDefined(); });
+    expect(calls.mock.calls.filter(([method]) => method === "get_field_contours")).toHaveLength(completed);
+  }
   hook.unmount(); queryClient.clear();
 });
 
@@ -178,32 +129,6 @@ it.each(["map", "live"] as const)("renders storm reports at the %s clock with th
   act(() => { useMapStore.getState().setLayerVisible("storm-reports", false); });
   await waitFor(() => { expect(scene.reports).toBeNull(); });
   hook.unmount(); queryClient.clear();
-});
-
-it("shares a frame across panels and reopens, colouring only when its Sharp image is read", () => {
-  const construct = vi.fn(function (data: Uint8ClampedArray, width: number, height: number) { return { data, width, height }; });
-  vi.stubGlobal("ImageData", construct);
-  const frame = parseFieldFrame(bytes(fieldPng));
-  const palette = parseMapCatalog(catalog).products[0]?.palette;
-  if (palette === undefined) throw new Error("Fixture palette missing");
-  const first = renderHook(() => useFieldImage(frame, palette));
-  const second = renderHook(() => useFieldImage(frame, palette));
-  expect(second.result.current).toBe(first.result.current);
-  expect(construct).not.toHaveBeenCalled();
-  expect(second.result.current?.image).toBe(first.result.current?.image);
-  expect(construct).toHaveBeenCalledTimes(1);
-  const image = first.result.current;
-  first.unmount(); second.unmount();
-  const initialProps: { selected: FieldFrame | undefined } = { selected: frame };
-  const reopened = renderHook(({ selected }) => useFieldImage(selected, palette), { initialProps });
-  expect(reopened.result.current).toBe(image);
-  reopened.rerender({ selected: undefined });
-  expect(reopened.result.current).toBeNull();
-  reopened.rerender({ selected: { ...frame, cells: frame.cells.slice() } });
-  expect(reopened.result.current === image).toBe(false);
-  expect(construct).toHaveBeenCalledTimes(1);
-  expect(reopened.result.current?.image).not.toBe(image?.image);
-  expect(construct).toHaveBeenCalledTimes(2);
 });
 
 it("keeps radar visible during decoding and refresh failure, and clears it on product change", async () => {

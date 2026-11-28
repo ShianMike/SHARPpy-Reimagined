@@ -119,7 +119,11 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
             if failure is not None:
                 raise _field_error("FIELD_FETCH_FAILED", f"{model_label} field availability could not be checked", failure, True) from None
             raise BridgeError("FIELD_UNAVAILABLE", f"No supported {model_label} fields are published for this run and hour. Choose an earlier run or retry later.", False)
-    if is_global or is_hrw or model in {"rap", "rdps", "hrdps"}:
+    if model in hrrr_products.NSSL_MPAS_MODELS:
+        from sharpmod_rs import nssl_mpas_cycle_limits
+
+        limits = nssl_mpas_cycle_limits(model)
+    elif is_global or is_hrw or model in {"rap", "rdps", "hrdps"}:
         from sharpmod.tools.model_extract import cycle_hours, forecast_hours
         cycles = cycle_hours(model)
         limits = [max(forecast_hours(model, cycle_hour=cycle)) if cycle in cycles else 0 for cycle in range(24)]

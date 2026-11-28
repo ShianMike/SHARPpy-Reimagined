@@ -16,6 +16,7 @@
 .panel > .map {
   position: absolute;
   inset: 0;
+  z-index: var(--z-map);
 }
 
 /* Top-left of each panel, below the shared toolbar and clear of the rail. */
@@ -31,6 +32,20 @@
   max-width: calc(100% - var(--heading-left) - var(--chrome-inset));
 }
 
+.chipSurface {
+  display: flex;
+  min-width: 0;
+  max-width: var(--panel-chip-max-w);
+  border-radius: var(--radius-md);
+}
+
+.toggleSurface {
+  display: flex;
+  flex: none;
+  align-items: center;
+  border-radius: var(--radius-pill);
+}
+
 .chip {
   display: flex;
   flex-direction: column;
@@ -38,11 +53,11 @@
   gap: var(--space-0-5);
   min-height: var(--control-h-xs);
   min-width: 0;
-  max-width: var(--panel-chip-max-w);
+  max-width: 100%;
   padding: var(--space-1) var(--space-3);
-  border: var(--hairline) solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--glass-fill);
+  border: var(--hairline) solid transparent;
+  border-radius: inherit;
+  background: transparent;
   color: var(--text-primary);
   font: inherit;
   font-size: var(--font-size-small);
@@ -58,17 +73,25 @@
 
 button.layerToggle[data-size="sm"] {
   width: var(--control-h-xs);
-  height: auto;
-  border: var(--hairline) solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--glass-fill);
-  color: var(--text-primary);
+  height: 100%;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
 }
 
-button.chip:hover:not(:disabled),
+button.layerToggle[data-size="sm"]:not(:hover, :focus-visible) > svg {
+  opacity: var(--glass-icon-opacity);
+}
+
+button.chip:hover:not(:disabled) {
+  border-color: var(--accent-glass-border);
+  background: var(--accent-glass-sheen), var(--fill-hover);
+  color: var(--accent-bright);
+}
+
 button.layerToggle:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--fill-hover);
+  background: var(--accent-glass-sheen), var(--fill-hover);
   color: var(--accent-bright);
 }
 

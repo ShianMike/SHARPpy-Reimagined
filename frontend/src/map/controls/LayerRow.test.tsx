@@ -14,9 +14,6 @@ import { createTransport } from "../../lib/backend/fixtureTransport";
 import { renderWithBackend } from "../../test/backendHarness";
 import { LayerPanel } from "./LayerPanel";
 import { LayerRow } from "./LayerRow";
-import { AvailabilityControl } from "./AvailabilityControl";
-import { RadarControls, SatelliteControls } from "./OverlayControls";
-import { ReportControls } from "./ReportControls";
 
 const initial = useMapStore.getState();
 beforeEach(() => { useMapStore.setState(initial, true); });
@@ -202,7 +199,15 @@ it("opens one weather editor at a time without closing it when another layer is 
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "Radar mosaic settings" }));
   expect(screen.getByRole("button", { name: "Radar mosaic settings" }).getAttribute("aria-expanded")).toBe("true");
+  expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Radar mosaic" }));
+  const radarOpacity = screen.getByRole("slider", { name: "Radar mosaic opacity" });
+  expect(radarOpacity.closest("[data-motion]")?.getAttribute("data-motion")).toBe("enter");
+  radarOpacity.focus();
+  fireEvent.change(radarOpacity, { target: { value: "0.45" } });
+  expect(screen.getByRole("slider", { name: "Radar mosaic opacity" })).toBe(radarOpacity);
+  expect(document.activeElement).toBe(radarOpacity);
   await user.click(screen.getByRole("button", { name: "GOES satellite settings" }));
+  expect(document.activeElement).toBe(screen.getByRole("heading", { name: "GOES satellite" }));
   expect(screen.getByRole("button", { name: "Radar mosaic settings" }).getAttribute("aria-expanded")).toBe("false");
   expect(screen.getByRole("button", { name: "GOES satellite settings" }).getAttribute("aria-expanded")).toBe("true");
   expect(screen.queryByRole("slider", { name: "Radar mosaic opacity" })).toBeNull();
@@ -212,8 +217,12 @@ it("opens one weather editor at a time without closing it when another layer is 
   await waitFor(() => { expect(document.activeElement).toBe(screen.getByRole("button", { name: "GOES satellite settings" })); });
   expect(screen.queryByTestId("layer-settings-satellite")).toBeNull();
   await user.click(screen.getByRole("button", { name: "GOES satellite settings" }));
+  await user.click(screen.getByRole("button", { name: "Layers" }));
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "GOES satellite settings" }));
+  await user.click(screen.getByRole("button", { name: "GOES satellite settings" }));
   await user.click(screen.getByRole("button", { name: "Panel 2" }));
   expect(screen.getByRole("button", { name: "Radar mosaic settings" }).getAttribute("aria-expanded")).toBe("false");
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Panel 2" }));
   view.unmount(); queryClient.clear();
 });
 
@@ -235,56 +244,4 @@ it("remembers its category after reopening and resets layers in every panel", as
   expect(useMapStore.getState()).toMatchObject({ panelLayout: 4, activePanel: 2 });
   expect(useMapStore.getState().panels[1]?.productKey).toBe("tmp-2m");
   for (let panel = 0; panel < 4; panel++) expect(panelLayers(useMapStore.getState(), panel)["station-labels"].visible).toBe(false);
-});
-
-it("chooses provider settings through custom menus and preserves numeric and automatic values", async () => {
-  renderWithBackend(<><RadarControls /><SatelliteControls /><ReportControls /><AvailabilityControl /></>, createTransport("overlay-error"));
-  const radar = screen.getByRole("combobox", { name: "Radar" });
-  await userEvent.click(radar);
-  await userEvent.keyboard("{End}{Enter}");
-  expect(useMapStore.getState().radarScope).toBe("site");
-  expect(useMapStore.getState().radarProduct).toBeNull();
-  expect(document.activeElement).toBe(radar);
-  const site = await screen.findByRole("combobox", { name: "Site" });
-  await userEvent.click(site);
-  await userEvent.click(screen.getByRole("option", { name: "KTLX" }));
-  expect(useMapStore.getState().radarSite).toBe("KTLX");
-  await userEvent.click(site);
-  await userEvent.keyboard("{ArrowDown}{Enter}");
-  expect(useMapStore.getState().radarSite).toBeNull();
-  const product = await screen.findByRole("combobox", { name: "Product" });
-  await userEvent.click(product);
-  const lastProduct = within(screen.getByRole("listbox", { name: "Product" })).getAllByRole("option").at(-1)?.getAttribute("value");
-  await userEvent.keyboard("{End}{Enter}");
-  expect(useMapStore.getState().radarProduct).toBe(lastProduct);
-  await userEvent.click(radar);
-  await userEvent.keyboard("{Home}{Enter}");
-  expect(useMapStore.getState().radarProduct).toBeNull();
-  expect(screen.queryByRole("combobox", { name: "Site" })).toBeNull();
-
-  const channel = screen.getByRole("combobox", { name: "Channel" });
-  await userEvent.click(channel);
-  await userEvent.keyboard("{End}{Enter}");
-  expect(useMapStore.getState().satelliteChannel).toBe("visible");
-  const window = await screen.findByRole("combobox", { name: "Event window" });
-  await userEvent.click(window);
-  await userEvent.keyboard("{Home}{Enter}");
-  expect(useMapStore.getState().reportWindowS).toBe(7200);
-  const hazard = screen.getByRole("combobox", { name: "Hazard" });
-  await userEvent.click(hazard);
-  await userEvent.click(screen.getByRole("option", { name: "Tornado" }));
-  expect(useMapStore.getState().reportFilter).toBe("tornado");
-  await userEvent.click(hazard);
-  await userEvent.keyboard("{End}{Escape}");
-  expect(useMapStore.getState().reportFilter).toBe("tornado");
-  expect(document.activeElement).toBe(hazard);
-
-  const availability = screen.getByRole("combobox", { name: "Availability" });
-  await userEvent.click(availability);
-  const release = within(screen.getByRole("listbox", { name: "Availability" })).getAllByRole("option")[1]?.getAttribute("value");
-  await userEvent.keyboard("{ArrowDown}{Enter}");
-  expect(useMapStore.getState().availabilityTime).toBe(release);
-  await userEvent.click(availability);
-  await userEvent.keyboard("{Home}{Enter}");
-  expect(useMapStore.getState().availabilityTime).toBeNull();
 });

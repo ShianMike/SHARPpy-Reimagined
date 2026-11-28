@@ -1,8 +1,9 @@
 import { GripHorizontal, Search, X } from "lucide-react";
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useMapStore } from "../../stores/mapStore";
 import { useUiStore } from "../../stores/uiStore";
 import { displayUnit } from "../../lib/displayUnits";
+import { groupMapParameters, normalizeParameterSearch } from "../../map/mapParameters";
 import type { FieldProduct } from "../../types/map";
 import { Action, IconAction } from "../../ui/Controls";
 import { Surface } from "../../ui/Surface";
@@ -15,12 +16,20 @@ export function ParameterPicker({ products, selected, anchor, onClose }: {
   const [query, setQuery] = useState("");
   const [chosenCategory, setCategory] = useState("All");
   const [preview, setPreview] = useState(selected);
-  const groups = [...new Set(products.map((product) => product.category))];
-  const categories = ["All", ...groups.filter((item) => item !== "Winter Weather"), ...groups.filter((item) => item === "Winter Weather")];
+  const groups = useMemo(() => groupMapParameters(products), [products]);
+  const matches = useMemo(() => {
+    const filter = normalizeParameterSearch(query);
+    return filter === "" ? groups : groups.map((group) => ({
+      ...group,
+      products: group.products.filter((product) =>
+        normalizeParameterSearch(`${product.label} ${product.shortLabel} ${product.key} ${product.description}`).includes(filter)),
+    }));
+  }, [groups, query]);
+  const categories = ["All", ...groups.map((group) => group.category)];
   const categoryIndex = Math.max(0, categories.indexOf(chosenCategory));
   const category = categories[categoryIndex] ?? "All";
-  const matches = products.filter((product) => `${product.label} ${product.shortLabel} ${product.description}`.toLowerCase().includes(query.trim().toLowerCase()));
-  const results = matches.filter((product) => category === "All" || product.category === category);
+  const resultGroups = matches.filter((group) => group.products.length > 0 && (category === "All" || group.category === category));
+  const results = resultGroups.flatMap((group) => group.products);
   const matchesProduct = (product: FieldProduct, key: string | null): boolean =>
     key !== null && (product.key === key || product.variants?.some((variant) => variant.key === key) === true);
   const detail = results.find((product) => matchesProduct(product, preview))
@@ -34,15 +43,26 @@ export function ParameterPicker({ products, selected, anchor, onClose }: {
     <div className={styles.parameterBrowser}>
       <nav aria-label="Parameter categories" className={styles.categories} data-selection-track="vertical"
         style={{ "--selection-index": categoryIndex } as CSSProperties}>
-        {categories.map((item) => <button type="button" key={item} aria-current={category === item ? "true" : undefined}
-          onClick={() => { setCategory(item); }}><span>{item}</span><small>{item === "All" ? matches.length : matches.filter((product) => product.category === item).length}</small></button>)}
+        <button type="button" aria-current={category === "All" ? "true" : undefined} onClick={() => { setCategory("All"); }}>
+          <span>All</span><small>{matches.reduce((count, group) => count + group.products.length, 0)}</small>
+        </button>
+        {matches.map((group) => <button type="button" key={group.category} aria-current={category === group.category ? "true" : undefined}
+          onClick={() => { setCategory(group.category); }}><span>{group.category}</span><small>{group.products.length}</small></button>)}
       </nav>
       <section key={category} data-motion="fade" className={styles.results} aria-label="Parameter results">
         <div className={styles.resultHeading}><strong>{category === "All" ? "All parameters" : category}</strong><span aria-live="polite">{results.length}</span></div>
-        {results.map((product) => <button type="button" className={styles.product} key={product.key} aria-label={`${product.label}, ${displayUnit(product.palette.units, units, product.palette.display) || "Index"}`} aria-pressed={matchesProduct(product, selected)} aria-description={`${product.description} ${product.caveat}`} onFocus={() => { setPreview(product.key); }} onMouseEnter={() => { setPreview(product.key); }} onClick={() => {
-          const next = matchesProduct(product, selected) && selected !== null ? selected : product.key;
-          useMapStore.getState().setProduct(next); useMapStore.getState().setLayerVisible("model-field", true); done();
-        }}><strong>{product.label}</strong><span className={styles.productUnit}>{displayUnit(product.palette.units, units, product.palette.display) || "Index"}</span></button>)}
+        {resultGroups.map((group) => <div key={group.category} className={styles.parameterGroup}>
+          {category === "All" ? <h3 className={styles.parameterGroupTitle}>{group.category}</h3> : null}
+          {group.products.map((product) => {
+            const unit = displayUnit(product.palette.units, units, product.palette.display) || "Index";
+            return <button type="button" className={styles.product} key={product.key} aria-label={`${product.label}, ${unit}`}
+              aria-pressed={matchesProduct(product, selected)} aria-description={`${product.description} ${product.caveat}`}
+              onFocus={() => { setPreview(product.key); }} onMouseEnter={() => { setPreview(product.key); }} onClick={() => {
+                const next = matchesProduct(product, selected) && selected !== null ? selected : product.key;
+                useMapStore.getState().setProduct(next); useMapStore.getState().setLayerVisible("model-field", true); done();
+              }}><strong>{product.label}</strong><span className={styles.productUnit}>{unit}</span></button>;
+          })}
+        </div>)}
         {results.length > 0 ? null : <div className={styles.empty}><p>No matching parameters.</p><Action onClick={() => { setQuery(""); setCategory("All"); }}>Reset filters</Action></div>}
       </section>
     </div>

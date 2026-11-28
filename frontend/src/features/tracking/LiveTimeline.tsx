@@ -45,7 +45,7 @@ export function LiveTimeline({ className, scanTarget }: { className?: string | u
     : "Past 60 minutes · session cache cleared on exit";
   const choose = (time: number | null): void => { setPlaying(false); selectTime(time); };
   const toggle = (): void => { setPlaying(!playing); };
-  return <Surface as="section" className={cx(styles.timeline, className)} aria-label="Live Tracking timeline" data-testid="live-timeline">
+  return <Surface as="section" className={cx(styles.timeline, className)} aria-label="Live Tracking timeline" data-testid="live-timeline" data-motion="fade">
     {scanTarget == null ? null : createPortal(<RadarScanPicker onSelect={(frame) => { choose(frame >= now ? null : frame); }} />, scanTarget)}
     <MapInteractionControls />
     <PlaybackTransport playing={playing} onToggle={toggle} onPrevious={previous === undefined ? undefined : () => { choose(previous); }}

@@ -18,8 +18,8 @@ REQUEST = {"run_time": "2026-10-27T00:00:00Z", "forecast_hour": 6}
 @pytest.mark.parametrize("model", hp.HRW_MODELS)
 def test_hrw_supported_parameters_and_native_cycles(model):
     products = {p.key: p for p in hp.available_products(model)}
-    assert len(products) == 31
-    assert {"refc", "tmp-2m", "hgt-wind-200", "apcp", "shear-0-1km", "uh-0-3km", "uh-0-3km-run", "uh-2-5km-1h", "uh-2-5km-3h", "uh-2-5km-run"} <= products.keys()
+    assert len(products) == 33
+    assert {"refc", "tmp-2m", "tmp-2m-wind", "dpt-2m-wind", "hgt-wind-200", "apcp", "shear-0-1km", "uh-0-3km", "uh-0-3km-run", "uh-2-5km-1h", "uh-2-5km-3h", "uh-2-5km-run"} <= products.keys()
     assert not products.keys() & {"ltng", "efhl", "snod", "prate", "prate-frzr", "prate-sleet", "prate-snow", "mucape", "scp", "stp"}
     assert all(p.sources == ("sfc",) for p in products.values())
     assert products["refc"].fields[0].level == "entire atmosphere (considered as a single layer)"

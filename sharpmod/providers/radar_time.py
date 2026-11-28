@@ -63,6 +63,8 @@ def select_time(
     now: datetime | None = None,
 ) -> datetime:
     """Nearest real scan; current views can show a delayed latest scan honestly."""
+    import sharpmod_rs
+
     reference = _utc(now or datetime.now(timezone.utc))
     requested = _utc(requested)
     # Minute-rounded history targets can wait behind other preload downloads.
@@ -88,18 +90,17 @@ def select_time(
     else:
         layers = entry[1]
     times = layers.get(layer.split(":")[-1], ())
-    candidates = [scan for scan in times if reference - HISTORY <= scan <= reference]
-    if not candidates:
-        raise RadarScanMissing(
-            f"{layer} advertises no historical scans in the past 60 minutes"
+    selected_ms, reason, message = sharpmod_rs.radar_select_scan_epoch(
+        layer,
+        [int(scan.timestamp() * 1000) for scan in times],
+        int(requested.timestamp() * 1000),
+        int(reference.timestamp() * 1000),
+    )
+    if reason is not None:
+        raise (RadarScanMissing if reason == "scan_missing" else RadarTimeError)(
+            message
         )
-    selected = min(candidates, key=lambda scan: (abs(scan - requested), scan))
-    current = abs(reference - requested) <= timedelta(minutes=2)
-    if not current and abs(selected - requested) > TOLERANCE:
-        raise RadarScanMissing(
-            f"{layer} has no advertised scan within 10 minutes of the requested time"
-        )
-    return selected
+    return datetime.fromtimestamp(selected_ms / 1000.0, tz=timezone.utc)
 
 
 def clear_cache() -> None:

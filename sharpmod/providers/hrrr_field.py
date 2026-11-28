@@ -64,7 +64,7 @@ from sharpmod.providers.hrrr_products import (
 )
 from sharpmod.models.lambert_grid import HRRR_GRID, HRRR_PROJ4, NAM_GRID, NAM_PROJ4, HRW_GRID
 from sharpmod.models.model_disk_cache import map_disk_cache_root as disk_cache_root
-from sharpmod.providers.hrrr_products import HRW_MODELS
+from sharpmod.providers.hrrr_products import HRW_MODELS, NSSL_MPAS_MODELS
 from sharpmod.models.model_transport import DownloadCancelled
 from sharpmod.maps.map_overlays import MAX_RASTER_BYTES, OverlayRaster
 
@@ -266,6 +266,10 @@ def pin_request(run: datetime, fxx: int | None = None) -> tuple[datetime, int]:
 
 
 def grib_url(run: datetime, fxx: int, source: str, model: str = "hrrr", *, release=None) -> str:
+    if model in NSSL_MPAS_MODELS:
+        from sharpmod_rs import nssl_mpas_archive_url
+
+        return nssl_mpas_archive_url(model, run)
     if model == "refs":
         import sharpmod_rs
 
@@ -630,7 +634,7 @@ _DISK_LOCK = threading.RLock()
 _NEXT_DISK_PRUNE = 0.0
 _MANAGED_FRAME = re.compile(
     r"(?:[a-z0-9-]+_\d{10}_f\d{2,3}_\d+x\d+\.png|"
-    r"(?:grid|contours)-v[12]_[a-z0-9-]+_[a-z0-9-]+_\d{10}_f\d{3}_\d+x\d+\.json\.gz|"
+    r"(?:grid|contours)-v[1-8]_[a-z0-9-]+_[a-z0-9-]+_\d{10}_f\d{3}_\d+x\d+\.json\.gz|"
     r"tmp[a-z0-9_]{8}\.part)"
 )
 

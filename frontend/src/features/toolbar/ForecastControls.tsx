@@ -19,6 +19,8 @@ import hints from "../../ui/HoverHint.module.css";
 
 export const FORECAST_FIELDS = ["Model", "Run", "Forecast hour", "Parameter"] as const;
 export const FORECAST_RANGE_ID = "forecast-hour-range";
+const PICKERS = ["model", "run", "hour", "parameter"] as const satisfies readonly (ForecastStep | "parameter")[];
+type Picker = (typeof PICKERS)[number];
 export interface ForecastControlsProps { className?: string | undefined; }
 
 export function ForecastControls({ className }: ForecastControlsProps): ReactNode {
@@ -26,10 +28,9 @@ export function ForecastControls({ className }: ForecastControlsProps): ReactNod
   const context = forecast.status === "ready" ? forecast.context : null;
   const panel = useMapStore((state) => state.activePanel);
   const field = usePanelField(panel);
-  const [picker, setPicker] = useState<ForecastStep | "parameter">("model");
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const download = useFrameDownload(pickerOpen && picker === "hour");
-  const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
+  const [picker, setPicker] = useState<Picker | null>(null);
+  const download = useFrameDownload(picker === "hour");
+  const [anchors, setAnchors] = useState<Partial<Record<Picker, HTMLButtonElement>>>({});
   const [parameterAnchor, setParameterAnchor] = useState<HTMLButtonElement | null>(null);
   const [dismissedError, setDismissedError] = useState<Error | null>(null);
   const parameterErrorOpen = field.catalog.isError && field.catalog.error !== dismissedError;
@@ -37,28 +38,29 @@ export function ForecastControls({ className }: ForecastControlsProps): ReactNod
   const catalogMissing = field.catalog.data === undefined;
   const parameterLabel = catalogMissing ? (field.catalog.isError ? "Unavailable" : "Loading…") : context !== null && !context.fieldsAvailable ? "Soundings only" : field.product?.shortLabel ?? "—";
   const parameterHint = catalogMissing ? (field.catalog.isError ? field.catalog.error.message : "Loading parameters…") : context !== null && !context.fieldsAvailable ? (context.model.soundingsAvailable ? "Map fields unavailable for this model. Point soundings are available." : "Map fields unavailable for this run and hour.") : field.product?.label;
-  const open = (kind: ForecastStep | "parameter", element: HTMLButtonElement): void => {
-    setAnchor(element); setPicker(kind); setPickerOpen(!(pickerOpen && picker === kind));
+  const togglePicker = (kind: Picker, element: HTMLButtonElement): void => {
+    setAnchors((current) => current[kind] === element ? current : { ...current, [kind]: element });
+    setPicker((current) => current === kind ? null : kind);
   };
   const variants = context?.fieldsAvailable === true ? field.product?.variants : undefined;
   const hasVariants = variants !== undefined && variants.length > 0;
   return <Surface className={cx(styles.fields, hasVariants && styles.fieldsWithVariant, className)} data-motion="fade" role="group" aria-label="Forecast" data-testid="forecast-fields">
-    <button className={cx(styles.trigger, hints.target)} type="button" aria-label="Choose model" aria-description={context?.model.label} aria-haspopup="dialog" aria-expanded={pickerOpen && picker === "model"} disabled={context === null} onClick={(event) => { open("model", event.currentTarget); }}>
+    <button className={cx(styles.trigger, hints.target)} type="button" aria-label="Choose model" aria-description={context?.model.label} aria-haspopup="dialog" aria-expanded={picker === "model"} disabled={context === null} onClick={(event) => { togglePicker("model", event.currentTarget); }}>
       <CloudSun className="icon-sm" aria-hidden="true" /><span className={styles.triggerCopy}><span className={styles.name}>Model</span><strong>{context?.model.label ?? "—"}</strong>{context === null ? <small>{reason}</small> : null}</span><ChevronDown className="icon-sm" aria-hidden="true" />
       <span className={hints.hint} data-side="bottom" aria-hidden="true">{context?.model.label ?? reason}</span>
     </button>
-    <button className={cx(styles.trigger, hints.target)} type="button" aria-label="Choose run" aria-description={context === null ? undefined : formatUtc(context.run)} aria-haspopup="dialog" aria-expanded={pickerOpen && picker === "run"} disabled={context === null} onClick={(event) => { open("run", event.currentTarget); }}>
+    <button className={cx(styles.trigger, hints.target)} type="button" aria-label="Choose run" aria-description={context === null ? undefined : formatUtc(context.run)} aria-haspopup="dialog" aria-expanded={picker === "run"} disabled={context === null} onClick={(event) => { togglePicker("run", event.currentTarget); }}>
       <CalendarDays className="icon-sm" aria-hidden="true" /><span className={styles.triggerCopy}><span className={styles.name}>Run{context !== null && context.run.slice(0, 4) !== context.model.suggestedRun.slice(0, 4) ? ` · ${context.run.slice(0, 4)}` : ""} · UTC</span><strong>{context === null ? "—" : compactUtc(context.run)}</strong></span><ChevronDown className="icon-sm" aria-hidden="true" />
       <span className={hints.hint} data-side="bottom" aria-hidden="true">{context === null ? reason : formatUtc(context.run)}</span>
     </button>
-    <button className={cx(styles.trigger, hints.target)} type="button" aria-label="Choose forecast hour" aria-haspopup="dialog" aria-expanded={pickerOpen && picker === "hour"} aria-controls={FORECAST_RANGE_ID} disabled={context === null} onClick={(event) => { open("hour", event.currentTarget); }}>
+    <button className={cx(styles.trigger, hints.target)} type="button" aria-label="Choose forecast hour" aria-haspopup="dialog" aria-expanded={picker === "hour"} aria-controls={FORECAST_RANGE_ID} disabled={context === null} onClick={(event) => { togglePicker("hour", event.currentTarget); }}>
       <Clock3 className="icon-sm" aria-hidden="true" /><span className={styles.triggerCopy}><span className={styles.name}>Forecast hour</span><span className={styles.hour}><strong>{context === null ? "—" : forecastLabel(context.hour)}</strong>{context === null ? null : <small>{`of ${forecastLabel(context.hours.at(-1) ?? 0)}`}</small>}</span></span><ChevronDown className="icon-sm" aria-hidden="true" />
       <span className={hints.hint} data-side="bottom" aria-hidden="true">{context === null ? reason : `${forecastLabel(context.hour)} · Valid ${formatUtc(context.validTime)}`}</span>
     </button>
-    <button ref={setParameterAnchor} className={cx(styles.trigger, hints.target)} type="button" aria-label="Choose parameter" aria-haspopup="dialog" aria-expanded={field.catalog.isError ? parameterErrorOpen : pickerOpen && picker === "parameter"}
+    <button ref={setParameterAnchor} className={cx(styles.trigger, hints.target)} type="button" aria-label="Choose parameter" aria-haspopup="dialog" aria-expanded={field.catalog.isError ? parameterErrorOpen : picker === "parameter"}
       disabled={context === null || (!field.catalog.isError && (catalogMissing || !context.fieldsAvailable))}
       aria-description={parameterHint}
-      onClick={(event) => { if (field.catalog.isError) setDismissedError(null); else open("parameter", event.currentTarget); }}>
+      onClick={(event) => { if (field.catalog.isError) setDismissedError(null); else togglePicker("parameter", event.currentTarget); }}>
       <SlidersHorizontal className="icon-sm" aria-hidden="true" /><span className={styles.triggerCopy}><span className={styles.name}>Parameter{panel > 0 ? ` · ${String(panel + 1)}` : ""}</span><strong>{parameterLabel}</strong></span><ChevronDown className="icon-sm" aria-hidden="true" />
       <span className={hints.hint} data-side="bottom" aria-hidden="true">{parameterHint}</span>
     </button>
@@ -76,12 +78,16 @@ export function ForecastControls({ className }: ForecastControlsProps): ReactNod
         <Action onClick={() => { setDismissedError(field.catalog.error); parameterAnchor?.focus(); }}>Dismiss</Action>
       </div>
     </Popover>
-    <Popover key={picker} id={`forecast-${picker}-picker`} open={pickerOpen && context !== null} movable unframed={picker === "parameter"} anchor={anchor} onClose={() => { setPickerOpen(false); }} role="dialog"
-      label={picker === "parameter" ? "Parameters" : FORECAST_TITLES[picker]} initialFocus="first" align={picker === "parameter" ? "end" : "start"} width="content"
-      className={picker === "parameter" ? styles.parameterPicker : cx(styles.picker, picker === "hour" && styles.hourPicker, picker === "model" && styles.modelPicker)}>
-      {picker !== "parameter" && context !== null ? <ForecastDialog context={context} step={picker} anchor={anchor} download={download} onClose={() => { setPickerOpen(false); }} /> : null}
-      {picker === "parameter" && field.catalog.data !== undefined ? <ParameterPicker products={field.catalog.data.products} selected={field.variant?.key ?? field.product?.key ?? null} anchor={anchor} onClose={() => { setPickerOpen(false); }} /> : null}
-    </Popover>
+    {PICKERS.map((kind) => {
+      const anchor = anchors[kind] ?? null;
+      const close = (): void => { setPicker((current) => current === kind ? null : current); };
+      return <Popover key={kind} id={`forecast-${kind}-picker`} open={picker === kind && context !== null} movable unframed={kind === "parameter"} anchor={anchor} onClose={close} role="dialog"
+        label={kind === "parameter" ? "Parameters" : FORECAST_TITLES[kind]} initialFocus="first" align={kind === "parameter" ? "end" : "start"} width="content"
+        className={cx(styles.toolbarPicker, kind === "parameter" ? styles.parameterPicker : cx(styles.picker, kind === "hour" && styles.hourPicker, kind === "model" && styles.modelPicker))}>
+        {kind !== "parameter" && context !== null ? <ForecastDialog context={context} step={kind} anchor={anchor} download={download} onClose={close} /> : null}
+        {kind === "parameter" && field.catalog.data !== undefined ? <ParameterPicker products={field.selectableProducts} selected={field.variant?.key ?? field.product?.key ?? null} anchor={anchor} onClose={close} /> : null}
+      </Popover>;
+    })}
     <span className={styles.announcement} role="status" aria-label="Forecast downloads">{download.started ? download.message : ""}</span>
   </Surface>;
 }

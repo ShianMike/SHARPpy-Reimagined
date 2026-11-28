@@ -22,52 +22,22 @@ def prepare_vertical_interpolator(
     max_gap_m: float,
 ) -> VerticalInterpolator:
     """Return a reusable scalar interpolator over cleaned vertical columns."""
+    import sharpmod_rs
 
     try:
-        height_column = np.asarray(
-            np.ma.asarray(heights, dtype=float).filled(np.nan),
+        height_column = np.ascontiguousarray(
+            np.ma.asarray(heights, dtype=float).filled(np.nan).reshape(-1),
             dtype=float,
-        ).reshape(-1)
-        value_column = np.asarray(
-            np.ma.asarray(values, dtype=float).filled(np.nan),
+        )
+        value_column = np.ascontiguousarray(
+            np.ma.asarray(values, dtype=float).filled(np.nan).reshape(-1),
             dtype=float,
-        ).reshape(-1)
+        )
     except (TypeError, ValueError):
         return lambda _target: None
-    size = min(height_column.size, value_column.size)
-    finite = np.isfinite(height_column[:size]) & np.isfinite(value_column[:size])
-    x = height_column[:size][finite]
-    y = value_column[:size][finite]
-    if not x.size:
-        return lambda _target: None
-
-    order = np.argsort(x)
-    x, y = x[order], y[order]
-    x, indices = np.unique(x, return_index=True)
-    y = y[indices]
-    gap_limit = float(max_gap_m)
-
-    def interpolate(target: float) -> float | None:
-        target = float(target)
-        if not np.isfinite(target):
-            return None
-        upper = int(np.searchsorted(x, target, side="right"))
-
-        # The previous implementation used ``np.isclose`` across the complete
-        # column.  Only the neighbours around the insertion point can match;
-        # checking them in ascending order retains the same first-match rule.
-        tolerance = 0.01 + 1e-05 * abs(target)
-        first_close = int(np.searchsorted(x, target - tolerance, side="left"))
-        if first_close < x.size and np.isclose(x[first_close], target, atol=0.01):
-            return float(y[first_close])
-
-        lower = upper - 1
-        if lower < 0 or upper >= x.size or x[upper] - x[lower] > gap_limit:
-            return None
-        weight = (target - x[lower]) / (x[upper] - x[lower])
-        return float(y[lower] + weight * (y[upper] - y[lower]))
-
-    return interpolate
+    return sharpmod_rs.prepare_vertical_interpolator(
+        height_column, value_column, float(max_gap_m),
+    )
 
 
 __all__ = ["VerticalInterpolator", "prepare_vertical_interpolator"]

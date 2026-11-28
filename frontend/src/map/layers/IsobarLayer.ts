@@ -5,5 +5,7 @@ import type { LayerBuildContext, LayerState } from "./registry";
 export const ISOBARS_LAYER_ID = "isobars";
 export function buildIsobarLayers(ctx: LayerBuildContext, state: LayerState) {
   const lines = ctx.isobars;
-  return lines === null ? [] : buildPressureContours(ISOBARS_LAYER_ID, lines, ctx, state);
+  return lines === null ? [] : buildPressureContours(ISOBARS_LAYER_ID, lines, ctx, state, {
+    suppressThickness: ctx.pressureOwnership?.compositeThickness === true,
+  });
 }

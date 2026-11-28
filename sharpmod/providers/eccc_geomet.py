@@ -16,12 +16,10 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-import math
+from datetime import datetime, timezone
 import os
 import threading
 import time
-from xml.etree import ElementTree
 
 import numpy as np
 
@@ -129,59 +127,45 @@ class RotatedGridDomain:
     def to_rotated(self, lat: float, lon: float) -> tuple[float, float]:
         """Convert one geographic coordinate to this grid's rotated degrees."""
 
-        phi = math.radians(float(lat))
-        delta_lon = math.radians(
-            ((float(lon) - self.north_pole_lon + 180.0) % 360.0) - 180.0
+        import sharpmod_rs
+
+        return sharpmod_rs.geomet_to_rotated(
+            self.north_pole_lat, self.north_pole_lon, float(lat), float(lon)
         )
-        pole_lat = math.radians(self.north_pole_lat)
-        rotated_lat = math.asin(
-            math.sin(phi) * math.sin(pole_lat)
-            + math.cos(phi) * math.cos(pole_lat) * math.cos(delta_lon)
-        )
-        rotated_lon = -math.atan2(
-            math.cos(phi) * math.sin(delta_lon),
-            math.sin(phi) * math.cos(pole_lat)
-            - math.cos(phi) * math.sin(pole_lat) * math.cos(delta_lon),
-        )
-        return math.degrees(rotated_lat), math.degrees(rotated_lon)
 
     def to_geographic(
         self, rotated_lat: float, rotated_lon: float
     ) -> tuple[float, float]:
         """Convert one rotated-grid coordinate to ``(lat, lon)`` degrees."""
 
-        phi_r = math.radians(float(rotated_lat))
-        lon_r = math.radians(float(rotated_lon))
-        pole_lat = math.radians(self.north_pole_lat)
-        lat = math.asin(
-            math.sin(phi_r) * math.sin(pole_lat)
-            + math.cos(phi_r) * math.cos(pole_lat) * math.cos(lon_r)
+        import sharpmod_rs
+
+        return sharpmod_rs.geomet_to_geographic(
+            self.north_pole_lat,
+            self.north_pole_lon,
+            float(rotated_lat),
+            float(rotated_lon),
         )
-        delta_lon = math.atan2(
-            -math.cos(phi_r) * math.sin(lon_r),
-            math.sin(phi_r) * math.cos(pole_lat)
-            - math.cos(phi_r) * math.sin(pole_lat) * math.cos(lon_r),
-        )
-        lon = self.north_pole_lon + math.degrees(delta_lon)
-        lon = ((lon + 180.0) % 360.0) - 180.0
-        return math.degrees(lat), lon
 
     def contains(self, lat: float, lon: float) -> bool:
         """Return whether a geographic point lies on the rotated model grid."""
+
+        import sharpmod_rs
 
         try:
             lat = float(lat)
             lon = float(lon)
         except (TypeError, ValueError):
             return False
-        if not math.isfinite(lat) or not math.isfinite(lon):
-            return False
-        if not -90.0 <= lat <= 90.0:
-            return False
-        rotated_lat, rotated_lon = self.to_rotated(lat, lon)
-        return (
-            self.rotated_lat_min <= rotated_lat <= self.rotated_lat_max
-            and self.rotated_lon_min <= rotated_lon <= self.rotated_lon_max
+        return sharpmod_rs.geomet_rotated_contains(
+            self.north_pole_lat,
+            self.north_pole_lon,
+            self.rotated_lon_min,
+            self.rotated_lon_max,
+            self.rotated_lat_min,
+            self.rotated_lat_max,
+            lat,
+            lon,
         )
 
     def outline(self, samples_per_edge: int = 28) -> tuple[
@@ -189,36 +173,17 @@ class RotatedGridDomain:
     ]:
         """Return a sampled geographic perimeter as ``(lon, lat)`` points."""
 
-        count = max(2, int(samples_per_edge))
+        import sharpmod_rs
 
-        def values(start, stop):
-            return tuple(
-                start + (stop - start) * index / count
-                for index in range(count)
-            )
-
-        rotated = []
-        rotated.extend(
-            (self.rotated_lat_min, lon)
-            for lon in values(self.rotated_lon_min, self.rotated_lon_max)
-        )
-        rotated.extend(
-            (lat, self.rotated_lon_max)
-            for lat in values(self.rotated_lat_min, self.rotated_lat_max)
-        )
-        rotated.extend(
-            (self.rotated_lat_max, lon)
-            for lon in values(self.rotated_lon_max, self.rotated_lon_min)
-        )
-        rotated.extend(
-            (lat, self.rotated_lon_min)
-            for lat in values(self.rotated_lat_max, self.rotated_lat_min)
-        )
-        rotated.append(rotated[0])
         return tuple(
-            (lon, lat) for lat, lon in (
-                self.to_geographic(rotated_lat, rotated_lon)
-                for rotated_lat, rotated_lon in rotated
+            sharpmod_rs.geomet_rotated_outline(
+                self.north_pole_lat,
+                self.north_pole_lon,
+                self.rotated_lon_min,
+                self.rotated_lon_max,
+                self.rotated_lat_min,
+                self.rotated_lat_max,
+                int(samples_per_edge),
             )
         )
 
@@ -337,6 +302,8 @@ def get_capability(model) -> GeoMetCapability:
 def point_in_domain(model, lat, lon) -> bool:
     """Return whether a point is inside the provider's actual model grid."""
 
+    import sharpmod_rs
+
     capability = get_capability(model)
     if capability.model_key == "rdps":
         return RDPS_ROTATED_DOMAIN.contains(lat, lon)
@@ -345,12 +312,8 @@ def point_in_domain(model, lat, lon) -> bool:
         lon = ((float(lon) + 180.0) % 360.0) - 180.0
     except (TypeError, ValueError):
         return False
-    if not math.isfinite(lat) or not math.isfinite(lon):
-        return False
     lon0, lon1, lat0, lat1 = capability.domain_bounds
-    longitude_ok = lon0 <= lon <= lon1 if lon0 <= lon1 \
-        else lon >= lon0 or lon <= lon1
-    return lat0 <= lat <= lat1 and longitude_ok
+    return sharpmod_rs.geomet_point_in_bounds(lat, lon, lon0, lon1, lat0, lat1)
 
 
 def worker_count(value=None) -> int:
@@ -381,15 +344,13 @@ def _iso(value: datetime) -> str:
 
 
 def _floor_cycle(value, cycles) -> datetime:
+    import sharpmod_rs
+
     value = _as_utc(value)
-    cycles = tuple(sorted(int(hour) for hour in cycles))
-    earlier = [hour for hour in cycles if hour <= value.hour]
-    if earlier:
-        hour = earlier[-1]
-    else:
-        value -= timedelta(days=1)
-        hour = cycles[-1]
-    return value.replace(hour=hour, minute=0, second=0, microsecond=0)
+    epoch = sharpmod_rs.geomet_floor_cycle_epoch(
+        int(value.timestamp()), [int(hour) for hour in cycles]
+    )
+    return datetime.fromtimestamp(epoch, tz=timezone.utc)
 
 
 def _deadline_passed(deadline) -> bool:
@@ -583,6 +544,8 @@ def build_feature_info_params(
     reference_time,
 ) -> dict[str, str]:
     """Build one WMS 1.3 point request with the required axis order."""
+    import sharpmod_rs
+
     capability = get_capability(capability)
     lat = float(lat)
     lon = ((float(lon) + 180.0) % 360.0) - 180.0
@@ -610,12 +573,7 @@ def build_feature_info_params(
         "QUERY_LAYERS": layer,
         "STYLES": "",
         "CRS": "EPSG:4326",
-        "BBOX": "%.6f,%.6f,%.6f,%.6f" % (
-            max(-90.0, lat - margin),
-            max(-180.0, lon - margin),
-            min(90.0, lat + margin),
-            min(180.0, lon + margin),
-        ),
+        "BBOX": sharpmod_rs.geomet_feature_info_bbox(lat, lon, margin),
         "WIDTH": "3",
         "HEIGHT": "3",
         "I": "1",
@@ -657,19 +615,13 @@ def _capabilities_params(capability) -> dict[str, str]:
 
 
 def _dimension_defaults(xml_text: str) -> dict[str, str]:
+    import sharpmod_rs
+
     try:
-        root = ElementTree.fromstring(xml_text)
-    except ElementTree.ParseError as exc:
+        pairs = sharpmod_rs.geomet_parse_dimension_defaults(xml_text)
+    except ValueError as exc:
         raise RetrievalError("GeoMet returned invalid capabilities XML") from exc
-    values = {}
-    for element in root.iter():
-        if str(element.tag).rsplit("}", 1)[-1] != "Dimension":
-            continue
-        name = element.attrib.get("name")
-        default = element.attrib.get("default")
-        if name and default:
-            values[str(name)] = str(default)
-    return values
+    return {str(name): str(default) for name, default in pairs}
 
 
 def latest_reference_time(

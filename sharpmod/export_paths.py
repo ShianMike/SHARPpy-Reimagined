@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 EXPORT_DIRECTORY_NAME = "rendered_soundings"
@@ -36,18 +35,9 @@ def application_root() -> Path:
 def _assert_writable_directory(directory: Path) -> None:
     """Probe creation and deletion, which ``os.access`` cannot prove on ACLs."""
 
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="wb",
-            prefix=".sharpmod-export-write-test-",
-            dir=directory,
-        ) as probe:
-            probe.write(b"ok")
-            probe.flush()
-    except OSError as exc:
-        raise ExportDirectoryError(
-            f"The export folder is not writable: {directory} ({exc})"
-        ) from exc
+    import sharpmod_rs
+
+    sharpmod_rs.export_probe_writable_dir(os.fspath(directory))
 
 
 def export_directory() -> Path:
@@ -79,9 +69,9 @@ def export_directory() -> Path:
 def export_file_path(default_name: str | os.PathLike[str]) -> Path:
     """Return an export-dialog suggestion inside the dedicated directory."""
 
-    name = Path(os.fspath(default_name)).name
-    if not name or name in {".", ".."}:
-        raise ValueError("an export filename is required")
+    import sharpmod_rs
+
+    name = sharpmod_rs.export_validate_filename(os.fspath(default_name))
     return export_directory() / name
 
 

@@ -1,8 +1,8 @@
 """Isolines of a product's contour field as map line geometry.
 
-One handler extracts the contour lines of a height/wind product's own contour
-field (``providers.hrrr_products.ContourSpec``) from the reprojected frame, as
-segments in lon/lat; the frontend draws them. This is the "backend contour
+One handler extracts the isolines of a product's own contour field
+(``providers.hrrr_products.ContourSpec``) from the interpolated frame, as
+joined paths or segments in lon/lat. This is the "backend contour
 operation" the map notes ask for: the legacy path stamps the same lines into
 its PNG (``hrrr_field_images.draw_contours``) where no client can read them.
 
@@ -81,7 +81,7 @@ def contour_segments(field: np.ndarray, interval: float, *, bounds=None):
 
 
 def contours(params: dict[str, Any]) -> dict[str, Any]:
-    """The isolines of one product's contour field, as lon/lat segments."""
+    """The isolines of one product's contour field."""
     from sharpmod.bridge import fields as bridge_fields
     from sharpmod.providers import hrrr_field
 
@@ -102,6 +102,8 @@ def contours(params: dict[str, Any]) -> dict[str, Any]:
 def _from_decoded(model, product, run, hour, decoded):
     from sharpmod.bridge import fields as bridge_fields, frame_cache
     from sharpmod.providers import hrrr_field
+    import sharpmod_rs
+
     bounds = hrrr_field.field_bounds(model)
     native = hrrr_field.field_grid(model)
     # Oversampling a coarse native grid adds staircase segments, not contour detail.
@@ -111,6 +113,7 @@ def _from_decoded(model, product, run, hour, decoded):
     target = frame_cache.path("contours", model, product.key, run, hour, bridge_fields.FRAME)
     spec = product.contour
     convert = spec.convert if spec is not None and spec.convert is not None else (lambda values: values)
+    thickness = None
     # The contour field is a separate record from the product's own; take it
     # from one download of all the product's fields.
     try:
@@ -120,8 +123,29 @@ def _from_decoded(model, product, run, hour, decoded):
             raw = np.asarray(convert(decoded[spec.name]), dtype=np.float32)
             if raw.shape != hrrr_field.field_grid(model).shape:
                 raise hrrr_field.HrrrFieldError(f"contour field is a {raw.shape} grid")
-            mapping = hrrr_field.index_map((width, height), bounds, model=model)
-            grid = hrrr_field.reproject(raw, mapping)
+            size = (width, height)
+            mapping = None if model in hrrr_field.GLOBAL_MODELS else hrrr_field.index_map(
+                size, bounds, model=model, interpolate=True,
+            )
+            grid = (sharpmod_rs.reproject_global_map_field(raw, size, bounds)
+                    if mapping is None else hrrr_field.reproject(raw, mapping))
+            if getattr(product, "thickness_interval", None) is not None:
+                # The REFS mean publishes its thickness grid painted in one step;
+                # every other provider decodes the 1000 and 500 mb heights.
+                if "thickness" in decoded:
+                    raw_thickness = np.asarray(decoded["thickness"], dtype=np.float32)
+                    if raw_thickness.shape != hrrr_field.field_grid(model).shape:
+                        raise hrrr_field.HrrrFieldError(
+                            f"thickness field is a {raw_thickness.shape} grid")
+                elif "hgt500" in decoded and "hgt1000" in decoded:
+                    raw_thickness = sharpmod_rs.thickness_dam(
+                        np.ascontiguousarray(decoded["hgt500"], dtype=np.float32),
+                        np.ascontiguousarray(decoded["hgt1000"], dtype=np.float32),
+                    )
+                else:
+                    raise hrrr_field.HrrrFieldError("decoded thickness heights are missing")
+                thickness = (sharpmod_rs.reproject_global_map_field(raw_thickness, size, bounds)
+                             if mapping is None else hrrr_field.reproject(raw_thickness, mapping))
         # shortcut: half-size winds already exceed the 64-pixel barb density at
         # map MAX_ZOOM 9; enlarge this frame if that maximum zoom is raised.
         wind_size = tuple(max(1, side // 2) for side in bridge_fields.FRAME)
@@ -143,13 +167,14 @@ def _from_decoded(model, product, run, hour, decoded):
         raise BridgeError(
             "FIELD_FETCH_FAILED", f"{product.label} could not be read.", False
         ) from None
-    import sharpmod_rs
 
     return frame_cache.write(target, sharpmod_rs.map_contour_frame(
         product.key, p.iso(run), hour,
         spec.label if spec is not None else "kt",
         float(spec.interval) if spec is not None else 5.0,
         grid if spec is not None else None, bounds, wind,
+        thickness_values=thickness,
+        thickness_interval=getattr(product, "thickness_interval", None),
     ))
 
 

@@ -42,9 +42,16 @@ it("shows Day 1 ERO risk, affected states, times, and expandable discussion summ
   expect(screen.getByText("Oklahoma, Texas")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Forecast discussion" })).toBeTruthy();
   expect(screen.getByText(/there is a slight risk of excessive rainfall/i)).toBeTruthy();
-  await userEvent.click(screen.getByRole("button", { name: "Read full discussion", expanded: false }));
+  const toggle = screen.getByRole("button", { name: "Read full discussion", expanded: false });
+  const body = document.getElementById(toggle.getAttribute("aria-controls") ?? "");
+  expect(body).toMatchObject({ hidden: true });
+  await userEvent.click(toggle);
   expect(screen.getByRole("heading", { name: "Southern Plains" })).toBeTruthy();
   expect(screen.getByText(/Persistent low-level moisture transport/)).toBeTruthy();
+  await userEvent.click(toggle);
+  expect(screen.queryByRole("heading", { name: "Southern Plains" })).toBeNull();
+  expect(body).toMatchObject({ hidden: true, isConnected: true });
+  expect(body?.hasAttribute("inert")).toBe(true);
   queryClient.clear();
 });
 

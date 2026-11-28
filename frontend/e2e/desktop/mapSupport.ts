@@ -89,11 +89,13 @@ export async function forecastIdentity() {
   const hour = /^F(\d{3}) · valid /u.exec(selected ?? "")?.[1];
   if (run === null || !/^\d{4}-\d\d-\d\d \d\dZ$/u.test(run) || hour === undefined) throw new Error(`missing forecast identity: ${String(run)}, ${String(selected)}`);
   const runTime = `${run.slice(0, 10)}T${run.slice(11, 13)}:00:00Z`;
-  const valid = compactUtc(addHours(runTime, Number(hour)));
+  const validTime = addHours(runTime, Number(hour));
+  const valid = compactUtc(validTime);
+  const timelineValid = compactUtc(validTime, { includeWeekday: true });
   const frame = forecastLabel(Number(hour));
-  expect(selected).toBe(`${frame} · valid ${valid} UTC`);
+  expect(selected).toBe(`${frame} · valid ${timelineValid} UTC`);
   await expect(toolbar.getByRole("button", { name: "Choose forecast hour", exact: true })).toContainText(frame);
-  await expect(page.getByLabel("Valid time", { exact: true }).locator("strong")).toHaveText(`${valid} UTC`);
+  await expect(page.getByLabel("Valid time", { exact: true }).locator("strong")).toHaveText(`${timelineValid} UTC`);
   return { run, hour: frame, valid, field: `${frame} of the ${compactUtc(runTime)} run, valid ${valid}.` };
 }
 
@@ -130,11 +132,11 @@ export async function mapCentre(panel = 1): Promise<{ x: number; y: number }> {
   return { x: box.x + box.width * 0.45, y: box.y + box.height * 0.55 };
 }
 
-export async function pointerValue(panel: number, label: string, unit: string): Promise<string> {
+export async function pointerValue(panel: number, unit: string): Promise<string> {
   const centre = await mapCentre(panel);
   await page.mouse.move(centre.x, centre.y);
   const value = page.getByTestId(`map-panel-${String(panel)}`).getByTestId("pointer-value");
-  await expect(value).toContainText(label);
+  await expect(value.locator("span")).toHaveText(/^-?\d+\.\d{4}, -?\d+\.\d{4}$/u);
   await expect(value.locator("strong")).toHaveText(/^-?\d+(?:\.\d+)? /u);
   await expect(value.locator("strong")).toContainText(unit);
   return text(value);

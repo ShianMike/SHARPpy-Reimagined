@@ -79,25 +79,23 @@ _CYCLE_HOURS = (0, 6, 12, 18)
 
 def _validate_request(lat, lon):
     """Range-validate lat/lon before any retrieval or I/O."""
-    if not (LAT_MIN <= lat <= LAT_MAX):
-        raise ParameterRangeError(
-            "latitude %.4f is out of range; permitted range is "
-            "[%.1f, %.1f] degrees" % (lat, LAT_MIN, LAT_MAX))
-    if not (LON_MIN <= lon <= LON_MAX):
-        raise ParameterRangeError(
-            "longitude %.4f is out of range; permitted range is "
-            "[%.1f, %.1f] degrees (IFS global coverage)"
-            % (lon, LON_MIN, LON_MAX))
+    import sharpmod_rs
+
+    try:
+        sharpmod_rs.ifs_validate_request(float(lat), float(lon))
+    except ValueError as exc:
+        raise ParameterRangeError(str(exc)) from None
 
 
 def _nearest_cycle(dt):
     """Return the most recent IFS cycle datetime at or before ``dt`` (UTC)."""
+    import sharpmod_rs
+
     dt = _as_datetime(dt)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     dt = dt.astimezone(timezone.utc)
-    hour = max(h for h in _CYCLE_HOURS if h <= dt.hour) \
-        if dt.hour >= _CYCLE_HOURS[0] else _CYCLE_HOURS[0]
+    hour = sharpmod_rs.ifs_nearest_cycle_hour(dt.hour)
     return dt.replace(hour=hour, minute=0, second=0, microsecond=0)
 
 

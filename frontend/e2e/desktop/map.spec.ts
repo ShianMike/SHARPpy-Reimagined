@@ -80,7 +80,7 @@ test.describe("real-backend forecast map", () => {
     await expect(page.getByTestId("panel-chip-1")).toHaveCount(0);
     results.scale = { description: await scale.getAttribute("aria-description"), value: await scale.getByRole("slider").getAttribute("aria-valuetext") };
     await page.getByRole("button", { name: "Close layers", exact: true }).click();
-    results.value = await pointerValue(1, "Composite Reflectivity", "dBZ");
+    results.value = await pointerValue(1, "dBZ");
     await shot("desktop-map-field.png");
 
     await chooseProduct("2 m AGL Temperature", "°F");
@@ -89,7 +89,7 @@ test.describe("real-backend forecast map", () => {
     await expect(scale).toHaveAccessibleDescription(/°F/u);
     results.secondScale = { description: await scale.getAttribute("aria-description"), value: await scale.getByRole("slider").getAttribute("aria-valuetext") };
     await page.getByRole("button", { name: "Close layers", exact: true }).click();
-    results.secondValue = await pointerValue(1, "2 m AGL Temperature", "°F");
+    results.secondValue = await pointerValue(1, "°F");
 
     const timeline = page.getByRole("region", { name: "Forecast timeline" });
     const next = timeline.getByRole("button", { name: "Next frame" });
@@ -228,7 +228,7 @@ test.describe("real-backend forecast map", () => {
     const weather = [];
     for (const [index, product] of FOUR_PRODUCTS.entries()) {
       const panel = index + 1;
-      weather.push({ panel, value: await pointerValue(panel, product.label, product.unit), pixels: await weatherPixels(panel) });
+      weather.push({ panel, value: await pointerValue(panel, product.unit), pixels: await weatherPixels(panel) });
     }
     // Re-enabling a layer above must still expose the same current frame in every panel.
     const ready = await loadedPanels();
@@ -278,7 +278,7 @@ test.describe("real-backend forecast map", () => {
     expect(to.valid).not.toBe(from.valid);
     const drawnAfter = [];
     for (const [index, product] of FOUR_PRODUCTS.entries()) {
-      drawnAfter.push({ panel: index + 1, value: await pointerValue(index + 1, product.label, product.unit), pixels: await weatherPixels(index + 1) });
+      drawnAfter.push({ panel: index + 1, value: await pointerValue(index + 1, product.unit), pixels: await weatherPixels(index + 1) });
     }
     results.loadedWeatherPlayback = { from, to, before, after, weather: drawnAfter, frames: playback };
     const stopped = await hour.inputValue();

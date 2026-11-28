@@ -1,4 +1,4 @@
-"""Theta-e thermodynamics, wind-only map geometry, and CONUS model outlines."""
+"""Theta-e thermodynamics, surface map overlays, and CONUS model outlines."""
 
 import base64
 from dataclasses import replace
@@ -46,29 +46,32 @@ def test_thetae_masks_missing_and_invalid_pressure_without_a_sea_level_fallback(
 @pytest.mark.parametrize("model", MODELS)
 def test_thetae_model_ingredients_and_catalogue_keep_kelvin_and_wind(model):
     product = next(p for p in hp.available_products(model) if p.key == "thetae-2m")
-    assert len(product.all_fields) == 5
+    pressure = {"hrrr": "MSLMA", "nam-3km-conus": "PRMSL"}.get(model, "MSLET")
+    assert len(product.all_fields) == 6
     assert {spec.name: (spec.variable, spec.level) for spec in product.all_fields} == {
         "tmp2m": ("TMP", "2 m above ground"),
         "dpt2m": ("DPT", "2 m above ground"),
         "pres": ("PRES", "surface"),
         "u10": ("UGRD", "10 m above ground"),
         "v10": ("VGRD", "10 m above ground"),
+        "mslp": (pressure, "mean sea level"),
     }
     assert all(spec.source == "sfc" and spec.forecast == "" for spec in product.all_fields)
-    assert product.wind and product.contour is None
+    assert product.wind and product.contour is not None
+    assert (product.contour.name, product.contour.interval, product.contour.label) == ("mslp", 2.0, "hPa")
     assert product.palette is hp.PALETTE_THETAE
     assert product.palette.units == "K" and product.palette.display == "fixed"
     assert product.palette.stepped
 
     wire = next(p for p in fields.catalog({"model": model})["products"]
                 if p["key"] == "thetae-2m")
-    assert wire["wind"] and wire["contour"] is None
+    assert wire["wind"] and wire["contour"]["interval"] == 2.0 and wire["contour"]["label"] == "hPa"
     assert wire["palette"]["units"] == "K"
     assert wire["palette"]["display"] == "fixed"
 
 
 @pytest.mark.parametrize("model", MODELS)
-def test_thetae_wind_only_endpoint_encodes_winds_without_contour_segments(model, monkeypatch, tmp_path):
+def test_thetae_endpoint_encodes_winds_and_sea_level_pressure_paths(model, monkeypatch, tmp_path):
     monkeypatch.setenv("SHARPMOD_HRRR_FIELD_CACHE", str(tmp_path / "maps"))
     grid = replace(lambert_grid.HRRR_GRID, shape=(2, 3), x0=0, y0=0)
     monkeypatch.setattr(hf, "HRRR_GRID", grid)
@@ -78,6 +81,7 @@ def test_thetae_wind_only_endpoint_encodes_winds_without_contour_segments(model,
                            np.array([True, True, True, True, True, False]))
     decoded = {
         "pres": np.full((2, 3), 100000, dtype=np.float32),
+        "mslp": np.array([[100500, 100700, 100900], [100500, 100700, 100900]], dtype=np.float32),
         "tmp2m": np.full((2, 3), 300, dtype=np.float32),
         "dpt2m": np.full((2, 3), 290, dtype=np.float32),
         "u10": np.array([[10, 0, np.nan], [3, 5, 20]], dtype=np.float32),
@@ -106,7 +110,8 @@ def test_thetae_wind_only_endpoint_encodes_winds_without_contour_segments(model,
     assert calls == [("thetae-2m", "2026-10-16T00:00:00+00:00", 1, model)]
     assert result["product"] == "thetae-2m" and result["forecast_hour"] == 1
     assert result["segments"] == []
-    assert (result["unit"], result["interval"]) == ("kt", 5.0)
+    assert result["paths"]
+    assert (result["unit"], result["interval"]) == ("hPa", 2.0)
     wind = result["wind"]
     assert (wind["width"], wind["height"]) == (3, 2)
     assert wind["bounds"] == fields._bounds(hf.COVERAGE_BOUNDS)

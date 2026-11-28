@@ -11,11 +11,11 @@ import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
 const LABELS: Record<ModelStatus["state"], string> = { available: "Available", partial: "Partial", unavailable: "Not found", unknown: "Unconfirmed", configured: "Configured" };
 const FILTERS = [{ key: "all", label: "All models" }, { key: "available", label: "Available" }, { key: "attention", label: "Needs attention" }] as const;
 
-export function ModelBackendStatus({ models }: { models: readonly ForecastModel[] }): ReactNode {
+export function ModelBackendStatus({ models, open = true }: { models: readonly ForecastModel[]; open?: boolean }): ReactNode {
   const client = useBackendClient();
   const health = useBackendHealth();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
-  const enabled = health.data?.bridge.status === "up";
+  const enabled = open && health.data?.bridge.status === "up";
   const queries = useQueries({ queries: models.map((model) => ({
     queryKey: ["models", "status", model.key, model.suggestedRun, model.defaultForecastHour],
     queryFn: () => client.getModelStatus(model.key, model.suggestedRun, model.defaultForecastHour),
@@ -38,7 +38,7 @@ export function ModelBackendStatus({ models }: { models: readonly ForecastModel[
     <div className={styles.sectionHeading}><div><h2 id="model-backends-title">Model backends</h2><p>Latest cycle availability</p></div><Action aria-label="Refresh statuses" disabled={!enabled || checking} onClick={() => { void Promise.all(queries.map((query) => query.refetch())); }}>{checking ? "Checking…" : "Refresh"}</Action></div>
     <div className={styles.backendToolbar}><div className={styles.backendFilters} role="group" aria-label="Filter model statuses">{FILTERS.map((item) => <button key={item.key} type="button" aria-pressed={filter === item.key} onClick={() => { setFilter(item.key); }}>{item.label}<span aria-hidden="true">{counts[item.key]}</span></button>)}</div><span className={styles.backendProgress} role="status">{checking ? `${String(queries.filter((query) => !query.isFetching && (query.data !== undefined || query.isError)).length)} of ${String(models.length)} checked` : "Select a model for details"}</span></div>
     <ul className={styles.backendList} aria-label="Model backend statuses">{visible.map(({ model, query, status, state, label, message }) => <li key={model.key}>
-      <details className={styles.backendModel}>
+      <details className={styles.backendModel} data-motion="details">
         <summary><span className={styles.backendIdentity}><strong>{model.label}</strong><small>{status?.provider ?? "Provider check pending"}</small></span><span className={styles.backendState} data-state={state}><i aria-hidden="true" />{label}</span><ChevronDown className="icon-sm" aria-hidden="true" /></summary>
         <div className={styles.backendDetail}>
           {query?.isError ? <SoundingErrorNotice error={query.error} operation="get_model_status"

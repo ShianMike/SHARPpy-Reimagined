@@ -4,12 +4,10 @@
 // for the map fields comes from the catalogue's per-cycle limits.
 
 import { useMemo } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { useModelCatalog } from "../sounding/soundingQueries";
 import { addHours, resolveModelRun } from "../sounding/soundingTime";
-import { useMapCatalog } from "../../map/mapQueries";
+import { minimumMapForecastHour, useMapCatalogSelection, useSelectedForecastProducts } from "../../map/catalogQuery";
 import { useForecastStore, type ForecastState } from "../../stores/forecastStore";
-import { panelLayers, panelProduct, useMapStore } from "../../stores/mapStore";
 import type { MapCatalog } from "../../types/map";
 import type { ForecastModel } from "../../types/soundings";
 
@@ -37,6 +35,7 @@ export function resolveForecast(
   catalog: MapCatalog | undefined,
   choice: ForecastChoice,
   selectedProducts: readonly string[] = [],
+  supported?: MapCatalog,
 ): ForecastContext | null {
   const fieldModel = catalog?.fieldModel ?? null;
   const model =
@@ -50,7 +49,10 @@ export function resolveForecast(
   const fieldsAvailable = catalog !== undefined && model.key === catalog.fieldModel;
   const cycle = new Date(run).getUTCHours();
   const limit = Math.min(model.maxForecastHours[cycle] ?? Infinity, fieldsAvailable ? (catalog.maxForecastHours[cycle] ?? Infinity) : Infinity);
-  const allowed = model.forecastHours.filter((hour) => hour <= limit);
+  const productCatalog = supported?.fieldModel === model.key ? supported : fieldsAvailable ? catalog : undefined;
+  const minimum = minimumMapForecastHour(productCatalog, selectedProducts);
+  const allowed = model.forecastHours.filter((hour) => hour >= minimum && hour <= limit);
+  if (allowed.length === 0 && minimum > 0) return null;
   const schedules = fieldsAvailable ? catalog.products.flatMap(({ key, forecastHours }) =>
     forecastHours !== undefined && selectedProducts.includes(key) ? [forecastHours] : []) : [];
   const scheduled = allowed.filter((hour) => schedules.every((schedule) => schedule.includes(hour)));
@@ -69,19 +71,16 @@ export type ForecastResolution =
 /** The shared forecast context; the map catalogue failing only turns the fields off. */
 export function useForecast(): ForecastResolution {
   const models = useModelCatalog();
-  const catalog = useMapCatalog();
+  const { inventory, supported } = useMapCatalogSelection();
   const modelKey = useForecastStore((state) => state.modelKey);
   const runTime = useForecastStore((state) => state.runTime);
   const forecastHour = useForecastStore((state) => state.forecastHour);
-  const selectedProducts = useMapStore(useShallow((state) => Array.from({ length: state.panelLayout }, (_, panel) => {
-    const product = panelProduct(state, panel);
-    return panelLayers(state, panel)["model-field"].visible && product !== null ? product : "";
-  })));
+  const selectedProducts = useSelectedForecastProducts();
   // One object while nothing it depends on changes, so effects can depend on it.
   const resolved = useMemo(
     () =>
-      models.data === undefined ? null : resolveForecast(models.data.models, catalog.data, { modelKey, runTime, forecastHour }, selectedProducts),
-    [models.data, catalog.data, modelKey, runTime, forecastHour, selectedProducts],
+      models.data === undefined ? null : resolveForecast(models.data.models, inventory.data, { modelKey, runTime, forecastHour }, selectedProducts, supported),
+    [models.data, inventory.data, modelKey, runTime, forecastHour, selectedProducts, supported],
   );
   if (models.isError) {
     return {

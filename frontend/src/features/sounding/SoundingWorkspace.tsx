@@ -1,6 +1,6 @@
 // Sounding sources and the interactive view drawn by sharpmod's native renderer.
 import { Activity, PanelLeft, PanelLeftClose, RadioTower } from "lucide-react";
-import { useRef, useState, type KeyboardEvent, type ReactNode, type Ref, type RefObject } from "react";
+import { useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref, type RefObject } from "react";
 import { Action, EmptyPanel, IconAction } from "../../ui/Controls";
 import { Surface } from "../../ui/Surface";
 import { Popover } from "../../components/Popover";
@@ -118,37 +118,40 @@ export function SoundingWorkspace(): ReactNode {
     <div ref={workspaceRef} tabIndex={-1} className={styles.workspace} data-testid="sounding-workspace">
       <div className={styles.layout} data-sidebar-open={sidebarOpen}>
         <Surface as="aside" className={styles.side} id="sounding-sources" aria-label="Soundings sidebar"
-          data-motion="fade" inert={!sidebarOpen} hidden={!sidebarOpen}>
+          data-motion="disclosure" inert={!sidebarOpen} hidden={!sidebarOpen}>
           <header className={styles.sideHeader}>
             <VisuallyHidden role="heading" aria-level={1}>Soundings</VisuallyHidden>
-            <div className={styles.sideTabs} role="tablist" aria-label="Sidebar view" onKeyDown={onSidebarKeyDown}>
+            <div className={styles.sideTabs} role="tablist" aria-label="Sidebar view" onKeyDown={onSidebarKeyDown}
+              data-selection-track="horizontal" style={{ "--selection-index": controls ? 1 : 0 } as CSSProperties}>
               <button type="button" role="tab" className={styles.sideTab} id="sounding-sources-tab"
                 aria-selected={!controls} aria-controls="sounding-sources-panel" tabIndex={controls ? -1 : 0}
                 onClick={() => { setControls(false); }}>Sources</button>
               <button type="button" role="tab" className={styles.sideTab} id="sounding-controls-tab"
                 aria-selected={controls} aria-controls="sounding-controls" tabIndex={controls ? 0 : -1}
-                onClick={() => { setControls(true); }}>Sounding controls</button>
+                onClick={() => { setControls(true); }}>Controls</button>
             </div>
             <IconAction icon={PanelLeftClose} size="sm" label={controls ? "Hide controls" : "Hide sources"}
               onClick={hide} aria-expanded={true} aria-controls="sounding-sources" />
           </header>
-          <div className={cx(styles.sideContent, styles.sourceContent)} id="sounding-sources-panel" role="tabpanel"
-            aria-labelledby="sounding-sources-tab" hidden={controls} inert={controls}>
-            <SourcePanel />
-            <OpenSoundings />
-          </div>
-          <div ref={setControlsTarget} className={cx(styles.sideContent, styles.controlsSlot)} id="sounding-controls" role="tabpanel"
-            aria-labelledby="sounding-controls-tab" tabIndex={0} hidden={!controls} inert={!controls}>
-            {active === null ? <section className={styles.controlsGuide} aria-label="Sounding quick start">
-              <div><h2>Start with a sounding</h2><p>Open an observed, model or ERA5 sounding, or import a file.</p></div>
-              <Action tone="accent" onClick={() => { setControls(false); focusPanel(false); }}><RadioTower className="icon-sm" />Choose a source</Action>
-              <ol className={styles.guideSteps}>
-                <li><strong>Inspect a level</strong><p>Hover either chart to link a level. Focus a chart and use ↑ / ↓ to move between levels.</p></li>
-                <li><strong>Edit your profile</strong><p>Choose Edit profile, then drag a point or select a level. Compare Original / New values and use Undo history to step back.</p></li>
-                <li><strong>Arrange and export</strong><p>Fit width or Fit all to resize. Use Chart panels for diagnostics or all four height charts, then {canCopyPng ? "Copy or Export PNG" : "Export PNG"}.</p></li>
-              </ol>
-              <p className={styles.guideNote}>Your original data stays unchanged.</p>
-            </section> : null}
+          <div className={styles.sidePanels}>
+            <div className={cx(styles.sideContent, styles.sourceContent)} id="sounding-sources-panel" role="tabpanel"
+              aria-labelledby="sounding-sources-tab" data-motion="disclosure" hidden={controls} inert={controls}>
+              <SourcePanel />
+              <OpenSoundings />
+            </div>
+            <div ref={setControlsTarget} className={cx(styles.sideContent, styles.controlsSlot)} id="sounding-controls" role="tabpanel"
+              aria-labelledby="sounding-controls-tab" tabIndex={0} data-motion="disclosure" hidden={!controls} inert={!controls}>
+              {active === null ? <section className={styles.controlsGuide} aria-label="Sounding quick start">
+                <div><h2>Start with a sounding</h2><p>Open an observed, model or ERA5 sounding, or import a file.</p></div>
+                <Action tone="accent" onClick={() => { setControls(false); focusPanel(false); }}><RadioTower className="icon-sm" />Choose a source</Action>
+                <ol className={styles.guideSteps}>
+                  <li><strong>Inspect a level</strong><p>Hover either chart to link a level. Focus a chart and use ↑ / ↓ to move between levels.</p></li>
+                  <li><strong>Edit your profile</strong><p>Choose Edit profile, then drag a point or select a level. Compare Original / New values and use Undo history to step back.</p></li>
+                  <li><strong>Arrange and export</strong><p>Fit width or Fit all to resize. Use Chart panels for diagnostics or all four height charts, then {canCopyPng ? "Copy or Export PNG" : "Export PNG"}.</p></li>
+                </ol>
+                <p className={styles.guideNote}>Your original data stays unchanged.</p>
+              </section> : null}
+            </div>
           </div>
           <SoundingRecoveryStatus />
         </Surface>

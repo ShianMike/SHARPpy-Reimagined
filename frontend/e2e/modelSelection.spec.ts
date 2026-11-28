@@ -5,7 +5,7 @@ import { expect, test } from "./support/test";
 
 const archiveModels = ["NAM", "NAM 3km CONUS"] as const;
 const archiveNotice = /3 Nov 2026.*06Z/u;
-const retiredFamilies = ["SREF", "HREF", "HRW", "HiresW"];
+const retiredFamilies = ["SREF", "HREF", "HRW", "HiResW"];
 
 test("shows the two NAM archives in both selectors in dark and light themes", async ({ page, consoleMessages }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
@@ -45,7 +45,7 @@ test("shows the two NAM archives in both selectors in dark and light themes", as
     }
     await forecastSearch.fill("");
     await forecast.getByRole("radio", { name: "CONUS", exact: true }).check();
-    await expect(forecast.getByRole("button", { name: /^Choose /u })).toHaveCount(4);
+    await expect(forecast.getByRole("button", { name: /^Choose (?:HRW|HiResW)/iu })).toHaveCount(0);
     await expect(forecast.getByText("Archive", { exact: true })).toHaveCount(2);
     await expect(forecast.getByText(archiveNotice)).toBeVisible();
     await saveScreenshot(page, `active-forecast-models-${theme}-1920x1080.png`);
@@ -61,6 +61,7 @@ test("shows the two NAM archives in both selectors in dark and light themes", as
     for (const model of ["HRRR", "RRFS", "ECMWF 9km", "RAP", "ICON"]) {
       await expect(sounding.getByRole("option", { name: model, exact: true })).toBeVisible();
     }
+    await expect(sounding.getByRole("option", { name: /^(?:HRW|HiResW)/iu })).toHaveCount(0);
     await expect(sounding.getByRole("group", { name: "Regional", exact: true }).getByRole("option", { name: "RAP", exact: true })).toBeVisible();
     const soundingConus = sounding.getByRole("group", { name: "CONUS", exact: true });
     for (const model of archiveModels) {

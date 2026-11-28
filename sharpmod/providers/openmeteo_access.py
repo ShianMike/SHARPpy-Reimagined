@@ -125,25 +125,25 @@ def redact(text: Any) -> str:
     request URL in several exception messages, so this runs on the way out of
     every failure path rather than only where a URL is built by hand.
     """
-    return _APIKEY_QUERY_RE.sub(r"\1" + REDACTED, str(text))
+    import sharpmod_rs
+
+    return sharpmod_rs.openmeteo_redact(str(text))
 
 
 def _host_of(url: str) -> str:
-    return (urlsplit(url).hostname or "").lower()
+    import sharpmod_rs
+
+    return sharpmod_rs.openmeteo_host_of(url)
 
 
 def _normalise_base_url(url: str) -> str:
-    text = str(url or "").strip().rstrip("/")
-    if not text:
-        raise OpenMeteoAccessError("Open-Meteo base URL is empty")
-    parts = urlsplit(text)
-    if parts.scheme not in {"http", "https"}:
-        raise OpenMeteoAccessError(
-            "Open-Meteo base URL must be http or https: %s" % redact(text))
-    if not parts.hostname:
-        raise OpenMeteoAccessError(
-            "Open-Meteo base URL has no host: %s" % redact(text))
-    return text
+    import sharpmod_rs
+
+    text = str(url or "")
+    try:
+        return sharpmod_rs.openmeteo_normalise_base_url(text)
+    except ValueError as exc:
+        raise OpenMeteoAccessError(str(exc)) from None
 
 
 @dataclass(frozen=True)
@@ -192,14 +192,12 @@ class OpenMeteoAccess:
         shorter value is less tempting to treat as an identifier elsewhere.
         Not surfaced in normal logs or UI.
         """
-        if self.mode == MODE_CUSTOMER and self.api_key is not None:
-            digest = hashlib.sha256(
-                self.api_key.reveal().encode("utf-8")).hexdigest()
-            return "customer-%s" % digest[:16]
-        if self.mode == MODE_SELF_HOSTED:
-            digest = hashlib.sha256(self.host.encode("utf-8")).hexdigest()
-            return "self-hosted-%s" % digest[:16]
-        return "free"
+        import sharpmod_rs
+
+        key = self.api_key.reveal() if self.api_key is not None else None
+        return sharpmod_rs.openmeteo_credential_scope(
+            self.mode, key, self.host
+        )
 
     def require_ready(self) -> None:
         """Raise when this access cannot be used as configured."""
@@ -257,57 +255,26 @@ def resolve_access(
     subscription was in use, and silently honouring it would send a credential
     to a host that never asked for one.
     """
+    import sharpmod_rs
+
     env = os.environ if environ is None else environ
 
-    key_text = api_key if api_key is not None else env.get(API_KEY_ENV, "")
-    key_text = str(key_text or "").strip()
-
-    url_text = base_url if base_url is not None \
-        else env.get(SELF_HOSTED_URL_ENV, "")
-    url_text = str(url_text or "").strip()
-
-    requested = str(
-        mode if mode is not None else env.get(MODE_ENV, "") or "").strip()
-    requested = requested.lower()
-    if requested and requested not in MODES:
-        raise OpenMeteoAccessError(
-            "unknown Open-Meteo access mode %r; expected one of %s"
-            % (requested, ", ".join(MODES)))
-
-    if not requested:
-        if url_text:
-            requested = MODE_SELF_HOSTED
-        elif key_text:
-            requested = MODE_CUSTOMER
-        else:
-            requested = MODE_FREE
-
-    if requested == MODE_SELF_HOSTED:
-        if not url_text:
-            raise OpenMeteoAccessError(
-                "Open-Meteo self-hosted access needs a base URL; set %s"
-                % SELF_HOSTED_URL_ENV)
-        if key_text:
-            raise OpenMeteoAccessError(
-                "refusing to forward an Open-Meteo key to a self-hosted "
-                "instance; unset %s or switch to customer access"
-                % API_KEY_ENV)
-        return OpenMeteoAccess(MODE_SELF_HOSTED, _normalise_base_url(url_text))
-
-    if requested == MODE_CUSTOMER:
-        # Constructed even without a key so the interface can report "customer
-        # mode, key missing" instead of failing at import or silently demoting
-        # the user to free access.
-        return OpenMeteoAccess(
-            MODE_CUSTOMER, CUSTOMER_BASE_URL,
-            _Secret(key_text) if key_text else None)
-
-    if key_text:
-        raise OpenMeteoAccessError(
-            "free Open-Meteo access does not accept a key, and sending one to "
-            "%s would leak it; unset %s or set %s=%s"
-            % (FREE_HOST, API_KEY_ENV, MODE_ENV, MODE_CUSTOMER))
-    return OpenMeteoAccess(MODE_FREE, FREE_BASE_URL)
+    raw_key = api_key if api_key is not None else env.get(API_KEY_ENV, "")
+    raw_url = base_url if base_url is not None else env.get(SELF_HOSTED_URL_ENV, "")
+    raw_mode = mode if mode is not None else env.get(MODE_ENV, "")
+    try:
+        resolved_mode, resolved_url, resolved_key = sharpmod_rs.openmeteo_resolve_access(
+            mode=str(raw_mode or ""),
+            api_key=str(raw_key or ""),
+            base_url=str(raw_url or ""),
+        )
+    except ValueError as exc:
+        raise OpenMeteoAccessError(str(exc)) from None
+    return OpenMeteoAccess(
+        resolved_mode,
+        resolved_url,
+        _Secret(resolved_key) if resolved_key else None,
+    )
 
 
 def build_session(access: OpenMeteoAccess, *, max_workers: int = 1):
@@ -455,6 +422,8 @@ def _error_reason(response: Any) -> str:
 
 def _retry_after(response: Any) -> float:
     """Return the provider's requested wait in seconds, clamped."""
+    import sharpmod_rs
+
     headers = getattr(response, "headers", None)
     if headers is None:
         return 0.0
@@ -462,10 +431,9 @@ def _retry_after(response: Any) -> float:
         raw = headers.get("Retry-After")
     except Exception:  # noqa: BLE001
         return 0.0
-    try:
-        return min(300.0, max(0.0, float(raw)))
-    except (TypeError, ValueError):
-        return 0.0
+    return sharpmod_rs.openmeteo_retry_after_seconds(
+        None if raw is None else str(raw)
+    )
 
 
 class OpenMeteoRateLimited(RetrievalError):

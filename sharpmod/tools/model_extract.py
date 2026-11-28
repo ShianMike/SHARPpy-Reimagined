@@ -615,11 +615,11 @@ def point_in_domain(model, lat, lon):
 
 
 def _longitude_segments(lon0, lon1):
-    lon0 = max(-180.0, min(180.0, float(lon0)))
-    lon1 = max(-180.0, min(180.0, float(lon1)))
-    if lon0 <= lon1:
-        return ((lon0, lon1),)
-    return ((lon0, 180.0), (-180.0, lon1))
+    import sharpmod_rs
+
+    return tuple(
+        sharpmod_rs.model_longitude_segments(float(lon0), float(lon1))
+    )
 
 
 

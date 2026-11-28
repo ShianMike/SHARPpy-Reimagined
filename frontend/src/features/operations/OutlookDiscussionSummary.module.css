@@ -12,7 +12,7 @@
   padding: var(--space-3);
   border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface-0) 68%, transparent);
+  background: var(--glass-inset-fill);
   box-shadow: inset 0 var(--hairline) 0 color-mix(in srgb, var(--text-primary) 6%, transparent);
 }
 .header {
@@ -136,9 +136,9 @@
 }
 .compact .section {
   padding: var(--space-3) var(--space-4);
-  border: var(--hairline) solid color-mix(in srgb, var(--border-subtle) 75%, transparent);
+  border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface-1) 66%, transparent);
+  background: var(--glass-inset-fill);
 }
 .section h4 {
   font-size: var(--font-size-subhead);

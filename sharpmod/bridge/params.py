@@ -25,20 +25,19 @@ def invalid(what: str) -> BridgeError:
 def keys(
     params: dict[str, Any], required: tuple[str, ...], optional: tuple[str, ...] = ()
 ) -> None:
-    missing = [key for key in required if key not in params]
-    extra = sorted(set(params) - set(required) - set(optional))
-    if missing or extra:
-        raise invalid(
-            f"expected {list(required)} (optional {list(optional)}), "
-            f"missing {missing}, unexpected {extra}"
-        )
+    import sharpmod_rs
+
+    sharpmod_rs.bridge_validate_param_keys(
+        params, list(required), list(optional)
+    )
 
 
 def text(params: dict[str, Any], key: str, low: int, high: int) -> str:
-    value = params.get(key)
-    if not isinstance(value, str) or not low <= len(value.strip()) <= high:
-        raise invalid(f"{key} must be text of {low} to {high} characters")
-    return value.strip()
+    import sharpmod_rs
+
+    return sharpmod_rs.bridge_validate_text(
+        params.get(key), key, int(low), int(high)
+    )
 
 
 def optional_text(params: dict[str, Any], key: str, high: int) -> str | None:
@@ -48,62 +47,52 @@ def optional_text(params: dict[str, Any], key: str, high: int) -> str | None:
 
 
 def number(params: dict[str, Any], key: str, low: float, high: float) -> float:
-    value = params.get(key)
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise invalid(f"{key} must be a number")
-    result = float(value)
-    if not math.isfinite(result) or not low <= result <= high:
-        raise invalid(f"{key} must be within [{low:g}, {high:g}]")
-    return result
+    import sharpmod_rs
+
+    return sharpmod_rs.bridge_validate_number(
+        params.get(key), key, float(low), float(high)
+    )
 
 
 def integer(params: dict[str, Any], key: str, low: int, high: int) -> int:
-    value = params.get(key)
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, int)
-        or not low <= value <= high
-    ):
-        raise invalid(f"{key} must be an integer within [{low}, {high}]")
-    return value
+    import sharpmod_rs
+
+    return sharpmod_rs.bridge_validate_integer(
+        params.get(key), key, int(low), int(high)
+    )
 
 
 def time(params: dict[str, Any], key: str) -> datetime:
-    value = params.get(key)
-    if not isinstance(value, str) or len(value) > 40:
-        raise invalid(f"{key} must be an RFC 3339 time")
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        raise invalid(f"{key} must be an RFC 3339 time") from None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    parsed = parsed.astimezone(UTC)
-    if (
-        not datetime(1900, 1, 1, tzinfo=UTC)
-        <= parsed
-        <= now() + timedelta(days=30)
-    ):
-        raise invalid(f"{key} is outside the supported range")
-    return parsed
+    import sharpmod_rs
+
+    micros = sharpmod_rs.bridge_validate_rfc3339_time(
+        params.get(key), key, int(now().timestamp() * 1_000_000)
+    )
+    return datetime(1970, 1, 1, tzinfo=UTC) + timedelta(microseconds=micros)
 
 
 def choice(
     params: dict[str, Any], key: str, choices: tuple[str, ...], default: str
 ) -> str:
-    value = params.get(key, default)
-    if not isinstance(value, str) or value not in choices:
-        raise invalid(f"{key} must be one of {', '.join(choices)}")
-    return value
+    import sharpmod_rs
+
+    return sharpmod_rs.bridge_validate_choice(
+        params.get(key, default), key, list(choices)
+    )
 
 
 def iso(value: Any) -> str | None:
     """RFC 3339 UTC with whole seconds; a naive datetime is UTC, as in SHARPpy."""
     if not isinstance(value, datetime):
         return None
+    import sharpmod_rs
+
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
-    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Exact integer seconds, floored like ``strftime`` drops the fraction;
+    # ``int(timestamp())`` would truncate toward zero before 1970.
+    delta = value.astimezone(UTC) - datetime(1970, 1, 1, tzinfo=UTC)
+    return sharpmod_rs.bridge_format_iso_utc(delta.days * 86400 + delta.seconds)
 
 
 def num(value: Any) -> float | None:

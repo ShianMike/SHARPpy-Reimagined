@@ -19,12 +19,12 @@ it("switches sidebar views by keyboard and restores focus when reopening the qui
   renderWithBackend(<SoundingWorkspace />, createTransport());
   const views = within(screen.getByRole("tablist", { name: "Sidebar view" }));
   const sources = views.getByRole("tab", { name: "Sources", selected: true });
-  const controls = views.getByRole("tab", { name: "Sounding controls", selected: false });
+  const controls = views.getByRole("tab", { name: "Controls", selected: false });
   await user.tab();
   expect(document.activeElement).toBe(sources);
   await user.keyboard("{ArrowRight}");
   expect(document.activeElement).toBe(controls);
-  expect(views.getByRole("tab", { name: "Sounding controls", selected: true })).toBe(controls);
+  expect(views.getByRole("tab", { name: "Controls", selected: true })).toBe(controls);
   expect(views.getByRole("tab", { name: "Sources", selected: false })).toBe(sources);
   await user.keyboard("{ArrowLeft}");
   expect(document.activeElement).toBe(sources);
@@ -35,7 +35,7 @@ it("switches sidebar views by keyboard and restores focus when reopening the qui
   const show = screen.getByRole("button", { name: "Show controls" });
   await waitFor(() => { expect(document.activeElement).toBe(show); });
   await user.click(show);
-  const panel = screen.getByRole("tabpanel", { name: "Sounding controls" });
+  const panel = screen.getByRole("tabpanel", { name: "Controls" });
   await waitFor(() => { expect(document.activeElement).toBe(panel); });
   const guide = screen.getByRole("region", { name: "Sounding quick start" });
   expect(within(guide).getByRole("heading", { name: "Start with a sounding" })).toBeTruthy();
@@ -64,7 +64,7 @@ it("swaps sources and controls without losing a file or draft, with no Info pane
   await userEvent.upload(screen.getByLabelText("File", { selector: "input" }), new File(["profile"], "retained.npz"));
   expect(screen.queryByLabelText("Sounding details")).toBeNull();
   const image = screen.getByTestId("sounding-image");
-  await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
+  await userEvent.click(screen.getByRole("tab", { name: "Controls" }));
   expect(screen.queryByRole("tablist", { name: "Source" })).toBeNull();
   const sidebar = document.getElementById("sounding-sources");
   expect(sidebar?.dataset.surface).toBe("flat");
@@ -90,7 +90,7 @@ it("swaps sources and controls without losing a file or draft, with no Info pane
   await userEvent.click(screen.getByRole("tab", { name: "Sources" }));
   expect(screen.getByText("retained.npz")).toBeTruthy();
   expect(screen.queryByLabelText("Sounding details")).toBeNull();
-  await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
+  await userEvent.click(screen.getByRole("tab", { name: "Controls" }));
   expect(screen.getByRole("spinbutton", { name: "Temperature °C" })).toBe(input);
   expect(input.value).toBe("32");
   await userEvent.click(screen.getByRole("button", { name: "Hide controls" }));

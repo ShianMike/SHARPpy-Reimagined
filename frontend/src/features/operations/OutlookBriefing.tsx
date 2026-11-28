@@ -1,9 +1,7 @@
 import { CloudHail, CloudLightning, CloudRain, ExternalLink, Layers, Percent, RefreshCw, Snowflake, Tornado, Weight, Wind, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { useLatestSpcOutlook, useLatestWpcOutlook } from "../../map/mapQueries";
 import {
   OUTLOOK_DAYS,
-  OUTLOOK_KEYS,
   WPC_WINTER_PRODUCTS,
   WPC_WINTER_PRODUCT_LABELS,
   type OutlookDay,
@@ -12,6 +10,7 @@ import {
 } from "../../types/map";
 import { IconAction } from "../../ui/Controls";
 import { OutlookDiscussionSummary } from "./OutlookDiscussionSummary";
+import { SPC_PRODUCTS_BY_DAY, useBriefingOutlook } from "./useBriefingOutlook";
 import styles from "./OutlookBriefing.module.css";
 
 export type OutlookBriefingKind = "convective" | "ero" | "winter";
@@ -29,7 +28,6 @@ const SPC_PRODUCTS: Record<OutlookProductKey, { label: string; icon: LucideIcon 
   hail: { label: "Hail", icon: CloudHail },
   prob: { label: "Severe probability", icon: Percent },
 };
-const SPC_PRODUCTS_BY_DAY: Record<OutlookDay, readonly OutlookProductKey[]> = { 1: OUTLOOK_KEYS, 2: OUTLOOK_KEYS, 3: ["cat", "prob"] };
 const WINTER_PRODUCT_ICONS: Record<WpcWinterProduct, LucideIcon> = {
   "winter-overall": Layers,
   "winter-snow": Snowflake,
@@ -55,13 +53,9 @@ export function OutlookBriefing({ initialKind = "convective" }: { initialKind?: 
     return () => { window.clearInterval(timer); window.removeEventListener("focus", update); document.removeEventListener("visibilitychange", update); };
   }, []);
 
-  const spcQuery = useLatestSpcOutlook(day, spcProduct, kind === "convective");
-  const wpcQuery = useLatestWpcOutlook(
-    day,
-    kind !== "convective",
-    kind === "winter" ? winterProduct : "ero",
-  );
-  const query = kind === "convective" ? spcQuery : wpcQuery;
+  const query = useBriefingOutlook(kind === "convective"
+    ? { agency: "spc", day, product: spcProduct }
+    : { agency: "wpc", day, product: kind === "winter" ? winterProduct : "ero" });
 
   const dayLabel = `Day ${String(day)}`;
   const outlook = query.data?.outlook;
@@ -104,7 +98,8 @@ export function OutlookBriefing({ initialKind = "convective" }: { initialKind?: 
   return (
     <section className={styles.briefing} aria-labelledby="outlook-briefing-title">
       <div className={styles.topBar}>
-        <div className={styles.kinds} role="group" aria-label="Outlook category">
+        <div className={styles.kinds} role="group" aria-label="Outlook category" data-selection-track="horizontal"
+          style={{ "--selection-index": KINDS.findIndex((option) => option.key === kind) } as CSSProperties}>
           {KINDS.map((option) => (
             <IconAction
               key={option.key}
@@ -112,7 +107,7 @@ export function OutlookBriefing({ initialKind = "convective" }: { initialKind?: 
               icon={option.icon}
               label={option.label}
               size="sm"
-              hintSide="bottom"
+              hintSide="right"
               aria-pressed={kind === option.key}
               onClick={() => { setKind(option.key); }}
             />
@@ -132,7 +127,7 @@ export function OutlookBriefing({ initialKind = "convective" }: { initialKind?: 
       </div>
 
       <header className={styles.header}>
-        <div className={styles.heading}>
+        <div key={kind} className={styles.heading} data-motion="fade">
           <h2 id="outlook-briefing-title">{title}</h2>
           <p className={styles.agency}>{agency}</p>
         </div>
@@ -141,6 +136,8 @@ export function OutlookBriefing({ initialKind = "convective" }: { initialKind?: 
             className={styles.segments}
             role="group"
             aria-label={kind === "convective" ? "SPC outlook day" : kind === "ero" ? "WPC outlook day" : "WPC winter outlook day"}
+            data-selection-track="horizontal"
+            style={{ "--selection-index": OUTLOOK_DAYS.indexOf(day) } as CSSProperties}
           >
             {OUTLOOK_DAYS.map((option) => (
               <button
@@ -150,7 +147,7 @@ export function OutlookBriefing({ initialKind = "convective" }: { initialKind?: 
                 aria-pressed={day === option}
                 onClick={() => {
                   setDay(option);
-                  if (kind === "convective" && !SPC_PRODUCTS_BY_DAY[option].includes(spcProduct)) setSpcProduct("cat");
+                  if (!SPC_PRODUCTS_BY_DAY[option].includes(spcProduct)) setSpcProduct("cat");
                 }}
               >
                 Day {option}
@@ -158,7 +155,8 @@ export function OutlookBriefing({ initialKind = "convective" }: { initialKind?: 
             ))}
           </div>
           {kind === "convective" ? (
-            <div className={styles.segments} role="group" aria-label="SPC outlook product">
+            <div key="convective" className={styles.segments} role="group" aria-label="SPC outlook product" data-motion="fade"
+              data-selection-track="horizontal" style={{ "--selection-index": SPC_PRODUCTS_BY_DAY[day].indexOf(spcProduct) } as CSSProperties}>
               {SPC_PRODUCTS_BY_DAY[day].map((key) => (
                 <IconAction
                   key={key}
@@ -173,7 +171,8 @@ export function OutlookBriefing({ initialKind = "convective" }: { initialKind?: 
               ))}
             </div>
           ) : kind === "winter" ? (
-            <div className={styles.segments} role="group" aria-label="WPC winter outlook product">
+            <div key="winter" className={styles.segments} role="group" aria-label="WPC winter outlook product" data-motion="fade"
+              data-selection-track="horizontal" style={{ "--selection-index": WPC_WINTER_PRODUCTS.indexOf(winterProduct) } as CSSProperties}>
               {WPC_WINTER_PRODUCTS.map((option) => (
                 <IconAction
                   key={option}
@@ -192,7 +191,8 @@ export function OutlookBriefing({ initialKind = "convective" }: { initialKind?: 
       </header>
 
       <div className={styles.summary} aria-live="polite" aria-busy={query.isPending}>
-        <div className={styles.risk} data-available={available} style={highest === undefined ? undefined : ({ "--risk-color": highest.fill ?? highest.stroke } as CSSProperties)}>
+        <div key={`${kind}:${String(day)}:${kind === "convective" ? spcProduct : kind === "winter" ? winterProduct : "ero"}:${String(available)}`}
+          className={styles.risk} data-motion="fade" data-available={available} style={highest === undefined ? undefined : ({ "--risk-color": highest.fill ?? highest.stroke } as CSSProperties)}>
           {available ? <p className={styles.riskLabel}>Highest outlined area</p> : null}
           <div className={styles.riskHeadline}>
             <h3>{headline}</h3>

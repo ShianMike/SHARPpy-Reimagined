@@ -182,15 +182,11 @@ class plotSHIP(QtWidgets.QFrame):
         ``SCALE_MIN`` -> 0.0, ``SCALE_MAX`` -> 1.0, values above ``SCALE_MAX``
         clamp to 1.0 (Requirement 20.3), values below ``SCALE_MIN`` clamp to 0.0.
         """
-        span = cls.SCALE_MAX - cls.SCALE_MIN
-        if span <= 0:
-            return 0.0
-        frac = (value - cls.SCALE_MIN) / span
-        if frac < 0.0:
-            return 0.0
-        if frac > 1.0:
-            return 1.0
-        return frac
+        import sharpmod_rs
+
+        return sharpmod_rs.ship_scale_fraction(
+            float(value), float(cls.SCALE_MIN), float(cls.SCALE_MAX)
+        )
 
     # ------------------------------------------------------------------
     # Geometry
@@ -311,10 +307,6 @@ class plotSHIP(QtWidgets.QFrame):
     @staticmethod
     def _fmt(value):
         """Format a scale value/read-out compactly."""
-        try:
-            f = float(value)
-        except (TypeError, ValueError):
-            return MISSING_STR
-        if f == int(f):
-            return str(int(f))
-        return f"{f:.1f}"
+        import sharpmod_rs
+
+        return sharpmod_rs.ship_format_value(value)

@@ -52,7 +52,9 @@ it("lists the supported map models in the forecast picker", async () => {
   const dialog = screen.getByRole("dialog", { name: "Forecast model" });
   expect(document.activeElement).toBe(screen.getByRole("searchbox", { name: "Search models" }));
   expect(within(dialog).getByRole<HTMLInputElement>("radio", { name: "CONUS" }).checked).toBe(true);
-  expect(within(within(dialog).getByRole("group", { name: "CONUS" })).getAllByRole("button")).toHaveLength(4);
+  const conusGroup = within(dialog).getByRole("group", { name: "CONUS" });
+  expect(within(conusGroup).getAllByRole("button").map((button) => button.getAttribute("aria-label")).toSorted())
+    .toEqual(["Choose HRRR", "Choose NAM", "Choose NAM 3km CONUS", "Choose RRFS"]);
   expect(within(dialog).queryByRole("button", { name: "Choose ECMWF" })).toBeNull();
   fireEvent.click(within(dialog).getByRole("radio", { name: "Global" }));
   expect(within(within(dialog).getByRole("group", { name: "Global" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Choose GFS", "Choose ECMWF 9km", "Choose ICON", "Choose ECMWF", "Choose GDPS", "Choose AIGFS"]);
@@ -144,7 +146,8 @@ it("links forecast setup and timeline to the same run limits and valid time", as
   await userEvent.click(screen.getByRole("button", { name: "Next frame" }));
   expect(screen.getByRole("button", { name: "Choose forecast hour" }).textContent).toContain("F001");
   expect((slider as HTMLInputElement).value).toBe("1");
-  expect(screen.getByLabelText("Valid time").textContent).toContain("10-04 17Z");
+  expect(screen.getByLabelText("Valid time").textContent).toContain("Sun 10-04 17Z UTC");
+  expect(slider.getAttribute("aria-valuetext")).toBe("F001 · valid Sun 10-04 17Z UTC");
   await userEvent.click(screen.getByRole("button", { name: "Choose run" }));
   const dialog = screen.getByRole("dialog", { name: "Model run" });
   await userEvent.click(within(dialog).getByRole("button", { name: "Run 10-04 12Z" }));
@@ -156,6 +159,8 @@ it("links forecast setup and timeline to the same run limits and valid time", as
   expect(slider.getAttribute("max")).toBe("48");
   act(() => { useForecastStore.getState().setRun("2026-10-04T16:00:00Z"); });
   await waitFor(() => { expect(slider.getAttribute("aria-valuetext")).toContain("F018"); });
+  expect(screen.getByLabelText("Valid time").textContent).toContain("Mon 10-05 10Z UTC");
+  expect(slider.getAttribute("aria-valuetext")).toBe("F018 · valid Mon 10-05 10Z UTC");
   expect(slider.getAttribute("max")).toBe("18");
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Next frame" }).disabled).toBe(true);
 });

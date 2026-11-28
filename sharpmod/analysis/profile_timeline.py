@@ -9,26 +9,16 @@ from sharppy.sharptab.prof_collection import ProfCollection
 
 def forecast_hour_range(available, start, end, step=1) -> tuple[int, ...]:
     """Return an inclusive, validated subset of selectable forecast hours."""
-    values = tuple(sorted({int(value) for value in available}))
-    if not values:
-        raise ValueError("no forecast hours are available")
-    start = int(start)
-    end = int(end)
-    step = int(step)
-    if step < 1:
-        raise ValueError("timeline step must be at least one hour")
-    if start > end:
-        raise ValueError("timeline start must not be after its end")
-    selected = tuple(
-        value
-        for value in values
-        if start <= value <= end and (value - start) % step == 0
+    import sharpmod_rs
+
+    return tuple(
+        sharpmod_rs.timeline_forecast_hour_range(
+            [int(value) for value in available],
+            int(start),
+            int(end),
+            int(step),
+        )
     )
-    if not selected:
-        raise ValueError("the selected range contains no available forecast hour")
-    if selected[0] != start or selected[-1] != end:
-        raise ValueError("timeline start and end must be available forecast hours")
-    return selected
 
 
 def combine_collections(collections) -> ProfCollection:

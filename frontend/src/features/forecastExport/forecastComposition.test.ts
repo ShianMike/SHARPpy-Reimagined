@@ -36,6 +36,23 @@ it.each([
   expect(labels).toContain("NOAA · OpenStreetMap");
 });
 
+it("exports 500 mb Height Anomaly with dam unit and 10-dam tick labels", () => {
+  const product = parseMapCatalog(modelCatalogs.gfs).products.find((item) => item.key === "hgt-anom-500");
+  if (product === undefined) throw new Error("GFS hgt-anom-500 fixture missing");
+  const context = { fillRect: vi.fn(), drawImage: vi.fn(), fillText: vi.fn(), strokeText: vi.fn(),
+    strokeRect: vi.fn(), putImageData: vi.fn() };
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as unknown as CanvasRenderingContext2D);
+  vi.stubGlobal("ImageData", class { constructor(readonly pixels: Uint8ClampedArray, readonly width: number, readonly height: number) {} });
+  const canvas = document.createElement("canvas"), map = document.createElement("canvas");
+  map.width = 1280; map.height = 720;
+  composeForecast(canvas, { map, frame: { forecastHour: 24, validTime: "2026-10-04T12:00:00Z",
+    attribution: "NOAA", basemapAttribution: "Natural Earth" } }, { width: 1280, height: 720,
+    model: "GFS", run: "2026-10-03T12:00:00Z", product, units: DEFAULT_UNITS });
+  const ticks = context.strokeText.mock.calls.slice(1).map(([label]) => String(label));
+  expect(context.fillText.mock.calls[4]?.[0]).toBe("dam");
+  expect(ticks).toEqual(["40", "30", "20", "10", "0", "-10", "-20", "-30", "-40"]);
+});
+
 it("keeps fractional and small scientific values distinct on the exported scale", () => {
   const source = parseMapCatalog(catalog).products[0];
   if (source === undefined) throw new Error("Forecast fixture missing");
@@ -54,9 +71,8 @@ it("keeps fractional and small scientific values distinct on the exported scale"
   }
 });
 
-it.each([[1920, 1080], [640, 360]])("fits one stacked REFS QPF legend inside a %i by %i export tile", (width, height) => {
-  const product = parseMapCatalog(modelCatalogs.refs).products.find((item) => item.key === "qpf-1h-ptype");
-  if (product === undefined) throw new Error("REFS QPF fixture missing");
+function renderStackedPtypeExport(product: ReturnType<typeof parseMapCatalog>["products"][number],
+  { width, height, model, attribution }: { width: number; height: number; model: string; attribution: string }) {
   vi.stubGlobal("Path2D", class { constructor(readonly data: string) {} });
   const theme = document.createElement("div").style;
   const background = "#202124", foreground = "#f4f4f4";
@@ -81,9 +97,17 @@ it.each([[1920, 1080], [640, 360]])("fits one stacked REFS QPF legend inside a %
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as unknown as CanvasRenderingContext2D);
   const map = document.createElement("canvas");
   map.width = width; map.height = height;
-  const captured = { map, frame: { forecastHour: 1, validTime: "2026-11-25T01:00:00Z", attribution: "NOAA" } };
-  const options = { width, height, model: "REFS Mean", run: "2026-11-25T00:00:00Z", product, units: DEFAULT_UNITS };
+  const captured = { map, frame: { forecastHour: 1, validTime: "2026-11-25T01:00:00Z", attribution } };
+  const options = { width, height, model, run: "2026-11-25T00:00:00Z", product, units: DEFAULT_UNITS };
   composeForecast(document.createElement("canvas"), captured, options);
+  return { background, foreground, fills, strokes, tickHeights, context, captured, options };
+}
+
+it.each([[1920, 1080], [640, 360]])("fits one stacked REFS QPF legend inside a %i by %i export tile", (width, height) => {
+  const product = parseMapCatalog(modelCatalogs.refs).products.find((item) => item.key === "qpf-1h-ptype");
+  if (product === undefined) throw new Error("REFS QPF fixture missing");
+  const { background, foreground, fills, strokes, tickHeights, context, captured, options } =
+    renderStackedPtypeExport(product, { width, height, model: "REFS Mean", attribution: "NOAA" });
 
   expect(context.drawImage).toHaveBeenCalledTimes(1);
   expect(context.strokeRect).toHaveBeenCalledTimes(4);
@@ -142,23 +166,48 @@ it.each([[1920, 1080], [640, 360]])("fits one stacked REFS QPF legend inside a %
   for (const [index, [path]] of context.stroke.mock.calls.entries()) expect(path).toBe(paths[index]);
 });
 
-it("draws the rate unit and rotated captions on grouped HRDPS precipitation exports", () => {
+it("draws the one-column stacked REFS icon layout on HRDPS precipitation exports", () => {
   const product = parseMapCatalog(modelCatalogs.hrdps).products.find((item) => item.key === "prate-ptype");
   if (product === undefined) throw new Error("HRDPS precipitation rate fixture missing");
-  const context = {
-    drawImage: vi.fn(), fillRect: vi.fn(), strokeRect: vi.fn<CanvasRenderingContext2D["strokeRect"]>(), strokeText: vi.fn(),
-    fillText: vi.fn<CanvasRenderingContext2D["fillText"]>(), stroke: vi.fn(),
-    measureText: (label: string) => ({ width: label.length * 7 }),
-    save: vi.fn(), restore: vi.fn(), translate: vi.fn(), rotate: vi.fn(),
-  };
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as unknown as CanvasRenderingContext2D);
-  const map = document.createElement("canvas"); map.width = 1280; map.height = 720;
-  composeForecast(document.createElement("canvas"), { map, frame: { forecastHour: 1, validTime: "2026-11-25T01:00:00Z", attribution: "ECCC" } },
-    { width: 1280, height: 720, model: "HRDPS", run: "2026-11-25T00:00:00Z", product, units: DEFAULT_UNITS });
+  const { context } = renderStackedPtypeExport(product, { width: 1280, height: 720, model: "HRDPS", attribution: "ECCC" });
 
-  expect(context.fillText.mock.calls.slice(4, -1).map(([text]) => text))
-    .toEqual(["in/h", "0.01", "0.05", "0.1", "0.2", "0.5+", "Rain", "Snow", "Freezing rain", "Mix"]);
-  expect(context.strokeRect.mock.calls).toEqual([1198, 1214, 1230, 1246].map((left) => [left, 132, 12, 401]));
-  expect(context.rotate.mock.calls).toEqual(Array.from({ length: 4 }, () => [Math.PI / 2]));
-  expect(context.stroke).not.toHaveBeenCalled();
+  expect(context.drawImage).toHaveBeenCalledTimes(1);
+  const ramps = context.strokeRect.mock.calls;
+  expect(ramps).toHaveLength(4);
+  expect(new Set(ramps.map(([left]) => left)).size).toBe(1);
+  expect(context.rotate).not.toHaveBeenCalled();
+  expect(context.translate).toHaveBeenCalledTimes(4);
+  expect(context.stroke.mock.calls.map(([path]) => path.data)).toEqual(PRECIPITATION_ICON_PATHS.flatMap((path) => [path, path]));
+  const ticks = context.fillText.mock.calls.slice(4, -1);
+  expect(ticks.map(([text]) => text)).toEqual(Array.from({ length: 4 }, () => ["0.01", "0.05", "0.1", "0.2", "0.5+"]).flat());
+});
+
+it.each([[1920, 1080], [640, 360]])("draws non-overlapping stacked dBZ ticks for HRRR refd-1km-ptype in %i by %i exports", (width, height) => {
+  const product = parseMapCatalog(catalog).products.find((item) => item.key === "refd-1km-ptype");
+  if (product === undefined) throw new Error("HRRR refd-1km-ptype fixture missing");
+  const { tickHeights, context } = renderStackedPtypeExport(product, { width, height, model: "HRRR", attribution: "NOAA" });
+
+  expect(context.drawImage).toHaveBeenCalledTimes(1);
+  const ramps = context.strokeRect.mock.calls;
+  expect(ramps).toHaveLength(4);
+  expect(new Set(ramps.map(([left]) => left)).size).toBe(1);
+  expect(context.rotate).not.toHaveBeenCalled();
+  expect(context.translate).toHaveBeenCalledTimes(4);
+  expect(context.stroke.mock.calls.map(([path]) => path.data)).toEqual(PRECIPITATION_ICON_PATHS.flatMap((path) => [path, path]));
+  const ticks = context.fillText.mock.calls.slice(4, -1);
+  expect(context.strokeText.mock.calls).toEqual(ticks);
+  expect(ticks.length % 4).toBe(0);
+  const perBlock = ticks.length / 4;
+  for (let block = 0; block < 4; block += 1) {
+    const start = block * perBlock;
+    const blockTicks = ticks.slice(start, start + perBlock);
+    expect(blockTicks[0]?.[0]).toBe("5");
+    expect(blockTicks.at(-1)?.[0]).toBe("50+");
+    for (const [index, [, , tickY]] of blockTicks.entries()) {
+      const nextTick = blockTicks[index + 1];
+      if (nextTick !== undefined) {
+        expect(tickY - nextTick[2]).toBeGreaterThan(tickHeights[start + index] ?? Infinity);
+      }
+    }
+  }
 });

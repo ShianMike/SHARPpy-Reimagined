@@ -1,68 +1,51 @@
 /*
  * Design tokens (DESIGN-frontend F7). The only file with raw colour and pixel
- * values. The shell follows SoundScopepy; scientific map colours stay from
- * DARK_MAP (MapPalette) and maps/map_geography.py.
- * It never names the backdrop property; glass.css owns that.
+ * values; it never names the backdrop property (glass.css owns that). The shell
+ * follows SoundScopepy; map colours stay from DARK_MAP (MapPalette) and map_geography.py.
  */
-
 :root {
-  --brand-orange: #f48120;
+  --brand-orange: #ff821a;
   --brand-orbit-stroke: 2.2;
   --brand-profile-stroke: 2.6;
-  --brand-orange-soft: #342114;
+  --brand-orange-soft: #3a1f0b;
   --link: var(--workspace-orange-text);
   --rail-collapsed-w: 52.2px;
   --dialog-w: 792px;
   --dialog-nav-w: 158.4px;
   --forecast-strip-h: 48.6px;
   --scrim: rgb(13 17 22 / 0.6);
-  --popover-focus-filter: blur(9px);
+  --popover-focus-filter: blur(1.5px);
   color-scheme: dark;
-
   /* Surfaces (surface, surface_raised, surface_overlay, surface_sunken) */
   --surface-0: #141516;
   --surface-1: #1d1f21;
   --surface-2: #24272a;
   --surface-sunken: #191b1d;
-
   /* Text */
   --text-primary: #f2f2f2;
   --text-secondary: #c2c5c8;
   --text-tertiary: #999da2;
   --text-disabled: #757b81;
-
   /* Borders: subtle is decoration only; strong marks a control boundary (3:1) */
   --border-subtle: #3a3d40;
   --border-strong: #5d6267;
-
   /* Accent */
-  --accent: var(--workspace-orange);
-  --accent-hover: var(--workspace-orange-hover);
-  --accent-pressed: var(--workspace-orange-pressed);
-  --accent-subtle: var(--workspace-orange-subtle);
-  --accent-bright: var(--workspace-orange-text);
-  --accent-text: #ffffff;
-
+  --accent: var(--workspace-orange); --accent-hover: var(--workspace-orange-hover); --accent-pressed: var(--workspace-orange-pressed);
+  --accent-subtle: var(--workspace-orange-subtle); --accent-bright: var(--workspace-orange-text); --accent-text: #ffffff;
   /* Status */
   --success: #3fb950;
   --forecast-loading: #58a6ff;
   --warning: #d29922;
   --danger: #f85149;
   --info: var(--workspace-orange-text);
-
   /* Focus */
   --focus-ring: var(--workspace-orange-text);
   --focus-ring-width: 2px;
   --focus-ring-offset: 1.8px;
-
   /* State fills: translucent, so they read on glass and on opaque surfaces */
-  --fill-hover: var(--workspace-orange-subtle);
-  --fill-pressed: var(--workspace-orange-subtle);
-  --fill-selected: var(--workspace-orange-subtle);
+  --fill-hover: var(--workspace-orange-subtle); --fill-pressed: var(--workspace-orange-subtle); --fill-selected: var(--workspace-orange-subtle);
   --selection-indicator: var(--brand-orange);
-
-  /* Interface lengths use 90% of the original design; canvas geometry stays separate. */
-  /* Spacing */
+  /* Interface lengths use 90% of the original design; canvas geometry stays separate. Spacing */
   --space-0-5: 1.8px;
   --space-1: 3.6px;
   --space-2: 7.2px;
@@ -71,13 +54,11 @@
   --space-5: 18px;
   --space-6: 21.6px;
   --space-8: 28.8px;
-
   /* Control heights; the smallest target remains above 24px. */
   --control-h-xs: 25.2px;
   --control-h-sm: 32.4px;
   --control-h-md: 36px;
   --control-h-lg: 39.6px;
-
   /* Layout (web layout, not Qt widths; shrink rules in DESIGN-frontend F8) */
   --toolbar-h: 50.4px;
   --rail-w: 208.8px;
@@ -106,7 +87,6 @@
   --rail-item-h: 32.4px;
   --empty-icon-size: 57.6px;
   --brand-icon-size: 28.8px;
-
   /* Sounding and responsive viewer dimensions */
   --sounding-side-w: 252px;
   --sounding-name-on-light: #111111;
@@ -114,7 +94,6 @@
   --field-label-w: 75.6px;
   --side-panel-min-h: 198px;
   --workspace-min-h: 324px;
-
   /* Icons: Lucide's 24px default is too large for 28 to 32px controls */
   --icon-size-sm: 12.6px;
   --icon-size-md: 18px;
@@ -144,21 +123,23 @@
   --radius-xl: 27px;
   --radius-pill: 999px;
   --radius-round: 50%;
-
   /* Elevation */
   --shadow-chrome: 0 3.6px 18px rgb(8 18 34 / 0.12);
   --shadow-floating: 0 10.8px 36px rgb(8 18 34 / 0.18), 0 1.8px 5.4px rgb(8 18 34 / 0.08);
   --shadow-popover: 0 21.6px 64.8px rgb(8 18 34 / 0.28), 0 3.6px 10.8px rgb(8 18 34 / 0.12);
 
   /* Glass: fill and filter live only in the profile blocks and overrides below */
-  --glass-tint: 25 31 40;
+  --glass-tint: 18 22 30;
   /* Inset panels share the sheet's blur instead of stacking more filters. */
   --glass-inset-fill: var(--surface-1);
   --tooltip-glass-fill: var(--surface-1);
-  --glass-border: rgb(255 255 255 / 0.28);
-  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -1px 0 rgb(255 255 255 / 0.07);
-  --glass-sheen: linear-gradient(145deg, rgb(255 255 255 / 0.07), transparent 45%, rgb(255 255 255 / 0.015));
-  --control-fill: rgb(255 255 255 / 0.08);
+  --glass-border: rgb(255 255 255 / 0.24);
+  --glass-highlight: inset 0 1px 0.5px rgb(255 255 255 / 0.36), inset 1px 0 0 rgb(255 255 255 / 0.14), inset 0 -1px 1px rgb(255 255 255 / 0.12), inset 0 0 14px rgb(255 255 255 / 0.04);
+  --glass-sheen: linear-gradient(135deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.03) 34%, transparent 58%, rgb(255 255 255 / 0.07));
+  --glass-text-primary: rgb(255 255 255 / 0.98); --glass-text-secondary: rgb(255 255 255 / 0.88); --glass-text-tertiary: rgb(255 255 255 / 0.72); --glass-divider: rgb(255 255 255 / 0.18); --glass-text-disabled: rgb(255 255 255 / 0.40);
+  --glass-text-shadow: 0 1px 2px rgb(0 0 0 / 0.65), 0 0 10px rgb(0 0 0 / 0.35); --glass-icon-shadow: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.34)); --glass-icon-opacity: 0.78; --glass-icon-active-opacity: 0.96;
+  --glass-ramp-opacity: 0.88; --glass-ramp-sheen: linear-gradient(90deg, rgb(255 255 255 / 0.46) 0%, rgb(255 255 255 / 0.14) 26%, transparent 52%, rgb(0 0 0 / 0.16) 82%, rgb(255 255 255 / 0.24) 100%); --glass-ramp-highlight: inset 0 1px 1px rgb(255 255 255 / 0.65), inset 1px 0 1px rgb(255 255 255 / 0.34), inset 0 -1px 1px rgb(255 255 255 / 0.20), inset -1px 0 1px rgb(255 255 255 / 0.16);
+  --control-fill: rgb(255 255 255 / 0.11);
   --control-selected: rgb(255 255 255 / 0.16);
   --chrome-inset: 18px;
   --dock-w: 50.4px;
@@ -198,11 +179,14 @@
   --theme-preview-dark: #252c38;
   --overview-h: 810px;
   --overview-w: 1080px;
-  --workspace-orange: #b8540b;
-  --workspace-orange-hover: #a54806;
-  --workspace-orange-pressed: #913e04;
-  --workspace-orange-text: #ffb16f;
-  --workspace-orange-subtle: rgb(244 129 32 / 0.13);
+  --workspace-orange: #e8640c; --workspace-orange-hover: #f2721b; --workspace-orange-pressed: #cc5205;
+  --workspace-orange-text: #ffbe78;
+  --workspace-orange-subtle: rgb(232 100 12 / 0.18);
+  --accent-glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.10), rgb(255 255 255 / 0.01));
+  --accent-glass-border: rgb(255 164 88 / 0.34); --accent-glass-filter: blur(0.5px) saturate(135%);
+  --accent-glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), inset 0 0 0 1px rgb(255 164 88 / 0.26), 0 1px 2px rgb(0 0 0 / 0.22);
+  --accent-solid-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(0 0 0 / 0.06));
+  --accent-solid-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), 0 1px 3px rgb(0 0 0 / 0.26);
   --scrollbar-size: 9px;
   --scrollbar-thumb: color-mix(in srgb, var(--text-secondary) 48%, transparent);
   --scrollbar-thumb-hover: var(--workspace-orange-text);
@@ -218,11 +202,13 @@
 
   /* Layers (DR6-4 order: notices sit above floating panels, below chrome) */
   --z-map: 0;
+  --z-liquid-glass: 1;
   /* Inside the map frame: above MapLibre's control containers (z-index 2), which hold the deck.gl canvas */
   --z-map-chip: 3;
   --z-floating: 10;
   --z-notice: 15;
   --z-chrome: 20;
+  --z-liquid-glass-overlay: 29;
   --z-popover: 30;
   --z-tooltip: 40;
   --z-popover-backdrop: 50;
@@ -291,6 +277,15 @@
   --map-obs-upper: #ff8a72;
   --map-obs-lower: #5fd98a;
   --map-plot-warn: #d29922;
+  /* MSLP strokes, pressure readings, dashed thickness, and H/L centers. */
+  --map-isobar: rgb(236 240 244 / 0.7);
+  --map-isobar-halo: rgb(12 17 22 / 0.72);
+  --map-isobar-label: #f4f6f8;
+  --map-isobar-label-halo: #0c1116;
+  --map-thickness-cold: #38bdf8;
+  --map-thickness-warm: #ef4444;
+  --map-center-high: #38bdf8;
+  --map-center-low: #f87171;
   --map-domain-width: 1.5px;
   --map-box-handle-border: 2px;
   --map-outlook-width: 1.5px;
@@ -308,26 +303,25 @@
 /* Light diffusion retains the backdrop's detail; low and accessibility profiles stay opaque. */
 [data-graphics-profile="high"] {
   --glass-fill: rgb(var(--glass-tint) / 0.62);
-  --glass-inset-fill: var(--glass-sheen), rgb(var(--glass-tint) / 0.12);
-  --tooltip-glass-fill: rgb(var(--glass-tint) / 0.32);
-  --glass-filter: blur(5.4px) saturate(112%);
+  --glass-inset-fill: var(--glass-sheen), rgb(var(--glass-tint) / 0.44);
+  --tooltip-glass-fill: rgb(var(--glass-tint) / 0.54);
+  --glass-filter: blur(2.5px) saturate(155%) brightness(1.02);
 }
-
 [data-graphics-profile="balanced"] {
   --glass-fill: rgb(var(--glass-tint) / 0.68);
-  --glass-inset-fill: var(--glass-sheen), rgb(var(--glass-tint) / 0.12);
-  --tooltip-glass-fill: rgb(var(--glass-tint) / 0.32);
-  --glass-filter: blur(3.6px) saturate(108%);
+  --glass-inset-fill: var(--glass-sheen), rgb(var(--glass-tint) / 0.48);
+  --tooltip-glass-fill: rgb(var(--glass-tint) / 0.60);
+  --glass-filter: blur(2px) saturate(135%);
 }
-
 [data-graphics-profile="low"] {
   --glass-fill: rgb(var(--glass-tint) / 0.97);
   --glass-inset-fill: var(--surface-1);
   --tooltip-glass-fill: rgb(var(--glass-tint) / 0.97);
   --glass-filter: none;
   --popover-focus-filter: none;
+  --glass-text-shadow: none; --glass-icon-shadow: none; --glass-icon-opacity: 1; --glass-icon-active-opacity: 1; --glass-ramp-opacity: 1; --glass-ramp-sheen: none; --glass-ramp-highlight: none;
+  --accent-glass-sheen: none; --accent-solid-sheen: none; --accent-glass-border: var(--accent); --accent-glass-shadow: inset 0 0 0 var(--hairline) var(--accent); --accent-solid-shadow: none; --accent-glass-filter: none;
 }
-
 /* Reduced transparency: opaque glass under every profile. (0,2,0) beats the blocks above. */
 @media (prefers-reduced-transparency: reduce) {
   :root[data-graphics-profile] {
@@ -336,20 +330,19 @@
     --tooltip-glass-fill: var(--surface-1);
     --glass-filter: none;
     --popover-focus-filter: none;
+    --glass-text-shadow: none; --glass-icon-shadow: none; --glass-icon-opacity: 1; --glass-icon-active-opacity: 1; --glass-ramp-opacity: 1; --glass-ramp-sheen: none; --glass-ramp-highlight: none;
+    --accent-glass-sheen: none; --accent-solid-sheen: none; --accent-glass-border: var(--accent); --accent-glass-shadow: inset 0 0 0 var(--hairline) var(--accent); --accent-solid-shadow: none; --accent-glass-filter: none;
   }
 }
-
 /* Reduced motion: every duration, the camera included, takes a single frame. */
 @supports (transition-timing-function: linear(0, 1)) {
   :root {
-    /* Apple's zero-bounce spring, sampled and normalized for a finite CSS transition.
-       See WWDC23 "Animate with springs": https://developer.apple.com/videos/play/wwdc2023/10158/?time=1234
-       f(t) = 1 - (1 + 2πt)e^(-2πt); samples of f(t) / f(1) at t = 0, 1/16, …, 1. */
+    /* Apple's zero-bounce spring, sampled and normalized for a finite CSS transition; see WWDC23 "Animate with springs":
+       https://developer.apple.com/videos/play/wwdc2023/10158/?time=1234. f(t) = 1 - (1 + 2πt)e^(-2πt); samples of f(t) / f(1) at t = 0, 1/16, …, 1. */
     --ease-travel: linear(0, 0.0604, 0.1885, 0.334, 0.472, 0.5921, 0.6913, 0.7706, 0.8323,
       0.8797, 0.9154, 0.942, 0.9618, 0.9762, 0.9868, 0.9945, 1);
   }
 }
-
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-fast: 0ms;
@@ -358,33 +351,48 @@
     --motion-camera: 0ms;
   }
 }
-
 :root[data-theme="light"] {
   color-scheme: light;
   --basemap-border-halo: #fffaf3;
   --map-height-contour: #101418;
   --map-height-contour-halo: #fff6e4;
-  --workspace-orange-text: #9b4208;
-  --surface-0: #f6f6f7;
-  --surface-1: #ffffff;
-  --surface-2: #ffffff;
-  --surface-sunken: #f7f7f8;
+  --map-isobar: rgb(28 34 40 / 0.7);
+  --map-isobar-halo: rgb(250 250 250 / 0.72);
+  --map-isobar-label: #1c2228;
+  --map-isobar-label-halo: #fafafa;
+  --map-thickness-cold: #1d4ed8;
+  --map-thickness-warm: #dc2626;
+  --map-center-high: #0284c7;
+  --map-center-low: #dc2626;
+  --workspace-orange: #e85f08; --workspace-orange-hover: #d85304; --workspace-orange-pressed: #be4703;
+  --workspace-orange-text: #c24900;
+  --workspace-orange-subtle: rgb(232 95 8 / 0.14);
+  --accent-glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0.06));
+  --accent-glass-border: rgb(216 92 10 / 0.32);
+  --accent-glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.72), inset 0 0 0 1px rgb(216 92 10 / 0.22), 0 1px 2px rgb(0 0 0 / 0.08);
+  --accent-solid-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.18), rgb(0 0 0 / 0.05));
+  --accent-solid-shadow: inset 0 1px 0 rgb(255 255 255 / 0.30), 0 1px 2px rgb(0 0 0 / 0.14);
+  --accent-glass-filter: blur(0.5px) saturate(130%);
+  --surface-0: #f6f6f7; --surface-1: #ffffff; --surface-2: #ffffff; --surface-sunken: #f7f7f8;
   --text-primary: #1d1d1f;
   --text-secondary: #4e5155;
   --text-tertiary: #6f7378;
   --text-disabled: #858a90;
-  --border-subtle: #d7d9dc;
   --border-strong: #a9adb2;
-  --brand-orange-soft: #fff3e7;
+  --brand-orange-soft: #fff2e2;
   --warning: #936900;
   --danger: #ba2525;
   --success: #187531;
   --forecast-loading: #0969da;
-  --glass-tint: 246 249 253;
-  --glass-border: rgb(255 255 255 / 0.65);
-  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.8), inset 0 -1px 0 rgb(255 255 255 / 0.2);
-  --control-fill: rgb(255 255 255 / 0.45);
-  --control-selected: rgb(255 255 255 / 0.85);
+  --glass-tint: 244 247 252;
+  --glass-border: rgb(255 255 255 / 0.72);
+  --glass-highlight: inset 0 1px 0.5px rgb(255 255 255 / 0.92), inset 1px 0 0 rgb(255 255 255 / 0.55), inset 0 -1px 1px rgb(20 23 31 / 0.08), inset 0 0 14px rgb(255 255 255 / 0.22);
+  --glass-sheen: linear-gradient(135deg, rgb(255 255 255 / 0.24), rgb(255 255 255 / 0.05) 38%, transparent 62%, rgb(255 255 255 / 0.10));
+  --glass-text-primary: rgb(14 18 26 / 0.96); --glass-text-secondary: rgb(14 18 26 / 0.82); --glass-text-tertiary: rgb(14 18 26 / 0.66); --glass-divider: rgb(14 18 26 / 0.16); --glass-text-disabled: rgb(14 18 26 / 0.38);
+  --glass-text-shadow: 0 1px 2px rgb(255 255 255 / 0.78), 0 0 10px rgb(255 255 255 / 0.50); --glass-icon-shadow: drop-shadow(0 1px 1.5px rgb(255 255 255 / 0.44)); --glass-icon-opacity: 0.78; --glass-icon-active-opacity: 0.95;
+  --glass-ramp-opacity: 0.90; --glass-ramp-sheen: linear-gradient(90deg, rgb(255 255 255 / 0.64) 0%, rgb(255 255 255 / 0.22) 28%, transparent 54%, rgb(14 18 26 / 0.10) 84%, rgb(255 255 255 / 0.36) 100%); --glass-ramp-highlight: inset 0 1px 1px rgb(255 255 255 / 0.88), inset 1px 0 1px rgb(255 255 255 / 0.56), inset 0 -1px 1px rgb(14 18 26 / 0.14), inset -1px 0 1px rgb(255 255 255 / 0.42);
+  --control-fill: rgb(255 255 255 / 0.24);
+  --control-selected: rgb(255 255 255 / 0.38);
   --track-fill: rgb(30 45 60 / 0.2);
-  --border-subtle: rgb(30 45 60 / 0.12);
+  --border-subtle: rgb(30 45 60 / 0.16);
 }

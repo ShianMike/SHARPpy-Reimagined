@@ -28,7 +28,7 @@ const SOURCES = [
 ] as const satisfies readonly { source: SoundingSource; label: string; hint: string; icon: typeof RadioTower }[];
 
 export function OperationsWorkspace(): ReactNode {
-  const [providersOpen, setProvidersOpen] = useState(false);
+  const [providersOpen, setProvidersOpen] = useState<boolean | null>(null);
   const forecast = useForecast();
   const context = forecast.status === "ready" ? forecast.context : null;
   const catalog = useMapCatalog();
@@ -83,9 +83,9 @@ export function OperationsWorkspace(): ReactNode {
       </section>
     </div>
     <div className={styles.diagnostics}>
-      {context === null ? null : <details className={styles.disclosure} onToggle={(event) => { setProvidersOpen(event.currentTarget.open); }}>
+      {context === null ? null : <details className={styles.disclosure} data-motion="details" onToggle={(event) => { setProvidersOpen(event.currentTarget.open); }}>
         <summary><span>Model availability</span><small>{String(context.models.length)} models</small><ChevronDown className="icon-sm" aria-hidden="true" /></summary>
-        {providersOpen ? <ModelBackendStatus models={context.models} /> : null}
+        {providersOpen === null ? null : <ModelBackendStatus models={context.models} open={providersOpen} />}
       </details>}
       <details className={styles.disclosure} data-motion="details">
         <summary><span>Recent activity</span><small className={styles.activityStatus} data-error={errors > 0}>{errors > 0 ? `${String(errors)} ${errors === 1 ? "error" : "errors"} this session` : "No errors this session"}</small><ChevronDown className="icon-sm" aria-hidden="true" /></summary>

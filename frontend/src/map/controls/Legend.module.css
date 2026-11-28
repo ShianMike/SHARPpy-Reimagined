@@ -57,9 +57,9 @@
   min-width: 0;
   gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
-  border: var(--hairline) solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface-1) 66%, transparent);
+  background: var(--glass-inset-fill);
   align-items: start;
 }
 .card h4 { flex-wrap: nowrap; align-items: flex-start; }

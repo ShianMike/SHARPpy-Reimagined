@@ -96,7 +96,7 @@ def test_fallback_requires_the_exact_readable_saved_frame(saved_frames, monkeypa
     elif damage == "missing":
         target.unlink()
     elif damage == "old-version":
-        target.rename(target.with_name(target.name.replace("grid-v2_", "grid-v0_")))
+        target.rename(target.with_name(target.name.replace("grid-v3_", "grid-v0_")))
     elif damage == "other-model":
         request["model"] = "aigfs"
     elif damage == "other-run":

@@ -88,9 +88,9 @@ def point_from_widget(widget: Any) -> tuple[float, float] | None:
     if lon is None:
         lon = _as_float(_collection_meta(widget, "lon"))
 
-    if lat is None or lon is None:
-        return None
-    if not -90.0 <= lat <= 90.0 or not -180.0 <= lon <= 180.0:
+    import sharpmod_rs
+
+    if not sharpmod_rs.hodo_locator_point_valid(lat, lon):
         return None
     return lat, lon
 
@@ -104,19 +104,20 @@ def requested_point_from_widget(widget: Any) -> tuple[float, float] | None:
     indistinguishable at map precision is omitted so observed soundings and
     exact grid hits keep one unambiguous marker.
     """
+    import sharpmod_rs
 
     lat = _as_float(_collection_meta(widget, "requested_lat"))
     lon = _as_float(_collection_meta(widget, "requested_lon"))
     if lat is None or lon is None:
         return None
-    if not -90.0 <= lat <= 90.0 or not -180.0 <= lon <= 180.0:
-        return None
     selected = point_from_widget(widget)
-    if selected is not None:
-        selected_lat, selected_lon = selected
-        delta_lon = ((lon - selected_lon + 180.0) % 360.0) - 180.0
-        if abs(lat - selected_lat) < 1.0e-4 and abs(delta_lon) < 1.0e-4:
-            return None
+    selected_lat, selected_lon = (
+        selected if selected is not None else (None, None)
+    )
+    if not sharpmod_rs.hodo_locator_requested_distinct(
+        selected_lat, selected_lon, lat, lon
+    ):
+        return None
     return lat, lon
 
 
@@ -131,28 +132,11 @@ def box_from_widget(widget: Any) -> tuple[float, float, float, float] | None:
 
     The stored order is the region's own ``(lat0, lon0, lat1, lon1)``.
     """
-    raw = _collection_meta(widget, "box_mean_bounds")
-    if raw is None or isinstance(raw, (str, bytes)):
-        return None
-    try:
-        south, west, north, east = (float(value) for value in raw)
-    except (TypeError, ValueError):
-        return None
-    for value in (south, west, north, east):
-        if not math.isfinite(value):
-            return None
-    if not -90.0 <= south <= 90.0 or not -90.0 <= north <= 90.0:
-        return None
-    if north <= south:
-        return None
-    # A box drawn across the antimeridian comes back with its east edge wrapped
-    # below its west edge. Unwrapping keeps the span positive so the inset sizes
-    # itself to the real width instead of to the 340-degree complement.
-    if east <= west:
-        east += 360.0
-    if east - west > 360.0:
-        return None
-    return west, south, east, north
+    import sharpmod_rs
+
+    return sharpmod_rs.hodo_locator_normalise_box(
+        _collection_meta(widget, "box_mean_bounds")
+    )
 
 
 def location_name_from_widget(widget: Any) -> str:
@@ -194,8 +178,11 @@ def location_name_from_widget(widget: Any) -> str:
     if model:
         return " ".join(str(model).split())
     if coordinate_fallback:
-        prefix = _COORDINATE_LABEL_RE.split(coordinate_fallback, maxsplit=1)[0]
-        return prefix.strip(" ,-")
+        import sharpmod_rs
+
+        return sharpmod_rs.hodo_overlay_strip_coordinate_label(
+            coordinate_fallback
+        )
     return ""
 
 
@@ -303,23 +290,17 @@ def raster_source_rect(raster: Any, bounds, width: int, height: int):
     survive. :func:`raster_draw_rects` does that clipping in step with the
     destination.
     """
+    import sharpmod_rs
+
     try:
         lon0, lon1, lat0, lat1 = (float(value) for value in raster.bounds)
     except (AttributeError, TypeError, ValueError):
         return None
-    west, south, east, north = bounds
-    span_lon = lon1 - lon0
-    span_lat = lat1 - lat0
-    if span_lon <= 0 or span_lat <= 0:
-        return None
-    if east <= lon0 or west >= lon1 or north <= lat0 or south >= lat1:
-        return None
-    left = (west - lon0) / span_lon * width
-    right = (east - lon0) / span_lon * width
-    # Row 0 is the north edge, so latitude runs the other way.
-    top = (lat1 - north) / span_lat * height
-    bottom = (lat1 - south) / span_lat * height
-    return (left, top, max(1.0, right - left), max(1.0, bottom - top))
+    west, south, east, north = (float(value) for value in bounds)
+    return sharpmod_rs.hodo_locator_raster_source_rect(
+        lon0, lon1, lat0, lat1, (west, south, east, north),
+        float(width), float(height),
+    )
 
 
 def raster_draw_rects(raster: Any, bounds, width: int, height: int, target):
@@ -333,27 +314,29 @@ def raster_draw_rects(raster: Any, bounds, width: int, height: int, target):
     values under the point were not the values at the point. The uncovered part of
     the inset is left unpainted instead, which is the truthful answer.
     """
-    full = raster_source_rect(raster, bounds, width, height)
-    if full is None:
+    import sharpmod_rs
+
+    try:
+        lon0, lon1, lat0, lat1 = (float(value) for value in raster.bounds)
+    except (AttributeError, TypeError, ValueError):
         return None
-    x, y, w, h = full
-    if w <= 0 or h <= 0:
-        return None
-    left = max(0.0, x)
-    top = max(0.0, y)
-    right = min(float(width), x + w)
-    bottom = min(float(height), y + h)
-    if right <= left or bottom <= top:
-        return None
-    # The same fraction removed from the source comes off the destination.
-    target_left = target.left() + (left - x) / w * target.width()
-    target_top = target.top() + (top - y) / h * target.height()
-    target_width = (right - left) / w * target.width()
-    target_height = (bottom - top) / h * target.height()
-    if target_width <= 0.0 or target_height <= 0.0:
-        return None
-    return ((left, top, right - left, bottom - top),
-            (target_left, target_top, target_width, target_height))
+    west, south, east, north = (float(value) for value in bounds)
+    rects = sharpmod_rs.hodo_locator_raster_draw_rects(
+        lon0,
+        lon1,
+        lat0,
+        lat1,
+        (
+            float(target.left()),
+            float(target.top()),
+            float(target.width()),
+            float(target.height()),
+        ),
+        (west, south, east, north),
+        float(width),
+        float(height),
+    )
+    return rects[0] if rects else None
 
 
 def raster_chip_text(raster: Any) -> str:
@@ -504,24 +487,13 @@ def zoom_bounds(
     larger than the inset showing it. The aspect is preserved while widening, so
     the inset keeps its shape at every zoom.
     """
-    half_lat = LOCATOR_HALF_LAT_DEGREES
-    cos_lat = max(0.35, math.cos(math.radians(lat)))
-    if box is not None:
-        west, south, east, north = box
-        # Measured from the sounding rather than from the box centre, so the
-        # rectangle still fits when the point sits off-centre inside it.
-        reach_lat = max(abs(north - lat), abs(lat - south))
-        reach_lon = max(abs(east - lon), abs(lon - west))
-        half_lat = max(
-            half_lat,
-            reach_lat * LOCATOR_BOX_MARGIN,
-            # Convert the longitude requirement into the latitude half-height
-            # that produces it, so widening cannot distort the aspect.
-            reach_lon * LOCATOR_BOX_MARGIN * cos_lat / LOCATOR_LON_ASPECT,
-        )
-        half_lat = min(half_lat, LOCATOR_MAX_HALF_LAT_DEGREES)
-    half_lon = half_lat * LOCATOR_LON_ASPECT / cos_lat
-    return lon - half_lon, lat - half_lat, lon + half_lon, lat + half_lat
+    import sharpmod_rs
+
+    return sharpmod_rs.hodo_locator_zoom_bounds(
+        float(lat),
+        float(lon),
+        None if box is None else tuple(float(value) for value in box),
+    )
 
 
 def presentation_from_widget(widget: Any) -> locator_presentation.LocatorPresentation:
@@ -604,6 +576,8 @@ def _county_tile_lines_cached(
         tile_lat: int,
 ) -> tuple[tuple[tuple[float, float], ...], ...]:
     """Decode one independently compressed one-degree county-outline tile."""
+    import sharpmod_rs
+
     _county_manifest_cached()
     name = f"tiles/{tile_lat}/{tile_lon}.json"
     try:
@@ -611,69 +585,26 @@ def _county_tile_lines_cached(
             payload = _county_archive_cached().read(name)
     except KeyError:
         return ()
-    raw_lines = json.loads(payload.decode("ascii"))
-    if not isinstance(raw_lines, list) or len(raw_lines) > 20_000:
-        return ()
-
-    scale = float(10 ** _COUNTY_COORDINATE_PRECISION)
-    lines = []
-    for raw_line in raw_lines:
-        if (
-            not isinstance(raw_line, list)
-            or len(raw_line) < 4
-            or len(raw_line) % 2
-            or len(raw_line) > 200_000
-            or not all(isinstance(value, int) for value in raw_line)
-        ):
-            continue
-        lon = raw_line[0]
-        lat = raw_line[1]
-        points = [(lon / scale, lat / scale)]
-        for index in range(2, len(raw_line), 2):
-            lon += raw_line[index]
-            lat += raw_line[index + 1]
-            points.append((lon / scale, lat / scale))
-        if all(
-            tile_lon - 1e-4 <= point_lon <= tile_lon + 1.0001
-            and tile_lat - 1e-4 <= point_lat <= tile_lat + 1.0001
-            for point_lon, point_lat in points
-        ):
-            lines.append(tuple(points))
-    return tuple(lines)
+    decoded = sharpmod_rs.hodo_locator_decode_county_tile(
+        payload, int(tile_lon), int(tile_lat)
+    )
+    return tuple(tuple(tuple(pt) for pt in line) for line in decoded)
 
 
 def county_lines_for_bounds(
         bounds: tuple[float, float, float, float],
 ) -> tuple[tuple[tuple[float, float], ...], ...]:
     """Return only bundled county linework intersecting local map tiles."""
-    try:
-        west, south, east, north = (float(value) for value in bounds)
-    except (TypeError, ValueError):
-        return ()
-    if (
-        not all(math.isfinite(value) for value in (
-            west, south, east, north))
-        or west >= east
-        or south >= north
-    ):
-        return ()
+    import sharpmod_rs
 
-    tile_west = math.floor(west)
-    tile_east = math.floor(east)
-    tile_south = math.floor(south)
-    tile_north = math.floor(north)
-    tile_count = (
-        (tile_east - tile_west + 1)
-        * (tile_north - tile_south + 1)
-    )
-    if tile_count <= 0 or tile_count > _COUNTY_MAX_QUERY_TILES:
+    coords = sharpmod_rs.hodo_locator_county_tile_coords(bounds)
+    if not coords:
         return ()
 
     lines = []
     try:
-        for tile_lon in range(tile_west, tile_east + 1):
-            for tile_lat in range(tile_south, tile_north + 1):
-                lines.extend(_county_tile_lines_cached(tile_lon, tile_lat))
+        for tile_lon, tile_lat in coords:
+            lines.extend(_county_tile_lines_cached(tile_lon, tile_lat))
     except (OSError, ValueError, KeyError, json.JSONDecodeError,
             zipfile.BadZipFile):
         return ()
@@ -729,25 +660,16 @@ def _longitude_near(lon: float, center: float) -> float:
 def _global_lines_for_bounds_cached(
         west: float, south: float, east: float, north: float) -> dict[
             str, tuple[tuple[tuple[float, float], ...], ...]]:
-    center = (west + east) / 2.0
+    import sharpmod_rs
+
     selected = {}
     for name, lines in _global_layers_cached().items():
-        matches = []
-        for line in lines:
-            adjusted = tuple(
-                (_longitude_near(lon, center), lat) for lon, lat in line)
-            line_west = min(coordinate[0] for coordinate in adjusted)
-            line_east = max(coordinate[0] for coordinate in adjusted)
-            line_south = min(coordinate[1] for coordinate in adjusted)
-            line_north = max(coordinate[1] for coordinate in adjusted)
-            if (
-                line_east >= west
-                and line_west <= east
-                and line_north >= south
-                and line_south <= north
-            ):
-                matches.append(adjusted)
-        selected[name] = tuple(matches)
+        filtered = sharpmod_rs.hodo_locator_filter_global_lines(
+            [list(line) for line in lines], west, south, east, north
+        )
+        selected[name] = tuple(
+            tuple(tuple(point) for point in line) for line in filtered
+        )
     return selected
 
 
@@ -813,14 +735,9 @@ def _overlay_actual_time(entry: Any) -> tuple[datetime | None, str]:
 
 def overlay_timing_text(context: dict[str, Any]) -> str:
     """Name the provider timestamp's meaning instead of guessing validity."""
+    import sharpmod_rs
 
-    stamp = _format_utc(context.get("actual_time"))
-    if not stamp:
-        return ""
-    basis = str(context.get("time_basis") or "valid")
-    if basis == "retrieved":
-        return f"retrieved {stamp}"
-    return f"actual {basis} {stamp}"
+    return sharpmod_rs.hodo_overlay_timing_text(context)
 
 
 
@@ -884,13 +801,15 @@ def _inset_rect(widget: Any, qtcore: Any):
     # Share the hodograph's upper-left corner rather than floating inward.
     frame_left = int(getattr(widget, "tlx", 0)) + 1
     frame_top = int(getattr(widget, "tly", 0)) + 1
-    available_width = max(0, bitmap.width() - frame_left - 8)
-    available_height = max(0, bitmap.height() - frame_top - 8)
-    width = min(max(150, int(bitmap.width() * 0.29)), 250, available_width)
-    height = min(max(96, int(width * 0.64)), available_height)
-    if width < 110 or height < 72:
-        return None
-    return qtcore.QRectF(frame_left, frame_top, width, height)
+    import sharpmod_rs
+
+    rect = sharpmod_rs.hodo_locator_inset_rect(
+        float(bitmap.width()),
+        float(bitmap.height()),
+        float(frame_left),
+        float(frame_top),
+    )
+    return None if rect is None else qtcore.QRectF(*rect)
 
 
 def locator_rect_for_widget(widget: Any, qtcore: Any):
@@ -913,15 +832,19 @@ def _map_point(rect: Any, bounds: tuple[float, float, float, float], lat: float,
 
 def _marker_position(rect, bounds, lat: float, lon: float):
     """Map a point, clamping an off-view point to a visible edge indicator."""
+    import sharpmod_rs
 
-    center = (bounds[0] + bounds[2]) / 2.0
-    lon = _longitude_near(lon, center)
-    x, y = _map_point(rect, bounds, lat, lon)
-    inside = rect.contains(x, y)
-    margin = 3.0
-    x = min(rect.right() - margin, max(rect.left() + margin, x))
-    y = min(rect.bottom() - margin, max(rect.top() + margin, y))
-    return x, y, inside
+    return sharpmod_rs.hodo_locator_marker_position(
+        float(lat),
+        float(lon),
+        tuple(float(value) for value in bounds),
+        (
+            float(rect.left()),
+            float(rect.top()),
+            float(rect.width()),
+            float(rect.height()),
+        ),
+    )
 
 
 def _draw_requested_point(

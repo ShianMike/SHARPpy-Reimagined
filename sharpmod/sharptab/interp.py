@@ -307,6 +307,8 @@ def _isotherm_pres_and_hght(prof, temp_c, wetbulb=False):
     them. Returns ``(MISSING, MISSING)`` when the isotherm is never reached or
     the profile is too short.
     """
+    import sharpmod_rs
+
     if wetbulb:
         profile = getattr(prof, "wetbulb", None)
         if profile is None:
@@ -318,41 +320,14 @@ def _isotherm_pres_and_hght(prof, temp_c, wetbulb=False):
     logp = _logp(prof)
     hgt = ma.asanyarray(prof.hght, dtype=float)
 
-    mask = ma.getmaskarray(tmp) | ma.getmaskarray(logp) | ma.getmaskarray(hgt)
-    tmpf = np.asarray(tmp.filled(np.nan), dtype=float)
-    logpf = np.asarray(logp.filled(np.nan), dtype=float)
-    hgtf = np.asarray(hgt.filled(np.nan), dtype=float)
-    good = (~mask) & np.isfinite(tmpf) & np.isfinite(logpf) & np.isfinite(hgtf)
+    tmpf = np.ascontiguousarray(tmp.filled(np.nan), dtype=float).reshape(-1)
+    logpf = np.ascontiguousarray(logp.filled(np.nan), dtype=float).reshape(-1)
+    hgtf = np.ascontiguousarray(hgt.filled(np.nan), dtype=float).reshape(-1)
 
-    tmpf = tmpf[good]
-    logpf = logpf[good]
-    hgtf = hgtf[good]
-    if tmpf.size < 2:
+    result = sharpmod_rs.isotherm_pres_and_hght(tmpf, logpf, hgtf, float(temp_c))
+    if result is None:
         return MISSING, MISSING
-
-    diff = tmpf - temp_c
-
-    # Exact hit on a reported level: return it directly.
-    exact = np.where(diff == 0.0)[0]
-    if exact.size:
-        i = int(exact[0])
-        return float(10.0 ** logpf[i]), float(hgtf[i])
-
-    if not np.any(diff <= 0) or not np.any(diff >= 0):
-        # Isotherm never crossed within the profile.
-        return MISSING, MISSING
-
-    # First index where consecutive temperatures straddle the isotherm.
-    cross = np.where((diff[:-1] * diff[1:]) < 0)[0]
-    if cross.size == 0:
-        return MISSING, MISSING
-    i = int(cross.min())
-
-    # Interpolate against temperature (x must be ascending for np.interp).
-    x = [tmpf[i + 1], tmpf[i]]
-    logp_i = np.interp(temp_c, x, [logpf[i + 1], logpf[i]])
-    hght_i = np.interp(temp_c, x, [hgtf[i + 1], hgtf[i]])
-    return float(10.0 ** logp_i), float(hght_i)
+    return float(result[0]), float(result[1])
 
 
 def pres_at_isotherm(prof, temp_c, wetbulb=False):

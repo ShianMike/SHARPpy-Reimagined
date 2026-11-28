@@ -166,15 +166,17 @@ def _clamp_to_range(name, value):
         # No documented range -> pass through unchanged.
         return value
 
+    import sharpmod_rs
+
     # Vector-valued result (e.g. mean-wind (u, v)): clamp on the magnitude.
     if isinstance(value, (tuple, list)):
         try:
-            magnitude = float(np.hypot(*value))
+            components = [float(item) for item in value]
         except (TypeError, ValueError):
             return MISSING
-        if not np.isfinite(magnitude):
-            return MISSING
-        if magnitude < spec.phys_min or magnitude > spec.phys_max:
+        if sharpmod_rs.profile_clamp_vector_in_range(
+            components, float(spec.phys_min), float(spec.phys_max)
+        ) is None:
             return MISSING
         return value
 
@@ -182,11 +184,10 @@ def _clamp_to_range(name, value):
         fval = float(value)
     except (TypeError, ValueError):
         return MISSING
-    if not np.isfinite(fval):
-        return MISSING
-    if fval < spec.phys_min or fval > spec.phys_max:
-        return MISSING
-    return fval
+    clamped = sharpmod_rs.profile_clamp_scalar_in_range(
+        fval, float(spec.phys_min), float(spec.phys_max)
+    )
+    return MISSING if clamped is None else clamped
 
 
 # ---------------------------------------------------------------------------

@@ -13,8 +13,6 @@ declutter rules, scale arithmetic, and contrast without a QApplication.
 
 from __future__ import annotations
 
-import math
-
 
 #: Paint order for boundary families, dimmest first. The basemap raster draws
 #: them in this order so the most prominent outline (coastline) finishes on
@@ -151,29 +149,23 @@ KM_PER_MILE = 1.609344
 
 def boundary_draw_order(names) -> tuple[str, ...]:
     """Return known boundary families dimmest-first, unknowns last in place."""
-    known = [name for name in BOUNDARY_ZORDER if name in set(names)]
-    extra = [name for name in names if name not in BOUNDARY_ZORDER]
-    return tuple(known + extra)
+    import sharpmod_rs
+
+    return sharpmod_rs.geo_boundary_draw_order(names)
 
 
 def boundary_width(family: str, *, density_scale: float = 1.0) -> float:
     """Return the stroke width for one boundary family."""
-    base = BOUNDARY_WIDTHS.get(str(family), 1.0)
-    try:
-        scale = float(density_scale)
-    except (TypeError, ValueError, OverflowError):
-        scale = 1.0
-    if not math.isfinite(scale) or scale <= 0.0:
-        scale = 1.0
-    return round(base * min(2.0, max(0.5, scale)), 3)
+    import sharpmod_rs
+
+    return sharpmod_rs.geo_boundary_width(str(family), density_scale)
 
 
 def normalise_label_density(value) -> str:
     """Return a valid label-density key, defaulting to ``standard``."""
-    text = str(value or "standard").strip().lower()
-    if text in LABEL_DENSITY_LEVELS:
-        return text
-    return "standard"
+    import sharpmod_rs
+
+    return sharpmod_rs.geo_normalise_label_density(value)
 
 
 def labels_visible_for_span(density: str, lon_span: float) -> tuple[bool, bool, bool]:
@@ -185,20 +177,9 @@ def labels_visible_for_span(density: str, lon_span: float) -> tuple[bool, bool, 
     :data:`LABEL_SPAN_DENSE` and only when the reader asked for ``dense``.
     ``off`` hides every tier; ``sparse`` keeps major cities at any zoom.
     """
-    density = normalise_label_density(density)
-    if density == "off":
-        return (False, False, False)
-    try:
-        span = abs(float(lon_span))
-    except (TypeError, ValueError, OverflowError):
-        span = float("inf")
-    if not math.isfinite(span):
-        span = float("inf")
-    if density == "sparse":
-        return (True, False, False)
-    if density == "dense":
-        return (True, span <= LABEL_SPAN_STANDARD, span <= LABEL_SPAN_DENSE)
-    return (True, span <= LABEL_SPAN_STANDARD, False)
+    import sharpmod_rs
+
+    return sharpmod_rs.geo_labels_visible_for_span(density, lon_span)
 
 
 def declutter_labels(
@@ -235,160 +216,18 @@ def declutter_labels(
     tier 0 for selected/hovered/pinned labels whose own marker is necessarily
     protected. Returns the kept candidates in placement order.
     """
-    try:
-        minimum = float(min_separation_px)
-    except (TypeError, ValueError, OverflowError):
-        minimum = float(LABEL_MIN_SEPARATION_PX)
-    if not math.isfinite(minimum) or minimum < 0.0:
-        minimum = float(LABEL_MIN_SEPARATION_PX)
-    try:
-        cap = max(0, int(limit))
-    except (TypeError, ValueError, OverflowError):
-        cap = LABEL_MAX_COUNT
-    if cap == 0:
-        return []
-    widths = dict(label_widths or {})
-    valid = [
-        item for item in candidates or ()
-        if len(tuple(item)) == 4 and str(item[3]).strip()
-    ]
-    try:
-        viewport_w, viewport_h = (
-            max(1.0, float(viewport_size[0])),
-            max(1.0, float(viewport_size[1])),
-        )
-        viewport_ok = math.isfinite(viewport_w) and math.isfinite(viewport_h)
-    except (TypeError, ValueError, OverflowError, IndexError):
-        viewport_w = viewport_h = 1.0
-        viewport_ok = False
+    import sharpmod_rs
 
-    def _spread(items):
-        """Yield a deterministic viewport-wide order for one priority tier."""
-        if not viewport_ok:
-            # Centre-out avoids the historical edge bands even for callers that
-            # cannot describe a viewport.
-            centre_y = sum(float(item[2]) for item in items) / max(1, len(items))
-            return sorted(
-                items,
-                key=lambda item: (
-                    abs(float(item[2]) - centre_y), float(item[1]), float(item[2]),
-                    str(item[3]),
-                ),
-            )
-        # The screen grid is tied to the same minimum spacing the collision pass
-        # uses. This keeps the bucket count bounded and makes a cap distribute
-        # labels over both axes, rather than merely alternating two y extremes.
-        aspect = viewport_w / viewport_h
-        columns = max(1, int(round(math.sqrt(max(1, cap) * aspect))))
-        rows = max(1, int(max(1, cap) // columns))
-        columns = min(columns, max(1, int(viewport_w / max(minimum * 2.5, 1.0))))
-        rows = min(rows, max(1, int(viewport_h / max(minimum * 1.6, 1.0))))
-        while columns * rows > max(1, cap):
-            if columns >= rows and columns > 1:
-                columns -= 1
-            elif rows > 1:
-                rows -= 1
-            else:
-                break
-        cell_w = viewport_w / columns
-        cell_h = viewport_h / rows
-        buckets: dict[tuple[int, int], list] = {}
-        for item in items:
-            col = max(0, min(columns - 1, int(float(item[1]) / cell_w)))
-            row = max(0, min(rows - 1, int(float(item[2]) / cell_h)))
-            buckets.setdefault((row, col), []).append(item)
-        for bucket in buckets.values():
-            bucket.sort(key=lambda item: (
-                str(item[3]), float(item[2]), float(item[1]),
-            ))
-        # Checkerboard phase first, then the remaining cells. This prevents a
-        # low cap from painting one contiguous band while remaining stable.
-        cells = sorted(
-            buckets,
-            key=lambda cell: (
-                (cell[0] + cell[1]) % 2,
-                abs(cell[0] - (rows - 1) / 2.0),
-                abs(cell[1] - (columns - 1) / 2.0),
-                cell[0], cell[1],
-            ),
-        )
-        spread = []
-        depth = 0
-        while True:
-            added = False
-            for cell in cells:
-                bucket = buckets[cell]
-                if depth < len(bucket):
-                    spread.append(bucket[depth])
-                    added = True
-            if not added:
-                break
-            depth += 1
-        return spread
-
-    ordered: list = []
-    for tier in sorted({item[0] for item in valid}):
-        tier_items = [item for item in valid if item[0] == tier]
-        if tier == 1:
-            # Curated population order is the continental tie-break.
-            ordered.extend(tier_items)
-            continue
-        ordered.extend(_spread(tier_items))
-    kept = []
-    placed = [(float(x), float(y)) for x, y in (protected or ()) if _finite(x, y)]
-    reserved = []
-    for rect in protected_rects or ():
-        try:
-            rx, ry, rw, rh = (float(value) for value in rect[:4])
-        except (TypeError, ValueError, OverflowError, IndexError):
-            continue
-        if _finite(rx, ry, rw, rh) and rw >= 0.0 and rh >= 0.0:
-            reserved.append((rx, ry, rw, rh))
-    for importance, x, y, label in ordered:
-        if not _finite(x, y):
-            continue
-        point = (float(x), float(y))
-        force_keep = (
-            always_keep_importance is not None
-            and importance == always_keep_importance
-        )
-        if not force_keep and any(
-            math.hypot(point[0] - px, point[1] - py) < minimum
-            for px, py in placed
-        ):
-            continue
-        try:
-            extent = float(widths.get(str(label), 0.0))
-        except (TypeError, ValueError, OverflowError):
-            extent = 0.0
-        if not math.isfinite(extent) or extent < 0.0:
-            extent = 0.0
-        draw_x = point[0] + 5.0
-        if viewport_ok:
-            draw_x = min(draw_x, max(0.0, viewport_w - extent - 4.0))
-        candidate_rect = (draw_x, point[1] - 13.0, extent + 8.0, 14.0)
-        blocked = any(
-            candidate_rect[0] < rx + rw + 4.0
-            and candidate_rect[0] + candidate_rect[2] + 4.0 > rx
-            and candidate_rect[1] < ry + rh + 2.0
-            and candidate_rect[1] + candidate_rect[3] + 2.0 > ry
-            for rx, ry, rw, rh in reserved
-        )
-        if blocked and not force_keep:
-            continue
-        kept.append((importance, float(x), float(y), str(label)))
-        placed.append(point)
-        reserved.append(candidate_rect)
-        if len(kept) >= cap:
-            break
-    return kept
-
-
-def _finite(*values) -> bool:
-    try:
-        return all(math.isfinite(float(value)) for value in values)
-    except (TypeError, ValueError, OverflowError):
-        return False
+    return sharpmod_rs.geo_declutter_labels(
+        candidates,
+        protected,
+        protected_rects,
+        min_separation_px,
+        limit,
+        label_widths,
+        always_keep_importance,
+        viewport_size,
+    )
 
 
 def km_per_pixel_at_latitude(lon_span: float, widget_width_px: float,
@@ -401,21 +240,11 @@ def km_per_pixel_at_latitude(lon_span: float, widget_width_px: float,
     local scale there instead -- this helper documents the flat-view contract
     the scale bar is built on.
     """
-    try:
-        span = abs(float(lon_span))
-        width = float(widget_width_px)
-        latitude = float(latitude)
-    except (TypeError, ValueError, OverflowError):
-        return float("nan")
-    if not math.isfinite(span) or not math.isfinite(width) or width <= 0.0:
-        return float("nan")
-    if not math.isfinite(latitude):
-        return float("nan")
-    clamped = max(-89.0, min(89.0, latitude))
-    squeeze = math.cos(math.radians(clamped)) if cos_adjusted else 1.0
-    squeeze = max(0.05, squeeze)
-    degrees_per_pixel = span / width
-    return degrees_per_pixel * squeeze * 111.195
+    import sharpmod_rs
+
+    return sharpmod_rs.geo_km_per_pixel_at_latitude(
+        lon_span, widget_width_px, latitude, bool(cos_adjusted),
+    )
 
 
 def pick_scale_length(km_per_pixel: float, *, target_px=SCALE_BAR_TARGET_PX,
@@ -427,66 +256,30 @@ def pick_scale_length(km_per_pixel: float, *, target_px=SCALE_BAR_TARGET_PX,
     non-positive scale returns a zero-length bar so the caller draws the
     "scale unavailable" state instead of a misleading bar.
     """
-    try:
-        scale = float(km_per_pixel)
-        target = float(target_px)
-    except (TypeError, ValueError, OverflowError):
-        scale, target = float("nan"), float(SCALE_BAR_TARGET_PX)
-    if not math.isfinite(scale) or scale <= 0.0 or not math.isfinite(target) \
-            or target <= 0.0:
-        return (0.0, 0.0, "km" if not imperial else "mi")
-    if imperial:
-        steps = tuple(value / KM_PER_MILE for value in SCALE_BAR_STEPS_KM)
-        unit = "mi"
-    else:
-        steps = tuple(float(value) for value in SCALE_BAR_STEPS_KM)
-        unit = "km"
-    best = min(steps, key=lambda step: abs(step / scale - target))
-    return (best, best / scale, unit)
+    import sharpmod_rs
+
+    return sharpmod_rs.geo_pick_scale_length(km_per_pixel, target_px, bool(imperial))
 
 
 def format_scale_length(length: float, unit: str) -> str:
     """Format a scale-bar length without trailing noise."""
-    try:
-        value = float(length)
-    except (TypeError, ValueError, OverflowError):
-        return f"Unknown {unit}"
-    if not math.isfinite(value) or value <= 0.0:
-        return f"Unknown {unit}"
-    text = f"{value:.0f}" if value >= 100.0 else (
-        f"{value:.1f}".rstrip("0").rstrip("."))
-    return f"{text} {unit}"
+    import sharpmod_rs
+
+    return sharpmod_rs.geo_format_scale_length(length, str(unit))
 
 
 def luminance(hex_colour: str) -> float:
     """Return the relative luminance of a ``#rrggbb`` colour, 0..1."""
-    text = str(hex_colour or "").strip().lstrip("#")
-    if len(text) != 6:
-        return float("nan")
-    try:
-        channels = tuple(int(text[offset:offset + 2], 16) / 255.0
-                         for offset in (0, 2, 4))
-    except ValueError:
-        return float("nan")
+    import sharpmod_rs
 
-    def linear(channel: float) -> float:
-        if channel <= 0.03928:
-            return channel / 12.92
-        return ((channel + 0.055) / 1.055) ** 2.4
-
-    red, green, blue = (linear(channel) for channel in channels)
-    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+    return sharpmod_rs.geo_luminance(hex_colour)
 
 
 def contrast_ratio(first: str, second: str) -> float:
     """Return the WCAG contrast ratio between two ``#rrggbb`` colours."""
-    first_lum = luminance(first)
-    second_lum = luminance(second)
-    if not math.isfinite(first_lum) or not math.isfinite(second_lum):
-        return float("nan")
-    lighter = max(first_lum, second_lum)
-    darker = min(first_lum, second_lum)
-    return (lighter + 0.05) / (darker + 0.05)
+    import sharpmod_rs
+
+    return sharpmod_rs.geo_contrast_ratio(first, second)
 
 
 __all__ = [

@@ -14,7 +14,44 @@
   border: var(--hairline) solid var(--glass-border);
   box-shadow: var(--glass-highlight), var(--glass-elevation);
   color: var(--text-primary);
+  text-shadow: var(--glass-text-shadow);
   border-radius: var(--radius-lg);
+}
+
+/* Translucent glass uses luminous/ink alpha foregrounds and specular hairlines; low and reduced-transparency stay on opaque tokens. */
+:root:not([data-graphics-profile="low"]) :where(.glass, [data-material="glass"]) {
+  --text-primary: var(--glass-text-primary);
+  --text-secondary: var(--glass-text-secondary);
+  --text-tertiary: var(--glass-text-tertiary);
+  --text-disabled: var(--glass-text-disabled);
+  --border-subtle: var(--glass-divider);
+}
+
+:where(.glass, [data-material="glass"]) :where(.lucide, .icon, .icon-sm) {
+  opacity: var(--glass-icon-opacity);
+  filter: var(--glass-icon-shadow);
+  transition: opacity var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+
+:where(
+  :is(.glass, [data-material="glass"])
+    :is(button, a, summary, [role="tab"], [role="option"]):is(:hover, :focus-visible, [aria-pressed="true"], [aria-expanded="true"], [aria-current="page"], [aria-current="true"], [data-active="true"]):not(:disabled)
+    :is(.lucide, .icon, .icon-sm),
+  :is(.glass, [data-material="glass"]) details[open] > summary :is(.lucide, .icon, .icon-sm)
+) {
+  opacity: var(--glass-icon-active-opacity);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-graphics-profile] :where(.glass, [data-material="glass"]) {
+    --text-primary: inherit;
+    --text-secondary: inherit;
+    --text-tertiary: inherit;
+    --text-disabled: inherit;
+    --border-subtle: inherit;
+  }
 }
 
 .glass--chrome {
@@ -29,6 +66,32 @@
   --glass-elevation: var(--shadow-popover);
 }
 
+/* The WebGL liquid pass draws the material; the transparent border keeps the box's size. */
+:where(.glass, [data-material="glass"])[data-liquid-glass="webgl"] {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Optical tinted Liquid Glass lens on accented controls over WebGL glass sheets. */
+:where([data-material="glass"][data-liquid-glass="webgl"]) :where(
+  button[data-tone="accent"],
+  button[aria-haspopup]:is(:hover, :focus-visible, [aria-expanded="true"]),
+  button[aria-pressed="true"]
+):not(:disabled),
+:where([data-material="glass"][data-liquid-glass="webgl"]) :where([data-selection-track])::before {
+  -webkit-backdrop-filter: var(--accent-glass-filter);
+  backdrop-filter: var(--accent-glass-filter);
+}
+
+/* Selection tracks draw the active pill on ::before; keep backdrop-filter off their buttons so HoverHints keep the track's containing block and stacking order. */
+:where([data-material="glass"][data-liquid-glass="webgl"]) [data-selection-track] > button {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 /* No backdrop support: opaque surfaces. The condition holds no length (rule 2). */
 @supports not ((backdrop-filter: none) or (-webkit-backdrop-filter: none)) {
   :root[data-graphics-profile] {
@@ -36,7 +99,30 @@
     --glass-inset-fill: var(--surface-1);
     --tooltip-glass-fill: var(--surface-1);
     --glass-filter: none;
+    --accent-glass-filter: none;
+    --glass-text-shadow: none; --glass-icon-shadow: none; --glass-icon-opacity: 1; --glass-icon-active-opacity: 1;
+    --glass-ramp-opacity: 1; --glass-ramp-sheen: none; --glass-ramp-highlight: none;
   }
+}
+
+[data-glass-ramp] {
+  position: relative;
+  border: var(--hairline) solid var(--glass-border);
+  box-shadow: var(--shadow-chrome);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+[data-glass-ramp] > :is(canvas, span, img) {
+  opacity: var(--glass-ramp-opacity);
+}
+[data-glass-ramp]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glass-ramp-sheen);
+  box-shadow: var(--glass-ramp-highlight);
+  pointer-events: none;
 }
 
 [data-material="glass"][data-elevation="popover"] { --glass-elevation: var(--shadow-popover); }

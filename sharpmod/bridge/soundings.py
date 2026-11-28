@@ -62,9 +62,14 @@ def model_status(params: dict[str, Any]) -> dict[str, Any]:
     """Check provider inventories without decoding map or sounding data."""
     p.keys(params, ("model", "run_time", "forecast_hour"))
     from sharpmod.tools import model_extract as mx
-    from sharpmod.providers.hrrr_products import ICON_MODEL
+    from sharpmod.providers.hrrr_products import ICON_MODEL, NSSL_MPAS_MODELS
 
     key = p.text(params, "model", 1, 40)
+    if key in NSSL_MPAS_MODELS:
+        from sharpmod_rs import nssl_mpas_model_status
+
+        return nssl_mpas_model_status(key, p.time(params, "run_time"),
+                                      p.integer(params, "forecast_hour", 0, 1000), p.now())
     config = next((cfg for cfg in mx.available_models() if cfg.key == key), None)
     if key in MAP_ONLY_MODELS:
         config = mx.get_config(key)
@@ -131,6 +136,7 @@ def models_catalog(params: dict[str, Any]) -> dict[str, Any]:
     """Forecast models and their sounding capability, with recent runs."""
     p.keys(params, ())
     from sharpmod.tools import model_extract as mx
+    from sharpmod.backends.selector import _rust_is_installed
 
     now = p.now()
     from sharpmod.analysis.ensemble_members import member_labels
@@ -171,6 +177,11 @@ def models_catalog(params: dict[str, Any]) -> dict[str, Any]:
                 "suggested_run": p.iso(suggested),
             }
         )
+    hrrr = next((model for model in models if model["key"] == "hrrr"), None)
+    if hrrr is not None and _rust_is_installed():
+        from sharpmod_rs import nssl_mpas_forecast_models
+
+        models.extend(nssl_mpas_forecast_models(now, hrrr["bounds"], hrrr["outline"], RECENT_RUN_COUNT))
     return {"models": models, "generated_at": p.iso(now)}
 
 

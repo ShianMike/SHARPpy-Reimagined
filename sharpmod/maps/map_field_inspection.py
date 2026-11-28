@@ -53,29 +53,18 @@ def normalise_tool(tool, *, allow_box: bool = True) -> str:
 
 def haversine_km(lat0: float, lon0: float, lat1: float, lon1: float) -> float:
     """Return the great-circle distance between two points, in kilometres."""
-    radius = 6371.0088
-    phi0, phi1 = math.radians(lat0), math.radians(lat1)
-    delta_phi = math.radians(lat1 - lat0)
-    delta_lambda = math.radians(lon1 - lon0)
-    half = (math.sin(delta_phi / 2.0) ** 2
-            + math.cos(phi0) * math.cos(phi1) * math.sin(delta_lambda / 2.0) ** 2)
-    return 2.0 * radius * math.asin(min(1.0, math.sqrt(max(0.0, half))))
+    import sharpmod_rs
+
+    return sharpmod_rs.inspection_haversine_km(
+        float(lat0), float(lon0), float(lat1), float(lon1),
+    )
 
 
 def format_field_value(value: float | None) -> str:
     """Format a sampled value at a precision suited to its magnitude."""
-    try:
-        number = float(value)
-    except (TypeError, ValueError, OverflowError):
-        return "—"
-    if not math.isfinite(number):
-        return "—"
-    magnitude = abs(number)
-    if magnitude >= 100.0:
-        return f"{number:.0f}"
-    if magnitude >= 1.0:
-        return f"{number:.1f}"
-    return f"{number:.2f}"
+    import sharpmod_rs
+
+    return sharpmod_rs.inspection_format_field_value(value)
 
 
 def coordinates_text(lat: float, lon: float) -> str:

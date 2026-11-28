@@ -182,7 +182,7 @@ test.describe("real-backend soundings", () => {
     expect(first.width).toBeGreaterThan(1000);
     await shot("desktop-sounding-observed.png");
 
-    await page.getByRole("tab", { name: "Sounding controls", exact: true }).click();
+    await page.getByRole("tab", { name: "Controls", exact: true }).click();
     await expect(page.getByRole("region", { name: "Chart panels", exact: true })).toBeVisible();
     const parcel = page.getByRole("group", { name: "Parcel" });
     const before = await viewerStage().getByTestId("sounding-image").getAttribute("src");
@@ -244,7 +244,7 @@ test.describe("real-backend soundings", () => {
     const image = await drawn(viewerStage());
     const meta = await page.getByTestId("sounding-viewer").getAttribute("aria-description") ?? "";
     expect(meta).toContain("time 1 of 49");
-    await page.getByRole("tab", { name: "Sounding controls", exact: true }).click();
+    await page.getByRole("tab", { name: "Controls", exact: true }).click();
     const time = page.getByRole("combobox", { name: "Sounding time (UTC)" });
     const firstSrc = await viewerStage().getByTestId("sounding-image").getAttribute("src");
     await time.click();

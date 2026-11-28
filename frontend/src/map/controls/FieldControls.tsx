@@ -12,16 +12,16 @@ import { SoundingErrorNotice } from "../../features/sounding/SoundingErrorNotice
 import { SourceSelect } from "../../features/sounding/SourceFields";
 import { useForecastStore } from "../../stores/forecastStore";
 import { panelLayers, useMapStore } from "../../stores/mapStore";
-import type { MapCatalog } from "../../types/map";
+import type { FieldProduct } from "../../types/map";
+import { groupMapParameters } from "../mapParameters";
 import { usePanelField, type PanelField } from "../panelField";
 import { FieldLegend } from "./FieldLegend";
 import styles from "./LayerPanel.module.css";
 
-function ProductSelect({ catalog, value }: { catalog: MapCatalog; value: string }): ReactNode {
+function ProductSelect({ products, value }: { products: readonly FieldProduct[]; value: string }): ReactNode {
   return (
     <SourceSelect label="Product" value={value}
-      options={catalog.categories.flatMap((category) => catalog.products
-        .filter((product) => product.category === category)
+      options={groupMapParameters(products).flatMap(({ category, products }) => products
         .map((product) => ({ value: product.key, label: product.label, detail: category })))}
       onChange={useMapStore.getState().setProduct} />
   );
@@ -96,7 +96,7 @@ export function FieldControls({ panel }: { panel: number }): ReactNode {
   const ready = !field.frame.isError && shown !== undefined && field.request !== null && shown.forecastHour === field.request.forecastHour;
   return (
     <div className={styles.extra}>
-      <ProductSelect catalog={catalog.data} value={product.key} />
+      <ProductSelect products={field.selectableProducts} value={product.key} />
       {product.variants !== undefined && product.variants.length > 0 ? (
         <SourceSelect
           label="Field"

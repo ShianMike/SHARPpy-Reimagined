@@ -58,10 +58,9 @@ def _provider_order(value: str) -> tuple[str, ...]:
 
 
 def _safe_token(value: str) -> str:
-    token = "".join(
-        character if character.isalnum() else "_" for character in value
-    ).strip("_")
-    return token or "station"
+    import sharpmod_rs
+
+    return sharpmod_rs.observed_safe_token(value)
 
 
 def _cmd_fetch(args) -> int:

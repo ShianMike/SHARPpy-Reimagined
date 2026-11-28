@@ -78,33 +78,9 @@ def normalise_bounds(value: Any) -> Bounds | None:
     crossing and unwrapped eastward.  Longitudes remain unwrapped afterwards;
     that is the same representation used by the shared picker map projection.
     """
+    import sharpmod_rs
 
-    if isinstance(value, (str, bytes)):
-        return None
-    try:
-        west, south, east, north = (_finite(item) for item in value)
-    except (TypeError, ValueError):
-        return None
-    if any(item is None for item in (west, south, east, north)):
-        return None
-    assert west is not None and south is not None
-    assert east is not None and north is not None
-    # Corrupt session metadata must not make the wrap loop non-terminating:
-    # adding 360 to a very large finite float can leave it unchanged.  This
-    # still permits thousands of shifted world copies, far beyond supported
-    # map navigation or a custom longitude spin box.
-    if abs(west) > MAX_LONGITUDE_MAGNITUDE or abs(east) > MAX_LONGITUDE_MAGNITUDE:
-        return None
-    if not (-90.0 <= south < north <= 90.0):
-        return None
-    if east <= west:
-        wrapped_span = (east - west) % 360.0
-        east = west + (wrapped_span if wrapped_span else 360.0)
-    if east - west > 360.0:
-        return None
-    if east - west < MIN_SPAN_DEGREES or north - south < MIN_SPAN_DEGREES:
-        return None
-    return (west, south, east, north)
+    return sharpmod_rs.locator_normalise_bounds(value)
 
 
 def bounds_from_map_view(value: Any) -> Bounds | None:
@@ -143,13 +119,9 @@ def area_from_map_box(value: Any) -> Bounds | None:
 
 def area_to_map_box(value: Any) -> tuple[float, float, float, float] | None:
     """Convert canonical bounds to a picker map's box tuple."""
+    import sharpmod_rs
 
-    bounds = normalise_bounds(value)
-    if bounds is None:
-        return None
-    west, south, east, north = bounds
-    east = ((east + 180.0) % 360.0) - 180.0 if east > 180.0 else east
-    return (south, west, north, east)
+    return sharpmod_rs.locator_area_to_map_box(value)
 
 
 def _normalise_point(value: Any) -> tuple[float, float] | None:
@@ -164,27 +136,6 @@ def _normalise_point(value: Any) -> tuple[float, float] | None:
     return (lat, lon)
 
 
-def _longitude_near(lon: float, center: float) -> float:
-    return center + ((float(lon) - center + 180.0) % 360.0) - 180.0
-
-
-def _shift_area_near(area: Bounds | None, lon: float) -> Bounds | None:
-    if area is None:
-        return None
-    west, south, east, north = area
-    center = (west + east) / 2.0
-    shifted_center = _longitude_near(center, lon)
-    shift = shifted_center - center
-    return (west + shift, south, east + shift, north)
-
-
-def _clamp_latitudes(south: float, north: float) -> tuple[float, float]:
-    span = min(180.0, max(MIN_SPAN_DEGREES, north - south))
-    center = (south + north) / 2.0
-    center = min(90.0 - span / 2.0, max(-90.0 + span / 2.0, center))
-    return center - span / 2.0, center + span / 2.0
-
-
 def centred_bounds(
     point: tuple[float, float],
     *,
@@ -192,33 +143,12 @@ def centred_bounds(
     include: Bounds | None = None,
 ) -> Bounds:
     """Frame a point at the established ground aspect, optionally fitting area."""
+    import sharpmod_rs
 
     lat, lon = point
-    half_lat = min(
-        MAX_HALF_LAT_DEGREES,
-        max(LOCAL_HALF_LAT_DEGREES, float(half_lat)),
+    return sharpmod_rs.locator_centred_bounds(
+        float(lat), float(lon), float(half_lat), include,
     )
-    cos_lat = max(0.35, math.cos(math.radians(lat)))
-    shifted = _shift_area_near(include, lon)
-    required_half_lon = 0.0
-    if shifted is not None:
-        west, south, east, north = shifted
-        reach_lat = max(abs(north - lat), abs(lat - south))
-        reach_lon = max(abs(east - lon), abs(lon - west))
-        required_half_lon = reach_lon * AREA_MARGIN
-        half_lat = max(
-            half_lat,
-            reach_lat * AREA_MARGIN,
-            required_half_lon * cos_lat / LON_ASPECT,
-        )
-    else:
-        half_lat = min(half_lat, MAX_HALF_LAT_DEGREES)
-    # A large represented area outranks the ordinary local/regional zoom cap;
-    # after a pole clamp, longitude must independently retain the whole area.
-    half_lat = min(half_lat, 90.0)
-    half_lon = max(half_lat * LON_ASPECT / cos_lat, required_half_lon)
-    south, north = _clamp_latitudes(lat - half_lat, lat + half_lat)
-    return (lon - half_lon, south, lon + half_lon, north)
 
 
 def fit_bounds(
@@ -228,31 +158,12 @@ def fit_bounds(
     minimum_half_lat: float = LOCAL_HALF_LAT_DEGREES,
 ) -> Bounds:
     """Fit ``area`` and ``point`` with margin, centring their geographic union."""
+    import sharpmod_rs
 
     lat, lon = point
-    shifted = _shift_area_near(area, lon)
-    if shifted is None:
-        return centred_bounds(point, half_lat=minimum_half_lat)
-    west, south, east, north = shifted
-    west, east = min(west, lon), max(east, lon)
-    south, north = min(south, lat), max(north, lat)
-    center_lon = (west + east) / 2.0
-    center_lat = (south + north) / 2.0
-    half_lat = max(minimum_half_lat, (north - south) * AREA_MARGIN / 2.0)
-    cos_lat = max(0.35, math.cos(math.radians(center_lat)))
-    required_half_lon = (east - west) * AREA_MARGIN / 2.0
-    half_lat = max(
-        half_lat,
-        required_half_lon * cos_lat / LON_ASPECT,
+    return sharpmod_rs.locator_fit_bounds(
+        float(lat), float(lon), area, float(minimum_half_lat),
     )
-    # Fit is a promise about coverage, not a request for a fixed zoom ceiling.
-    # The latitude span can saturate at the poles while longitude still needs
-    # more than its nominal aspect to keep the entire selected area visible.
-    half_lat = min(half_lat, 90.0)
-    half_lon = max(half_lat * LON_ASPECT / cos_lat, required_half_lon)
-    south, north = _clamp_latitudes(
-        center_lat - half_lat, center_lat + half_lat)
-    return (center_lon - half_lon, south, center_lon + half_lon, north)
 
 
 @dataclass(frozen=True)

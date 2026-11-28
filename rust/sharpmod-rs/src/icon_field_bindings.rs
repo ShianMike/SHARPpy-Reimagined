@@ -260,6 +260,12 @@ fn download_icon_map_fields<'py>(
             Array2::from_shape_vec(SHAPE, regular).expect("validated ICON mapping dimensions");
         mapped.set_item(name, grid.into_pyarray(py))?;
     }
+    if product.getattr("key")?.extract::<String>()? == "hgt-anom-500" {
+        mapped.set_item(
+            "__valid_time",
+            (run + time::Duration::hours(i64::from(hour))).unix_timestamp(),
+        )?;
+    }
     Ok(mapped)
 }
 

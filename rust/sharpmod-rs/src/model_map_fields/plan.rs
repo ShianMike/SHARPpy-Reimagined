@@ -19,6 +19,18 @@ pub(super) struct Field {
     pub subfield: usize,
 }
 
+// The first supported lead is catalogue metadata. Only these recipes
+// combine a trailing window of records from the same initialization.
+#[pyfunction]
+pub(super) fn map_field_trailing_window(key: &str, hour: u32, minimum_hour: u32) -> u32 {
+    match key {
+        "uh-0-3km-run" | "uh-2-5km-run" => hour,
+        "uh-0-3km" | "uh-2-5km-1h" | "uh-2-5km-3h" => minimum_hour,
+        _ if key.starts_with("qpf-") && key != "qpf-1h-ptype" => minimum_hour,
+        _ => 0,
+    }
+}
+
 pub(super) fn fields(
     py: Python<'_>,
     product: &Bound<'_, PyAny>,
@@ -39,24 +51,23 @@ pub(super) fn fields(
         ));
     }
     let key: String = product.getattr("key")?.extract()?;
-    let maximum: u32 = product.getattr("max_hours")?.extract()?;
-    if hour < maximum {
+    let minimum_hour: u32 = product.getattr("max_hours")?.extract()?;
+    if hour < minimum_hour {
         return Err(PyErr::from_value(
             api.getattr("HrrrFieldUnavailable")?.call1((format!(
-                "{} needs {maximum} complete forecast hours",
+                "{} needs {minimum_hour} complete forecast hours",
                 product.getattr("label")?
             ),))?,
         ));
     }
     let nam_sum = matches!(model, "nam" | "nam-3km-conus") && key == "apcp";
-    let hourly_sum = key.starts_with("qpf-");
+    // The p-type composite reads one 1-h accumulation plus instantaneous
+    // records, so it must not sweep the window into hourly sums.
+    let hourly_sum = key.starts_with("qpf-") && key != "qpf-1h-ptype";
+    let interval_accumulation = key == "qpf-1h-ptype";
     let hourly_diff = key == "snow-1h";
     let sum = nam_sum || hourly_sum;
-    let window = if matches!(key.as_str(), "uh-0-3km-run" | "uh-2-5km-run") {
-        hour
-    } else {
-        maximum
-    };
+    let window = map_field_trailing_window(&key, hour, minimum_hour);
     if key == "apcp" && hour == 0 {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "F000 precipitation is supplied as a zero field by the provider",
@@ -154,7 +165,20 @@ pub(super) fn fields(
             }));
         };
         for spec in selected {
-            let adjusted = if !hourly_diff && (nam_sum || window > 0) {
+            let variable: String = spec.getattr("variable")?.extract()?;
+            let adjusted = if interval_accumulation {
+                if matches!(source, "sfc") && variable == "APCP" {
+                    // The trailing 1-h accumulation; every other record is
+                    // instantaneous (type flags, MSLET, and the HGT heights).
+                    let kwargs = PyDict::new(py);
+                    kwargs.set_item("forecast", format!("{}-{step} hour acc fcst", step - 1))?;
+                    PyModule::import(py, "dataclasses")?
+                        .getattr("replace")?
+                        .call((spec,), Some(&kwargs))?
+                } else {
+                    spec.clone()
+                }
+            } else if !hourly_diff && (nam_sum || window > 0) {
                 let kwargs = PyDict::new(py);
                 kwargs.set_item(
                     "forecast",

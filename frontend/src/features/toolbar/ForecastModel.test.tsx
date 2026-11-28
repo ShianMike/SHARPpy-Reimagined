@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import mapCatalog from "@contracts/public/map/catalog.json";
+import modelCatalog from "@contracts/public/soundings/models.catalog.json";
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -36,6 +38,65 @@ it("opens the selected model's region and keeps selection visible while browsing
   expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(4);
   expect(dialog.querySelector("footer")?.textContent).toContain("ECMWF 9km");
   expect(useForecastStore.getState().modelKey).toBe("ecmwf-ifs-9km");
+});
+
+it.each([
+  { key: "nssl-mpas-htpo", label: "NSSL MPAS-HTPO", legacyKey: "hrw-wrf-arw", unavailableKey: "nssl-mpas-rn", unavailableLabel: "NSSL MPAS-RN" },
+  { key: "nssl-mpas-rn", label: "NSSL MPAS-RN", legacyKey: "hrw-wrf-nssl", unavailableKey: "nssl-mpas-htpo", unavailableLabel: "NSSL MPAS-HTPO" },
+])("offers $label with published runs and hides all retired HRW models", async ({ key, label, legacyKey, unavailableKey, unavailableLabel }) => {
+  const legacy = modelCatalog.models.find((model) => model.key === legacyKey);
+  if (legacy === undefined) throw new Error("HRW fixture missing");
+  const suggestedRun = "2026-11-24T00:00:00Z";
+  const olderRun = "2026-11-21T12:00:00Z";
+  const scheduledButUnlisted = "2026-11-22T12:00:00Z";
+  const notes = "MPAS runs may reach the archive several days after initialization.";
+  const mpas = {
+    ...legacy, key, label, soundingsAvailable: false, gridSpacingKm: 3, notes,
+    cycles: [0, 12], defaultForecastHour: 1, recentRuns: [suggestedRun, olderRun], suggestedRun,
+  };
+  const existingModels = modelCatalog.models.filter((model) => model.key !== key && model.key !== unavailableKey);
+  const base = createTransport("field-error");
+  const call = vi.fn<typeof base.call>((command, args) => {
+    if (command === "get_model_catalog") return Promise.resolve({
+      ...modelCatalog, models: [...existingModels, mpas, { ...mpas, key: unavailableKey, label: unavailableLabel, suggestedRun: scheduledButUnlisted }],
+    });
+    if (command === "get_map_catalog" && args?.model === key) return Promise.resolve({
+      ...mapCatalog, fieldModel: key, defaultProduct: "tmp-2m",
+      products: mapCatalog.products.filter((product) => product.key === "tmp-2m"),
+    });
+    return base.call(command, args);
+  });
+  useForecastStore.setState({ modelKey: legacyKey, runTime: legacy.suggestedRun, forecastHour: 12 });
+  const { queryClient } = renderWithBackend(<ForecastControls />, { ...base, call });
+  const chooseModel = await screen.findByRole<HTMLButtonElement>("button", { name: "Choose model" });
+  await waitFor(() => {
+    expect(chooseModel.disabled).toBe(false);
+    expect(chooseModel.textContent).toContain("HRRR");
+  });
+  await userEvent.click(chooseModel);
+  const dialog = within(screen.getByRole("dialog", { name: "Forecast model" }));
+  const conus = within(dialog.getByRole("group", { name: "CONUS" }));
+  const choice = conus.getByRole("button", { name: `Choose ${label}` });
+  expect(choice.textContent).toContain("Maps only");
+  expect(choice.textContent).toContain("3 km");
+  expect(conus.queryAllByRole("button", { name: /^Choose (?:HRW|HiResW)/iu })).toHaveLength(0);
+  expect(conus.getAllByRole("button", { name: /^Choose NSSL MPAS/u })).toEqual([choice]);
+
+  await userEvent.click(choice);
+  await waitFor(() => {
+    expect(call).toHaveBeenCalledWith("get_map_catalog", { model: key, runTime: suggestedRun, forecastHour: 1 });
+  });
+  expect(useForecastStore.getState()).toMatchObject({ modelKey: key, runTime: null, forecastHour: null });
+  await userEvent.click(screen.getByRole("button", { name: "Choose run" }));
+  const runDialog = within(screen.getByRole("dialog", { name: "Model run" }));
+  expect(runDialog.getByText(notes)).toBeTruthy();
+  expect(runDialog.getByRole<HTMLButtonElement>("button", { name: "Run 11-24 12Z" }).disabled).toBe(true);
+  await userEvent.click(runDialog.getByRole("button", { name: "Previous run date" }));
+  await userEvent.click(runDialog.getByRole("button", { name: "Run 11-21 12Z" }));
+  await waitFor(() => {
+    expect(call).toHaveBeenCalledWith("get_map_catalog", { model: key, runTime: olderRun, forecastHour: 1 });
+  });
+  queryClient.clear();
 });
 
 it("groups the REFS mean and members under Ensemble and reopens on the selection", async () => {

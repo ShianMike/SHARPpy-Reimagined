@@ -79,7 +79,7 @@ export function SoundingRenderStatus({ phase, overImage }: { phase: SoundingRend
                 data-phase={phase}
                 data-testid="sounding-render-status"
               >
-                <Surface elevation="popover" className={styles.card} data-motion="enter">
+                <Surface elevation="popover" className={styles.card} data-motion="enter" data-overlay-kind="sounding">
                   <span className={styles.indicator} aria-hidden="true">
                     <svg className={styles.spinner} viewBox="0 0 24 24" fill="none">
                       <circle className={styles.ringTrack} cx="12" cy="12" r="9" />

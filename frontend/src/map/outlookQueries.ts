@@ -7,18 +7,15 @@ import type { OutlookDay, OutlookProductKey, SpcOutlook, WpcOutlook, WpcOutlookD
 export const SPC_REFRESH_MS = 5 * 60_000;
 
 /** Keep each day's latest issuance separate from the map's time-based outlooks. */
-export function useLatestSpcOutlook(day: OutlookDay, product: OutlookProductKey, enabled = true): UseQueryResult<SpcOutlook> {
-  const client = useBackendClient();
-  return useQuery({
+export function latestSpcOutlookQueryOptions(client: BackendClient, day: OutlookDay, product: OutlookProductKey) {
+  return {
     ...BASE_QUERY_OPTIONS,
-    queryKey: ["spc-latest", day, product],
-    queryFn: ({ signal }) => client.getSpcOutlook(product, `${new Date(Date.now()).toISOString().slice(0, 19)}Z`, signal, day),
-    enabled,
+    queryKey: ["spc-latest", day, product] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }): Promise<SpcOutlook> =>
+      client.getSpcOutlook(product, `${new Date(Date.now()).toISOString().slice(0, 19)}Z`, signal, day),
     staleTime: SPC_REFRESH_MS,
     gcTime: 3 * SPC_REFRESH_MS,
-    refetchInterval: SPC_REFRESH_MS,
-    refetchOnWindowFocus: "always",
-  });
+  };
 }
 
 export function wpcOutlookQueryOptions(
@@ -60,12 +57,8 @@ export function useWpcOutlook(
 export function useLatestWpcOutlook(day: OutlookDay, enabled = true, product: WpcProduct = "ero"): UseQueryResult<WpcOutlook> {
   const client = useBackendClient();
   return useQuery({
-    ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.wpcLatest(day, product),
-    queryFn: ({ signal }) => client.getWpcOutlook(`${new Date(Date.now()).toISOString().slice(0, 19)}Z`, signal, day, product),
+    ...wpcOutlookQueryOptions(client, "", day, product),
     enabled,
-    staleTime: SPC_REFRESH_MS,
-    gcTime: 3 * SPC_REFRESH_MS,
     refetchInterval: SPC_REFRESH_MS,
     refetchOnWindowFocus: "always",
   });

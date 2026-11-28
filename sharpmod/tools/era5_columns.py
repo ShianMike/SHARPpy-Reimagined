@@ -47,6 +47,8 @@ def _surface_relative_vorticity_from_wind_grid(
         return None
     x0, x1 = x_pair
     y0, y1 = y_pair
+    import sharpmod_rs
+
     pressure_name = _api._first_present(ds, _api._VAR_SURFACE_PRESSURE)
     if pressure_name is not None:
         try:
@@ -55,20 +57,25 @@ def _surface_relative_vorticity_from_wind_grid(
             }).transpose(ydim, xdim).values, dtype=float)
             pressures = window[[iy-y0, iy-y0, iy-y0, 0, y1-y0],
                                [ix-x0, 0, x1-x0, ix-x0, ix-x0]]
-            if not np.all(np.isfinite(pressures)) or np.any(pressures <= 0):
+            minimum = sharpmod_rs.era5_normalize_surface_pressures_hpa(
+                pressures.tolist()
+            )
+            if minimum is None:
                 return None
-            minimum = float(np.min(np.where(pressures > 2000, pressures / 100, pressures)))
-            surface_pressure = minimum if surface_pressure is None else min(surface_pressure, minimum)
+            surface_pressure = (
+                minimum if surface_pressure is None
+                else min(surface_pressure, minimum)
+            )
         except (ValueError, IndexError, KeyError):
             return None
     try:
         levels = np.asarray(levels, dtype=float)
-        eligible = np.isfinite(levels)
-        if surface_pressure is not None:
-            eligible &= levels <= float(surface_pressure)
-        if not np.any(eligible):
+        surface_level = sharpmod_rs.era5_select_surface_level_index(
+            levels.tolist(),
+            None if surface_pressure is None else float(surface_pressure),
+        )
+        if surface_level is None:
             return None
-        surface_level = int(np.nanargmax(np.where(eligible, levels, np.nan)))
     except Exception:
         return None
     level_name = _api._first_present(ds.coords, _api._LEVEL_COORDS)
@@ -125,19 +132,18 @@ def _surface_relative_vorticity_from_wind_grid(
             lat_window[local_y1, local_x],
         )
 
-    if not (np.isfinite(dx) and np.isfinite(dy)) or abs(dx) < 1.0 or abs(dy) < 1.0:
-        return None
-
-    dvdx = (
-        float(v2d[local_y, local_x1])
-        - float(v2d[local_y, local_x0])
-    ) / dx
-    dudy = (
-        float(u2d[local_y1, local_x])
-        - float(u2d[local_y0, local_x])
-    ) / dy
-    value = dvdx - dudy
-    return float(value) if np.isfinite(value) else None
+    return sharpmod_rs.era5_grid_surface_relative_vorticity(
+        u2d.tolist(),
+        v2d.tolist(),
+        float(dx),
+        float(dy),
+        local_y,
+        local_x,
+        local_x0,
+        local_x1,
+        local_y0,
+        local_y1,
+    )
 
 
 def _build_columns(ds, index_tuple, latitude=None):
@@ -187,20 +193,22 @@ def _build_columns(ds, index_tuple, latitude=None):
         }).values)
         return rotate_winds(u, v, longitude, rotation, missing=_api.MISSING)
 
+    import sharpmod_rs
+
     surface_pressure = _api._first_surface_value(get(_api._VAR_SURFACE_PRESSURE))
-    if surface_pressure is not None and surface_pressure > 2000.0:
-        surface_pressure /= 100.0
     surface_height_name = _api._first_present(ds, _api._VAR_SURFACE_HEIGHT)
     surface_height = _api._first_surface_value(get(_api._VAR_SURFACE_HEIGHT))
-    if surface_height_name == "surface_geopotential" \
-            and surface_height is not None:
-        surface_height /= _api.G0
     surface_temperature = _api._first_surface_value(get(_api._VAR_2M_TEMP))
     surface_dewpoint = _api._first_surface_value(get(_api._VAR_2M_DEWPOINT))
-    if surface_temperature is not None and surface_temperature > 150.0:
-        surface_temperature -= 273.15
-    if surface_dewpoint is not None and surface_dewpoint > 150.0:
-        surface_dewpoint -= 273.15
+    surface_pressure, surface_height, surface_temperature, surface_dewpoint = (
+        sharpmod_rs.era5_normalize_surface_scalars(
+            surface_pressure,
+            surface_height,
+            surface_height_name == "surface_geopotential",
+            surface_temperature,
+            surface_dewpoint,
+        )
+    )
     if surface_temperature is not None:
         surface_rh = _api._first_surface_value(get(_api._VAR_2M_RH))
         surface_q = _api._first_surface_value(get(_api._VAR_2M_Q))

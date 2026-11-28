@@ -46,31 +46,20 @@ def detected_sharppy_version() -> str:
 
 def validate_sharppy_version(version: str | None = None) -> str:
     """Validate the exact widget-internal version targeted by the patches."""
-    detected = str(version or detected_sharppy_version()).strip()
-    if detected not in SUPPORTED_SHARPPY_VERSIONS:
-        supported = ", ".join(SUPPORTED_SHARPPY_VERSIONS)
-        raise UnsupportedSHARPpyVersion(
-            f"SHARPpy {detected or '<unknown>'} is not supported by the render "
-            f"patch registry; expected {supported}")
-    return detected
+    import sharpmod_rs
+
+    detected = str(version if version else detected_sharppy_version())
+    return sharpmod_rs.patch_registry_validate_version(detected)
 
 
 def apply_patch_registry(
         patches: Iterable[PatchSpec], *,
         sharppy_version: str | None = None) -> tuple[str, ...]:
     """Validate then install every patch in stable order."""
+    import sharpmod_rs
+
     specs = tuple(patches)
-    seen = set()
-    for spec in specs:
-        name = str(getattr(spec, "name", "") or "").strip()
-        if not name:
-            raise RenderPatchError("render patch names cannot be empty")
-        if name in seen:
-            raise RenderPatchError(f"duplicate render patch name: {name}")
-        if not callable(getattr(spec, "installer", None)):
-            raise RenderPatchError(
-                f"render patch installer is not callable: {name}")
-        seen.add(name)
+    sharpmod_rs.patch_registry_validate_specs(list(specs))
 
     validate_sharppy_version(sharppy_version)
     installed = []

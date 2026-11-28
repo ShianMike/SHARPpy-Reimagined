@@ -3,7 +3,7 @@
 use super::{
     derive_refs_member_lcl,
     palettes::{lcl_stops, LCL_TICKS},
-    pressure_product,
+    pressure_product, ptype,
 };
 use crate::{numeric_grid, wind_layers::maximum_bulk_shear};
 use pyo3::{
@@ -13,7 +13,6 @@ use pyo3::{
 };
 use rayon::prelude::*;
 
-const KG_M2_S_TO_IN_H: f64 = 3600.0 / 25.4;
 const MS_TO_KT: f64 = 3600.0 / 1852.0;
 const MS_TO_MPH: f64 = 3600.0 / 1609.344;
 
@@ -35,22 +34,22 @@ fn gust_stops() -> impl Iterator<Item = (u8, &'static str)> {
     (14..=76).zip(GUST_COLOURS.into_iter().chain([last_colour]))
 }
 
-fn precip_type_rate([rate, ww]: [f64; 2]) -> f64 {
-    let rate_in_h = (rate * KG_M2_S_TO_IN_H * 1000.0).round() / 1000.0;
-    if !rate_in_h.is_finite() || rate_in_h < 0.01 || ww.fract() != 0.0 {
+fn precip_type_rate([accum_mm3h, ww]: [f64; 2]) -> f64 {
+    if !ww.is_finite() || ww.fract() != 0.0 {
         return f64::NAN;
     }
 
-    // DWD ICON Table 6.1 leaves the precipitation phase of thunderstorms unspecified.
+    // DWD ICON Table 6.1 mixes rain/snow/ice pellets alongside thunderstorms
+    // whose phase is unspecified; the legend names that fourth group Mix.
     let offset = match ww as u8 {
         51 | 53 | 55 | 61 | 63 | 65 | 80..=82 => 0.0,
         71 | 73 | 75 | 77 | 85 | 86 => 10.0,
         56 | 57 | 66 | 67 => 20.0,
-        95 | 96 => 30.0,
+        68 | 69 | 79 | 83 | 84 | 95 | 96 => 30.0,
         _ => return f64::NAN,
     };
-    // Keep the rate in its group and bias exact thresholds above frame quantization.
-    offset + rate_in_h.min(9.99) + 0.0004
+    // The plan reduces TOT_PREC run totals to millimetres over the trailing 3 h.
+    ptype::encode_ptype_rate(accum_mm3h / (3.0 * 25.4), offset)
 }
 
 fn shear_sfc_500_kt([u10, v10, u500, v500]: [f64; 4]) -> f64 {
@@ -91,7 +90,7 @@ fn derive_cells<const N: usize>(
 
 #[pyfunction]
 fn derive_prate_ptype(py: Python<'_>, fields: &Bound<'_, PyDict>) -> PyResult<Py<PyAny>> {
-    derive_cells(py, fields, ["prate", "ww"], precip_type_rate)
+    derive_cells(py, fields, ["prate3h", "ww"], precip_type_rate)
 }
 
 #[pyfunction]
@@ -146,32 +145,49 @@ pub(crate) fn catalogue(py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
     updates.set_item("caveat", "Uses DWD's native PMSL field.")?;
     products.push(replace.call((mslp,), Some(&updates))?.unbind());
 
-    let options = PyDict::new(py);
-    options.set_item("units", "in/h")?;
-    options.set_item("ptype_labels", ("Rain", "Snow", "Frzr", "Storm"))?;
-    let ptype_palette = replace.call((source.getattr("PALETTE_QPF_PTYPE")?,), Some(&options))?;
-    let fields = (
-        source.getattr("F_PRATE")?,
-        field_spec.call1(("ww", "sfc", "WW", "surface"))?,
-    );
     let updates = PyDict::new(py);
     updates.set_item("key", "prate-ptype")?;
-    updates.set_item("label", "Precipitation Type and Rate")?;
-    updates.set_item("chip", "P-Type & Rate")?;
+    updates.set_item(
+        "label",
+        "Precipitation Type, 3-h Avg Rate, 1000-500 mb Thickness",
+    )?;
+    updates.set_item("chip", "P-Type / 3h Rate + Thick")?;
     updates.set_item("category", "Precipitation")?;
-    updates.set_item("fields", fields)?;
+    updates.set_item(
+        "fields",
+        (
+            field_spec.call1(("prate3h", "sfc", "APCP", "surface"))?,
+            field_spec.call1(("ww", "sfc", "WW", "surface"))?,
+        ),
+    )?;
     updates.set_item("derive", wrap_pyfunction!(derive_prate_ptype, py)?)?;
-    updates.set_item("palette", ptype_palette)?;
-    updates.set_item("max_hours", 1)?;
+    updates.set_item(
+        "palette",
+        ptype::rate_palette(&source, "in/h", ["Rain", "Snow", "Frzr", "Mix"])?,
+    )?;
+    updates.set_item("contour", ptype::sea_level_contour(&source, 2.0)?)?;
+    updates.set_item(
+        "contour_fields",
+        (
+            field_spec.call1(("mslp", "sfc", "PRMSL", "mean sea level"))?,
+            field_spec.call1(("hgt500", "prs", "HGT", "500 mb"))?,
+            field_spec.call1(("hgt1000", "prs", "HGT", "1000 mb"))?,
+        ),
+    )?;
+    updates.set_item("thickness_interval", 6.0)?;
+    updates.set_item("max_hours", 3)?;
     updates.set_item(
         "description",
-        "Average liquid-equivalent precipitation rate since the previous published forecast hour, in inches per hour.",
+        "Average liquid-equivalent precipitation rate in inches per hour over the three hours \
+         ending at the selected forecast time, shaded by the DWD WW precipitation phase, with \
+         2 hPa mean sea-level isobars and 1000-500 mb thickness lines.",
     )?;
     updates.set_item(
         "caveat",
-        "Available from F001. The rate averages 1 hour through F078 and 3 hours from F081. \
-         DWD WW at the end of the interval describes the final hour only. Storm in the legend \
-         marks wet thunderstorms (WW 95/96) with unspecified precipitation phase.",
+        "Uses the difference between DWD TOT_PREC run totals over the trailing 3 h with the \
+         final hour's WW phase code; PMSL supplies the isobars and FI at 500 and 1000 hPa the \
+         thickness (published in geopotential metres). Mix marks mixed rain/snow, ice pellets, \
+         mixed showers (WW 68/69/79/83/84), and wet thunderstorms (WW 95/96). Available from F003.",
     )?;
     products.push(product.call((), Some(&updates))?.unbind());
 
@@ -305,7 +321,8 @@ mod tests {
 
     #[test]
     fn precipitation_uses_ww_phase_and_liquid_equivalent_inches_per_hour() {
-        let rate = 2.54 / 3600.0;
+        // 7.62 mm over the trailing 3 h is 0.1 in/h.
+        let accum = 0.1 * 3.0 * 25.4;
         for (codes, offset) in [
             (
                 &[51.0, 53.0, 55.0, 61.0, 63.0, 65.0, 80.0, 81.0, 82.0][..],
@@ -313,10 +330,10 @@ mod tests {
             ),
             (&[71.0, 73.0, 75.0, 77.0, 85.0, 86.0][..], 10.0),
             (&[56.0, 57.0, 66.0, 67.0][..], 20.0),
-            (&[95.0, 96.0][..], 30.0),
+            (&[68.0, 69.0, 79.0, 83.0, 84.0, 95.0, 96.0][..], 30.0),
         ] {
             for &ww in codes {
-                let encoded = precip_type_rate([rate, ww]);
+                let encoded = precip_type_rate([accum, ww]);
                 assert!((encoded - (offset + 0.1004)).abs() < 1e-9, "WW {ww}");
             }
         }
@@ -324,13 +341,15 @@ mod tests {
 
     #[test]
     fn precipitation_masks_unclassified_weather_and_keeps_heavy_rates_in_their_band() {
-        let threshold = 0.01 / KG_M2_S_TO_IN_H;
+        // 0.762 mm over 3 h is exactly the 0.01 in/h shading floor.
+        let threshold = 0.01 * 3.0 * 25.4;
         for ww in [
             0.0,
+            2.0,
+            10.0,
             45.0,
             48.0,
             61.5,
-            68.0,
             99.0,
             255.0,
             f64::NAN,
@@ -338,12 +357,12 @@ mod tests {
         ] {
             assert!(precip_type_rate([threshold, ww]).is_nan(), "WW {ww}");
         }
-        for rate in [-1.0, 0.0, threshold / 2.0, f64::NAN, f64::INFINITY] {
-            assert!(precip_type_rate([rate, 61.0]).is_nan());
-            assert!(precip_type_rate([rate, 95.0]).is_nan());
+        for accum in [-1.0, 0.0, threshold / 2.0, f64::NAN, f64::INFINITY] {
+            assert!(precip_type_rate([accum, 61.0]).is_nan());
+            assert!(precip_type_rate([accum, 95.0]).is_nan());
         }
         assert!(precip_type_rate([threshold, 73.0]) >= 10.01);
-        assert!(precip_type_rate([1.0, 73.0]) < 20.0);
+        assert!(precip_type_rate([1.0 * 3.0 * 25.4, 73.0]) < 20.0);
     }
 
     #[test]

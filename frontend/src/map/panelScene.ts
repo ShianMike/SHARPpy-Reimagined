@@ -175,9 +175,8 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   const surfacePlots = surfaceVisible ? surfaceQuery.data?.plots ?? null : null;
   const { positions: spotterPositions } = useSpotterPositions(live && layers["spotter-network"].visible);
   const isobarsWanted = !live && layers.isobars.visible;
-  // Composite pressure and wind products carry their own isobars until the
-  // independent Isobars layer takes over.
-  const standalonePressure = field.product?.key === "mslp" && (!field.product.wind || isobarsWanted);
+  // Pressure and wind composites keep their contour spec for the layer handoff.
+  const standalonePressure = field.product?.key === "mslp" && !field.product.wind;
   const contourSpec = live || standalonePressure ? null : field.product?.contour ?? null;
   const auxiliaryWanted = field.request !== null && field.product !== null && fieldAuxiliaries(field.product);
   const contourQuery = useFieldContours(

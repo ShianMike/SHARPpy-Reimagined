@@ -34,7 +34,7 @@ it("keeps icon-free profile buttons together and always shows the comparison", (
   expect(within(comparison).getByRole("row", { name: "Smooth edges Off Off On" })).toBeTruthy();
   expect(within(comparison).getByRole("row", { name: "Station labels Fewer More Most" })).toBeTruthy();
   expect(within(comparison).getByRole("row", { name: "Cache & prefetch Less Moderate More" })).toBeTruthy();
-  expect(within(comparison).getByRole("row", { name: "Glass blur Off Light Stronger" })).toBeTruthy();
+  expect(within(comparison).getByRole("row", { name: "Liquid glass Off Light Full" })).toBeTruthy();
   expect(screen.getByText(/Higher profiles/u).textContent).toContain("graphics power and memory");
   expect(screen.getByText(/Four maps/u).textContent).toContain("above 1× by up to 25%");
   expect(screen.getByText(/Reduced transparency/u).textContent).toContain("keeps panels opaque");

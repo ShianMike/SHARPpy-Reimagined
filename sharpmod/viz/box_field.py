@@ -80,29 +80,14 @@ _ON_FILL_SHADOW = "#FFFFFF"
 
 def ramp_color(fraction, stops=SEQUENTIAL_STOPS) -> QColor:
     """Return the ramp colour at ``fraction`` in ``[0, 1]``."""
-    try:
-        position = float(fraction)
-    except (TypeError, ValueError):
-        position = 0.0
-    if not math.isfinite(position):
-        position = 0.0
-    position = max(0.0, min(1.0, position))
-    previous_stop, previous_color = stops[0]
-    for stop, color in stops:
-        if position <= stop:
-            if stop <= previous_stop:
-                return QColor(color)
-            span = stop - previous_stop
-            weight = (position - previous_stop) / span
-            start = QColor(previous_color)
-            end = QColor(color)
-            return QColor(
-                round(start.red() + (end.red() - start.red()) * weight),
-                round(start.green() + (end.green() - start.green()) * weight),
-                round(start.blue() + (end.blue() - start.blue()) * weight),
-            )
-        previous_stop, previous_color = stop, color
-    return QColor(stops[-1][1])
+    import sharpmod_rs
+
+    if not stops:
+        raise IndexError("stops must not be empty")
+    r, g, b = sharpmod_rs.box_field_ramp_rgb(
+        fraction, [(float(pos), str(col)) for pos, col in stops]
+    )
+    return QColor(r, g, b)
 
 
 @dataclass(frozen=True)
@@ -128,17 +113,11 @@ class FieldScale:
 
     def normalize(self, value) -> float | None:
         """Return ``value``'s position in ``[0, 1]``, or ``None`` if absent."""
-        if value is None:
-            return None
-        try:
-            number = float(value)
-        except (TypeError, ValueError):
-            return None
-        if not math.isfinite(number):
-            return None
-        if self.flat:
-            return 0.5
-        return max(0.0, min(1.0, (number - self.minimum) / self.span))
+        import sharpmod_rs
+
+        return sharpmod_rs.box_field_normalize(
+            value, float(self.minimum), float(self.maximum)
+        )
 
     def color(self, value, *, alpha=255) -> QColor | None:
         """Return the colour for ``value``, or ``None`` when it is absent."""
@@ -157,19 +136,22 @@ def scale_for(stats: BoxFieldStats, *, robust=True) -> FieldScale:
     flatten the rest of the box into a single colour, which is the usual failure
     of auto-scaled fields. The full range is used when that band is degenerate.
     """
+    import sharpmod_rs
+
     if not isinstance(stats, BoxFieldStats):
         raise TypeError("stats must be a BoxFieldStats")
-    low, high = float(stats.minimum), float(stats.maximum)
-    if robust and stats.p90 > stats.p10:
-        low, high = float(stats.p10), float(stats.p90)
-    stops = SEQUENTIAL_STOPS
-    if low < 0.0 < high:
-        # Straddles zero, so put the neutral tone on zero and make the ramp
-        # symmetric; otherwise the colour of "zero" would drift with the data.
-        limit = max(abs(low), abs(high))
-        low, high = -limit, limit
-        stops = DIVERGING_STOPS
-    return FieldScale(minimum=low, maximum=high, stops=stops)
+    low, high, use_diverging = sharpmod_rs.box_field_scale_range(
+        float(stats.minimum),
+        float(stats.maximum),
+        float(stats.p10),
+        float(stats.p90),
+        robust=bool(robust),
+    )
+    return FieldScale(
+        minimum=low,
+        maximum=high,
+        stops=DIVERGING_STOPS if use_diverging else SEQUENTIAL_STOPS,
+    )
 
 
 def _cell_steps(analysis: BoxAnalysis) -> tuple[float, float]:
@@ -188,21 +170,13 @@ def _cell_steps(analysis: BoxAnalysis) -> tuple[float, float]:
 
 def _cell_polygon(to_px, lon, lat, half_lon, half_lat, *, segments=4):
     """Project one geographic cell, sampling each curved geographic edge."""
-    corners = (
-        (lon - half_lon, lat + half_lat),
-        (lon + half_lon, lat + half_lat),
-        (lon + half_lon, lat - half_lat),
-        (lon - half_lon, lat - half_lat),
+    import sharpmod_rs
+
+    vertices = sharpmod_rs.box_field_cell_vertices(
+        float(lon), float(lat), float(half_lon), float(half_lat),
+        segments=int(segments),
     )
-    points = []
-    for start, end in zip(corners, corners[1:] + corners[:1]):
-        for step in range(max(1, int(segments))):
-            fraction = step / float(max(1, int(segments)))
-            points.append(to_px(
-                start[0] + (end[0] - start[0]) * fraction,
-                start[1] + (end[1] - start[1]) * fraction,
-            ))
-    return QPolygonF(points)
+    return QPolygonF([to_px(x, y) for x, y in vertices])
 
 
 def draw_field_cells(

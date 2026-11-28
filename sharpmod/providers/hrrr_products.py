@@ -1067,10 +1067,14 @@ class HrrrProduct:
     #: where the key is a slug rather than a name: ``srh-0-3km`` is not how
     #: anybody writes 0-3 km SRH.
     chip: str = ""
-    #: Complete trailing interval of hourly maxima, within the selected run.
+    #: Earliest eligible forecast hour. Rolling products also use it as their interval.
     max_hours: int = 0
     #: Selectable ensemble/field variants exposed for this parameter: ``((key, label), ...)``.
     variants: tuple[tuple[str, str], ...] = ()
+    #: The 1000-500 mb thickness contour interval in decametres, for products
+    #: that overlay thickness lines drawn from the decoded heights (or a
+    #: published ``thickness`` grid). ``None`` draws only the contour field.
+    thickness_interval: float | None = None
 
     @property
     def short_label(self) -> str:
@@ -1393,7 +1397,9 @@ ECMWF_MODELS = ("openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km")
 ICON_MODEL = "openmeteo-icon-global"
 GLOBAL_MODELS = (*ECMWF_MODELS, "aigfs", "gfs", "gdps", ICON_MODEL)
 HRW_MODELS = ("hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3")
-FIELD_MODELS = ("hrrr", "rap", "rdps", "hrdps", "rrfs-a", "nam", "nam-3km-conus", "refs", *(f"refs-m{i}" for i in range(1, 6)), *GLOBAL_MODELS, *HRW_MODELS)
+NSSL_MPAS_MODELS = ("nssl-mpas-htpo", "nssl-mpas-rn")
+FIELD_MODELS = ("hrrr", "rap", "rdps", "hrdps", "rrfs-a", "nam", "nam-3km-conus", "refs",
+                *(f"refs-m{i}" for i in range(1, 6)), *GLOBAL_MODELS, *HRW_MODELS, *NSSL_MPAS_MODELS)
 _HRW_UNSUPPORTED = frozenset({"ltng", "efhl", "prate", "prate-frzr", "prate-sleet", "prate-snow", "snod", "mucape", "scp", "stp"})
 # The reduced REFS member stream omits these products' ingredients.
 _REFS_UNSUPPORTED = frozenset({
@@ -1424,7 +1430,7 @@ def _available_products(model: str) -> tuple[HrrrProduct, ...]:
         raise ValueError(f"{model!r} has no map field catalogue")
     if model == "hrrr":
         return tuple(PRODUCTS.values())
-    if model in {"gdps", "hrdps", "rap", "rdps", "refs", ICON_MODEL}:
+    if model in {"gdps", "hrdps", "rap", "rdps", "refs", ICON_MODEL, *NSSL_MPAS_MODELS}:
         return ()  # The native catalogue owns these provider product sets.
     if model == "aigfs":
         keys = {*(f"hgt-wind-{level}" for level in (200, 300, 500, 700, 850)),

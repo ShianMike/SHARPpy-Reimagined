@@ -134,7 +134,7 @@ describe("Sounding local work protection", () => {
     if (hasEdits) useSoundingStore.getState().setView(summary.soundingId, edited);
     const { queryClient } = renderWithBackend(<SoundingWorkspace />, transport);
     await screen.findByTestId("sounding-image");
-    await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Controls" }));
     await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
     await userEvent.keyboard("{Home}{Enter}");

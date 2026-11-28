@@ -1,7 +1,7 @@
 import { waitForMapDrawn } from "./support/app";
 import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
-import { boxOf, isInside, viewportBox } from "./support/ui";
+import { boxOf, isInside, overlapArea, viewportBox } from "./support/ui";
 
 for (const { width, height, theme } of [
   { width: 1280, height: 800, theme: "dark" },
@@ -41,6 +41,33 @@ test("Overview disclosures and workspace actions support keyboard navigation", a
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
   const panel = page.getByTestId("workspace-panel");
+  const kinds = panel.getByRole("group", { name: "Outlook category" });
+  const briefing = panel.locator('section[aria-labelledby="outlook-briefing-title"]');
+  const title = panel.locator("#outlook-briefing-title");
+  for (const label of ["Excessive Rainfall", "Winter Weather", "Convective"] as const) {
+    const button = kinds.getByRole("button", { name: label, exact: true });
+    await button.click();
+    await button.hover();
+    const hint = button.locator('[data-side="right"]');
+    await expect(hint).toHaveCSS("opacity", "1");
+    await expect(button).toHaveCSS("backdrop-filter", "none");
+    const hintBox = await boxOf(hint);
+    const kindsBox = await boxOf(kinds);
+    expect(isInside(hintBox, await boxOf(briefing))).toBe(true);
+    expect(overlapArea(hintBox, kindsBox)).toBe(0);
+    expect(hintBox.x).toBeGreaterThanOrEqual(kindsBox.x + kindsBox.width);
+    expect(overlapArea(hintBox, await boxOf(title))).toBe(0);
+  }
+  const unpressed = kinds.getByRole("button", { name: "Excessive Rainfall", exact: true });
+  await unpressed.hover();
+  const unpressedHint = unpressed.locator('[data-side="right"]');
+  await expect(unpressedHint).toHaveCSS("opacity", "1");
+  const unpressedHintBox = await boxOf(unpressedHint);
+  const kindsBox = await boxOf(kinds);
+  expect(isInside(unpressedHintBox, await boxOf(briefing))).toBe(true);
+  expect(overlapArea(unpressedHintBox, kindsBox)).toBe(0);
+  expect(unpressedHintBox.x).toBeGreaterThanOrEqual(kindsBox.x + kindsBox.width);
+  expect(overlapArea(unpressedHintBox, await boxOf(title))).toBe(0);
   const availability = panel.locator("summary").filter({ hasText: "Model availability" });
   await availability.focus();
   await page.keyboard.press("Enter");

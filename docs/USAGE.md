@@ -244,7 +244,7 @@ requests must fit within the backend's 8 MiB message limit; choose a smaller
 resolution if a particularly complex frame exceeds it. Stored PNG frames and
 the completed animation each have a 128 MiB limit.
 
-In **Soundings → Sounding controls**, choose **Animate sounding** for a
+In **Soundings → Controls**, choose **Animate sounding** for a
 deterministic point forecast or a file containing multiple profiles. Choose
 2–12 forecast hours from the same model run and location, or file profiles in
 collection order, and select **Prepare playback**. All profiles load before

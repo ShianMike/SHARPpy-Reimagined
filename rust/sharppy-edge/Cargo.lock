@@ -506,7 +506,7 @@ dependencies = [
 
 [[package]]
 name = "sharppy-edge"
-version = "3.10.0"
+version = "3.11.0"
 dependencies = [
  "futures-util",
  "serde",

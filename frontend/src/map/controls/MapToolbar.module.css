@@ -14,6 +14,6 @@
   background: var(--border-subtle);
 }
 
-.layouts { display: grid; align-self: center; gap: var(--space-0-5); --selection-gap: var(--space-0-5); --selection-fill: var(--control-selected); --selection-shadow: var(--control-shadow); --selection-radius: var(--radius-round); }
+.layouts { display: grid; align-self: center; gap: var(--space-0-5); --selection-gap: var(--space-0-5); --selection-fill: var(--accent-glass-sheen), var(--accent-subtle); --selection-shadow: var(--accent-glass-shadow); --selection-radius: var(--radius-round); }
 .toolbar > button, .layouts > button { width: var(--control-h-md); height: var(--control-h-md); align-self: center; }
 .layouts[data-selection-track] button[aria-pressed="true"] { background: transparent; }

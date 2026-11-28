@@ -1,6 +1,7 @@
 // The parser for contour-line geometry (DESIGN-contracts C8): strict keys,
 // bounded counts, and every point on the globe.
 
+import type { ContourPath, PressureCenter, ThicknessContours } from "../../types/contours";
 import type { ContourLines, WindBarbGrid } from "../../types/map";
 import { parseBounds } from "./soundings";
 import {
@@ -12,12 +13,17 @@ import {
   expectInteger,
   expectNullable,
   expectObject,
+  expectOneOf,
   expectString,
   expectTimestamp,
 } from "./guards";
 
 const MAX_SEGMENTS = 100_000;
 const MAX_PATH_POINTS = 200_000;
+const MAX_CONTOUR_LABELS = 256;
+const MAX_PRESSURE_LABELS = 2_048;
+/** Pressure centers are few by nature; a frame with more is not a level set. */
+const MAX_CENTERS = 64;
 
 function parseWindGrid(value: unknown, path: string): WindBarbGrid {
   const obj = expectObject(value, path);
@@ -65,9 +71,70 @@ function parseSegment(
   return [parsePoint(value[0], at(path, 0)), parsePoint(value[1], at(path, 1))];
 }
 
+/** A joined display path with at least two on-globe points, shared by every level set. */
+function parsePath(value: unknown, path: string, budget: { remaining: number }): ContourPath {
+  if (!Array.isArray(value) || value.length < 2) throw new ContractError(path, "expected a path with at least two points");
+  budget.remaining -= value.length;
+  if (budget.remaining < 0) throw new ContractError(path, "has too many contour path points");
+  return value.map((point: unknown, index: number) => parsePoint(point, at(path, index)));
+}
+
+/** One labelled contour level of `interval`, at its on-globe anchor. */
+function parseContourLevel(value: unknown, path: string, interval: number): { position: readonly [number, number]; value: number } {
+  const label = expectObject(value, path);
+  expectExactKeys(label, path, ["position", "value"]);
+  const level = expectFiniteNumber(label.value, at(path, "value"));
+  const multiple = level / interval;
+  if (!Number.isFinite(multiple) || Math.abs(multiple - Math.round(multiple)) > 1e-8) {
+    throw new ContractError(at(path, "value"), "label is not a contour level");
+  }
+  return {
+    position: parsePoint(label.position, at(path, "position")),
+    value: level,
+  };
+}
+
+function parseCenter(value: unknown, path: string): PressureCenter {
+  const center = expectObject(value, path);
+  expectExactKeys(center, path, ["lon", "lat", "kind", "value"]);
+  return {
+    lon: expectFiniteNumber(center.lon, at(path, "lon"), { min: -180, max: 180 }),
+    lat: expectFiniteNumber(center.lat, at(path, "lat"), { min: -90, max: 90 }),
+    kind: expectOneOf(center.kind, at(path, "kind"), ["H", "L"] as const),
+    // Whole millibars: a center pressure is reported, never a grid value.
+    value: expectInteger(center.value, at(path, "value"), { min: 300, max: 1200 }),
+  };
+}
+
+function parseThickness(value: unknown, path: string): ThicknessContours {
+  const obj = expectObject(value, path);
+  expectExactKeys(obj, path, ["unit", "interval", "paths", "labels"]);
+  const interval = expectFiniteNumber(obj.interval, at(path, "interval"), { min: 0, max: 1000 });
+  if (interval <= 0) {
+    throw new ContractError(at(path, "interval"), "expected a positive interval");
+  }
+  const budget = { remaining: MAX_PATH_POINTS };
+  const paths = expectArray(obj.paths, at(path, "paths"), (item, p) => {
+    const contour = expectObject(item, p);
+    expectExactKeys(contour, p, ["value", "points"]);
+    return {
+      value: expectFiniteNumber(contour.value, at(p, "value")),
+      points: parsePath(contour.points, at(p, "points"), budget),
+    };
+  });
+  const labels = expectArray(obj.labels, at(path, "labels"), (item, p) => parseContourLevel(item, p, interval));
+  if (labels.length > MAX_CONTOUR_LABELS) throw new ContractError(at(path, "labels"), "has too many contour labels");
+  return {
+    unit: expectString(obj.unit, at(path, "unit"), { maxLength: 40 }),
+    interval,
+    paths,
+    labels,
+  };
+}
+
 export function parseContourLines(value: unknown, path = ""): ContourLines {
   const obj = expectObject(value, path);
-  expectExactKeys(obj, path, ["product", "runTime", "forecastHour", "unit", "interval", "segments", "wind"], ["labels", "paths"]);
+  expectExactKeys(obj, path, ["product", "runTime", "forecastHour", "unit", "interval", "segments", "wind"], ["labels", "paths", "centers", "thickness"]);
   const segments = expectArray(obj.segments, at(path, "segments"), parseSegment);
   const interval = expectFiniteNumber(obj.interval, at(path, "interval"), { min: 0, max: 1000 });
   // The same rule as the Rust validator: an interval must be positive, and a
@@ -78,37 +145,28 @@ export function parseContourLines(value: unknown, path = ""): ContourLines {
   if (segments.length > MAX_SEGMENTS) {
     throw new ContractError(at(path, "segments"), "has too many segments");
   }
-  let remainingPoints = MAX_PATH_POINTS;
-  const paths = obj.paths === undefined ? undefined : expectArray(obj.paths, at(path, "paths"), (value, p) => {
-    if (!Array.isArray(value) || value.length < 2) throw new ContractError(p, "expected a path with at least two points");
-    remainingPoints -= value.length;
-    if (remainingPoints < 0) throw new ContractError(p, "has too many contour path points");
-    return value.map((point: unknown, index: number) => parsePoint(point, at(p, index)));
-  });
-  const labels = obj.labels === undefined ? undefined : expectArray(obj.labels, at(path, "labels"), (value, p) => {
-    const label = expectObject(value, p);
-    expectExactKeys(label, p, ["position", "value"]);
-    const position = parsePoint(label.position, at(p, "position"));
-    const level = expectFiniteNumber(label.value, at(p, "value"));
-    const multiple = level / interval;
-    if (!Number.isFinite(multiple) || Math.abs(multiple - Math.round(multiple)) > 1e-8) {
-      throw new ContractError(at(p, "value"), "label is not a contour level");
-    }
-    return {
-      position,
-      value: level,
-    };
-  });
-  if (labels !== undefined && labels.length > 256) throw new ContractError(at(path, "labels"), "has too many contour labels");
+  const budget = { remaining: MAX_PATH_POINTS };
+  const paths = obj.paths === undefined ? undefined : expectArray(obj.paths, at(path, "paths"), (value, p) => parsePath(value, p, budget));
+  const unit = expectString(obj.unit, at(path, "unit"), { maxLength: 40 });
+  const labels = obj.labels === undefined
+    ? undefined
+    : expectArray(obj.labels, at(path, "labels"), (value, p) => parseContourLevel(value, p, interval));
+  const labelLimit = unit === "hPa" ? MAX_PRESSURE_LABELS : MAX_CONTOUR_LABELS;
+  if (labels !== undefined && labels.length > labelLimit) throw new ContractError(at(path, "labels"), "has too many contour labels");
+  const centers = obj.centers === undefined ? undefined : expectArray(obj.centers, at(path, "centers"), parseCenter);
+  if (centers !== undefined && centers.length > MAX_CENTERS) throw new ContractError(at(path, "centers"), "has too many pressure centers");
+  const thickness = obj.thickness === undefined ? undefined : parseThickness(obj.thickness, at(path, "thickness"));
   return {
     product: expectString(obj.product, at(path, "product"), { minLength: 1, maxLength: 40 }),
     runTime: expectTimestamp(obj.runTime, at(path, "runTime")),
     forecastHour: expectInteger(obj.forecastHour, at(path, "forecastHour"), { min: 0, max: 384 }),
-    unit: expectString(obj.unit, at(path, "unit"), { maxLength: 40 }),
+    unit,
     interval,
     segments,
     wind: expectNullable(obj.wind, at(path, "wind"), parseWindGrid),
     ...(paths === undefined ? {} : { paths }),
     ...(labels === undefined ? {} : { labels }),
+    ...(centers === undefined ? {} : { centers }),
+    ...(thickness === undefined ? {} : { thickness }),
   };
 }

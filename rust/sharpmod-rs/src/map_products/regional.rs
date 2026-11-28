@@ -29,6 +29,15 @@ pub fn catalogue(py: Python<'_>, model: &str) -> PyResult<Vec<Py<PyAny>>> {
                     "caveat",
                     "Uses RDPS's published one-hour accumulation for this precipitation type.",
                 )?;
+            } else if key == "prate-ptype" {
+                updates.set_item(
+                    "caveat",
+                    "Uses RDPS's 6-hour Rain/Snow/FreezingRain/IcePellets accumulations \
+                     (native 6-hour rolling files every 6 hours, and 6-hour differences of \
+                     run-total accumulations on intermediate hours from F006); the type with \
+                     the largest accumulation is dominant, and Pressure_MSL plus HGT at 500 \
+                     and 1000 mb supply the overlays.",
+                )?;
             } else if matches!(key.as_str(), "apcp" | "prate") {
                 updates.set_item("max_hours", 0)?;
             } else {
@@ -46,6 +55,7 @@ pub fn catalogue(py: Python<'_>, model: &str) -> PyResult<Vec<Py<PyAny>>> {
             key.as_str(),
             "ltng"
                 | "stp"
+                | "refd-1km-ptype"
                 | "uh-0-3km"
                 | "uh-0-3km-run"
                 | "uh-2-5km-1h"

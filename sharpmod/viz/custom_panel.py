@@ -263,8 +263,9 @@ class CustomPanel(QtWidgets.QFrame):
         if unit is None:
             unit = spec.output_units if spec is not None else ""
         # "unitless" (and blanks) are shown as no unit.
-        if unit is None or unit.strip().lower() in ("", "unitless", "none"):
-            unit = ""
+        import sharpmod_rs
+
+        unit = sharpmod_rs.custom_panel_normalise_unit(unit)
         return label, unit
 
     def _resolve_value(self, item: PanelItem) -> tuple[str, object]:
@@ -454,25 +455,9 @@ class CustomPanel(QtWidgets.QFrame):
         knots) is rendered as its magnitude/speed so a wind quantity shows a
         single readable number rather than a raw tuple.
         """
-        if isinstance(value, (tuple, list)) and len(value) == 2:
-            try:
-                import math
-                value = math.hypot(float(value[0]), float(value[1]))
-            except (TypeError, ValueError):
-                return str(value)
-        try:
-            f = float(value)
-        except (TypeError, ValueError):
-            return str(value)
-        if f != f or f in (float("inf"), float("-inf")):
-            return MISSING_STR
-        if param == "vgp":
-            return f"{f:.2f}"
-        if abs(f) >= 1000:
-            return f"{f:.0f}"
-        if f == int(f):
-            return str(int(f))
-        return f"{f:.1f}"
+        import sharpmod_rs
+
+        return sharpmod_rs.custom_panel_format_number(value, param=param)
 
     @staticmethod
     def _elide(text: str, width: int, font: QtGui.QFont) -> str:

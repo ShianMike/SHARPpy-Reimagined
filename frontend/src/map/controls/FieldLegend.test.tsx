@@ -125,9 +125,9 @@ it("shows the REFS QPF color tables in a comparison map panel", async () => {
   renderWithBackend(<MapPanel panel={1} layout={4} />, createTransport());
 
   const scale = await screen.findByRole("complementary", { name: "Parameter scale" });
-  expect(scale.getAttribute("aria-description")).toBe("1-h QPF and Dominant Precipitation Type · in · Panel 2");
+  expect(scale.getAttribute("aria-description")).toBe("Precipitation Type, 1 h QPF (Ensemble Mean), 1000–500 mb Thickness · in · Panel 2");
   const legend = within(within(scale).getByTestId("field-legend"));
-  expect(legend.getAllByRole("img").map((ramp) => ramp.getAttribute("aria-label"))).toEqual(["Rain", "Snow", "Freezing rain", "Mix"]);
+  expect(legend.getAllByRole("img").map((ramp) => ramp.getAttribute("aria-label"))).toEqual(["Rain", "Snow", "Frzr", "Sleet"]);
   expect(legend.getAllByRole("listitem").map((tick) => tick.textContent)).toEqual(["0.5+", "0.2", "0.1", "0.05", "0.01"]);
 });
 

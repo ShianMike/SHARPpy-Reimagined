@@ -117,17 +117,9 @@ def split_value_unit(text: str) -> tuple[str, str] | None:
     """Split a sounding value from a recognized trailing unit suffix."""
     if not isinstance(text, str) or not text:
         return None
-    for suffix in _UNIT_SUFFIXES:
-        if text.endswith(suffix):
-            value = text[:-len(suffix)]
-            if value and value.strip():
-                return value, suffix
-    for suffix in _DEGREE_SUFFIXES:
-        if text.endswith(suffix):
-            value = text[:-len(suffix)]
-            if value and value.strip():
-                return value, suffix
-    return None
+    import sharpmod_rs
+
+    return sharpmod_rs.unit_split_value_suffix(text)
 
 
 def small_unit_font(font: QtGui.QFont) -> QtGui.QFont:

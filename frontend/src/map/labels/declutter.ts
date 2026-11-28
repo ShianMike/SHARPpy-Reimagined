@@ -51,13 +51,15 @@ export function near(a: ScreenPoint, b: ScreenPoint, distance: number): boolean 
  * The items, in the given order, inside the viewport and at least `cell` from
  * every item kept before them on one axis or the other. A kept point owns its
  * cell (no other point in it can be that far away), so only the 3 by 3 cells
- * around a candidate need checking.
+ * around a candidate need checking. `accept` can check a candidate's full label
+ * bounds before it takes a cell.
  */
 export function declutterPoints<T>(
   items: readonly T[],
   project: (item: T) => ScreenPoint,
   viewport: Viewport,
   cell: number,
+  accept?: (item: T, point: ScreenPoint) => boolean,
 ): T[] {
   const size = Math.max(1, cell);
   const offsets = [-size, 0, size];
@@ -87,7 +89,7 @@ export function declutterPoints<T>(
         }
       }
     }
-    if (crowded) {
+    if (crowded || accept?.(item, point) === false) {
       continue;
     }
     const y = Math.floor(point.y / size);

@@ -43,7 +43,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import re
 import ssl
 import threading
 import time
@@ -267,15 +266,12 @@ def covers(view: tuple[float, float, float, float] | None) -> bool:
     if view is None:
         return False
     try:
-        lon0, lon1, lat0, lat1 = (float(value) for value in view)
+        values = [float(value) for value in view]
     except (TypeError, ValueError):
         return False
-    min_lon, max_lon, min_lat, max_lat = COVERAGE_BOUNDS
-    if max(lon0, lon1) < min_lon or min(lon0, lon1) > max_lon:
-        return False
-    if max(lat0, lat1) < min_lat or min(lat0, lat1) > max_lat:
-        return False
-    return True
+    import sharpmod_rs
+
+    return sharpmod_rs.radar_mosaic_covers(values, COVERAGE_BOUNDS)
 
 
 def _frame_size(size: tuple[int, int] | None) -> tuple[int, int]:
@@ -286,9 +282,11 @@ def _frame_size(size: tuple[int, int] | None) -> tuple[int, int]:
         width, height = (int(value) for value in size)
     except (TypeError, ValueError):
         raise ValueError("frame size must be two integers") from None
-    width = min(MAX_FRAME_PIXELS, max(MIN_FRAME_PIXELS, width))
-    height = min(MAX_FRAME_PIXELS, max(MIN_FRAME_PIXELS, height))
-    return width, height
+    import sharpmod_rs
+
+    return sharpmod_rs.radar_mosaic_frame_size(
+        width, height, MIN_FRAME_PIXELS, MAX_FRAME_PIXELS
+    )
 
 
 def build_query(
@@ -340,17 +338,6 @@ def frame_url(
 # --------------------------------------------------------------------------- #
 # transport
 # --------------------------------------------------------------------------- #
-#: Matches the exception text GeoServer returns in place of an image.
-#:
-#: The element name must be followed by whitespace or the closing angle bracket.
-#: Without that guard this also matches the enclosing
-#: ``<ServiceExceptionReport>`` wrapper, and the captured "message" then begins
-#: with the real element's own opening tag.
-_SERVICE_EXCEPTION = re.compile(
-    rb"<ServiceException(?:\s[^>]*)?>(.*?)</ServiceException\s*>",
-    re.DOTALL | re.IGNORECASE,
-)
-
 #: How much of a non-image body is inspected for an explanation. The body could
 #: be anything, so this is read as a bounded prefix rather than in full.
 _EXCEPTION_SCAN_BYTES = 4096
@@ -358,15 +345,9 @@ _EXCEPTION_SCAN_BYTES = 4096
 
 def _service_exception_text(payload: bytes) -> str:
     """Return the ``ServiceException`` message in ``payload``, if any."""
-    match = _SERVICE_EXCEPTION.search(payload[:_EXCEPTION_SCAN_BYTES])
-    if match is None:
-        return ""
-    try:
-        text = match.group(1).decode("utf-8", "replace")
-    except Exception:  # pragma: no cover - decode with replace cannot raise
-        return ""
-    # Collapse the whitespace GeoServer pretty-prints into the element.
-    return " ".join(text.split())[:300]
+    import sharpmod_rs
+
+    return sharpmod_rs.radar_service_exception_text(payload, _EXCEPTION_SCAN_BYTES)
 
 
 def _ssl_context() -> ssl.SSLContext:

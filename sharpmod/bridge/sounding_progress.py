@@ -12,10 +12,9 @@ _active = {}
 
 
 def _id(value):
-    if not isinstance(value, str) or not 1 <= len(value) <= 64 \
-            or not value.isascii() or not value.isalnum():
-        raise p.invalid("progress_id must be 1 to 64 letters or digits")
-    return value
+    import sharpmod_rs
+
+    return sharpmod_rs.progress_validate_id(value)
 
 
 class DownloadProgress:
@@ -25,13 +24,11 @@ class DownloadProgress:
         self.samples = deque([(monotonic(), 0)])
 
     def stage(self, stage, _planned_bytes=0):
+        import sharpmod_rs
+
         with _lock:
-            self.phase = (
-                "waiting" if stage in ("locating", "queued", "validating") else
-                "downloading" if stage in ("downloading", "retrieving") else
-                "decoding" if stage in ("decoding", "opening", "extracting", "cached") else
-                "calculating" if stage == "calculating" else
-                "processing"
+            self.phase = sharpmod_rs.progress_stage_phase(
+                str(stage), int(_planned_bytes)
             )
 
     def receive(self, size):
@@ -50,14 +47,20 @@ class DownloadProgress:
         return now
 
     def snapshot(self):
+        import sharpmod_rs
+
         with _lock:
             now = self._sample()
-            start, count = self.samples[0]
-            speed = (self.downloaded - count) / max(now - start, 0.1)
+            phase, downloaded, speed = sharpmod_rs.progress_window_snapshot(
+                self.phase,
+                int(self.downloaded),
+                [(float(stamp), int(count)) for stamp, count in self.samples],
+                float(now),
+            )
             return {
-                "stage": self.phase,
-                "downloaded_bytes": self.downloaded,
-                "bytes_per_second": speed if self.phase == "downloading" else 0,
+                "stage": phase,
+                "downloaded_bytes": downloaded,
+                "bytes_per_second": speed,
             }
 
 

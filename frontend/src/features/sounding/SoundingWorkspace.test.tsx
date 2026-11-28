@@ -69,7 +69,7 @@ describe("SoundingWorkspace", () => {
     await userEvent.upload(screen.getByLabelText("File", { selector: "input" }), file);
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     await screen.findByTestId("sounding-image");
-    await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Controls" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Sounding time (UTC)" }));
     expect(screen.getAllByRole("option")).toHaveLength(49);
     await userEvent.keyboard("{End}{Enter}");
@@ -87,7 +87,7 @@ describe("SoundingWorkspace", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Station" }), "72357");
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     await screen.findByTestId("sounding-image");
-    await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Controls" }));
     await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
     const formatted = formatUnit.mock.calls.length;
     expect(formatted).toBeGreaterThan(0);
@@ -115,7 +115,7 @@ describe("SoundingWorkspace", () => {
     workspace.view.unmount();
     renderWithBackend(<SoundingWorkspace />, transport);
     await screen.findByTestId("sounding-image");
-    await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Controls" }));
     expect(screen.getByRole("combobox", { name: "Undo history" }).textContent).toContain("1 edited level");
     expect(transport.calls.filter((call) => call.command === "render_sounding_view").every((call) => (call.args as Record<string, unknown>).imageMode === "uhd")).toBe(true);
   });
@@ -179,7 +179,7 @@ describe("SoundingWorkspace", () => {
     expect(String(request.request.time)).toMatch(/^\d{4}-\d\d-\d\dT(00|12):00:00Z$/u);
     expect(screen.getByTestId("sounding-title").textContent).toBe("72357 (example data)");
     expect(within(screen.getByTestId("open-soundings")).getAllByRole("listitem")).toHaveLength(1);
-    await userEvent.click(screen.getByRole("tab", { name: "Sounding controls" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Controls" }));
     expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("details")).toBeNull();
     expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("header")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "ML" }));

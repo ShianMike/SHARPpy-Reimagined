@@ -18,14 +18,14 @@ def test_only_native_products_and_six_hour_steps_to_f384():
     catalog = fields.catalog({"model": "aigfs"})
     assert {p["key"] for p in catalog["products"]} == {
         *(f"hgt-wind-{level}" for level in (200, 300, 500, 700, 850)),
-        "tmp-2m", "wind-10m", "apcp", "lapse-700-500",
+        "hgt-anom-500", "tmp-2m", "tmp-2m-wind", "wind-10m", "apcp", "lapse-700-500",
     }
     assert catalog["default_product"] == "tmp-2m"
     assert catalog["max_forecast_hours"] == [384 if cycle % 6 == 0 else 0 for cycle in range(24)]
     for hour in (0, 6, 384):
         assert fields._request({**REQUEST, "product": "tmp-2m", "forecast_hour": hour})[-1] == hour
     for change in ({"forecast_hour": 1}, {"forecast_hour": 385}, {"product": "dpt-2m"},
-                   {"run_time": "2026-10-27T01:00:00Z"}):
+                   {"product": "dpt-2m-wind"}, {"run_time": "2026-10-27T01:00:00Z"}):
         with pytest.raises(BridgeError):
             fields._request({**REQUEST, "product": "tmp-2m", **change})
 
@@ -47,7 +47,7 @@ def test_exact_run_inventory_hides_unpublished_ingredients_and_uses_run_total(mo
 
     monkeypatch.setattr(hf, "fetch_inventory", inventory)
     catalog = fields.catalog(REQUEST)
-    assert {p["key"] for p in catalog["products"]} == {"tmp-2m", "lapse-700-500"}
+    assert {p["key"] for p in catalog["products"]} == {"tmp-2m", "lapse-700-500", "hgt-anom-500"}
     assert {url.rsplit("/", 1)[-1] for url in calls} == {"aigfs.t00z.sfc.f000.grib2", "aigfs.t00z.pres.f000.grib2"}
     intervals = hf.parse_inventory("1:0:d=2026102700:APCP:surface:378-384 hour acc fcst:\n"
                                    "2:100:d=2026102700:APCP:surface:0-16 day acc fcst:\n")
@@ -86,7 +86,7 @@ def test_native_contours_avoid_inventing_segments_above_the_bridge_limit(tmp_pat
                else np.full((5, 8), 10 if spec.variable == "UGRD" else 0)
                for spec in product.all_fields}
     result = contours._from_decoded("aigfs", product, RUN, 0, decoded)
-    assert 0 < len(result["segments"]) <= 100
+    assert 0 < sum(len(path) - 1 for path in result["paths"]) <= 100
     assert result["wind"]["width"] == 32 and result["wind"]["height"] == 16
 
 

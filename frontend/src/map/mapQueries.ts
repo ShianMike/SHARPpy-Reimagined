@@ -13,7 +13,7 @@ import { useSoundingStore } from "../stores/soundingStore";
 import { releaseTime } from "../features/sounding/soundingTime";
 import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
 import { nearestRadarSite } from "./nearestSite";
-import { SPC_REFRESH_MS, useLatestSpcOutlook, useLatestWpcOutlook, useWpcOutlook, wpcOutlookQueryOptions } from "./outlookQueries";
+import { SPC_REFRESH_MS, useLatestWpcOutlook, useWpcOutlook, wpcOutlookQueryOptions } from "./outlookQueries";
 import { panelRadar } from "./panelRadar";
 
 const OUTLOOK_STALE_MS = 10 * 60_000;
@@ -27,7 +27,7 @@ function radarRefreshMs(frame: RadarFrame | undefined): number {
 }
 
 export { useMapCatalog } from "./catalogQuery";
-export { useLatestSpcOutlook, useLatestWpcOutlook, useWpcOutlook, wpcOutlookQueryOptions };
+export { useLatestWpcOutlook, useWpcOutlook, wpcOutlookQueryOptions };
 
 export interface FrameRequest {
   model: string;
@@ -41,7 +41,11 @@ export function trimFieldCache(queryClient: QueryClient, budgetBytes: number, in
   // Estimate retained contour/point arrays alongside the compact winds and raster textures.
   const bytes = (frame: FieldFrame | ContourLines) => "cells" in frame ? 5 * frame.cells.byteLength
     : (frame.wind?.data.byteLength ?? 0) + frame.segments.length * 192 + (frame.labels?.length ?? 0) * 128
-      + (frame.paths?.reduce((sum, path) => sum + 64 + path.length * 64, 0) ?? 0);
+      + (frame.paths?.reduce((sum, path) => sum + 64 + path.length * 64, 0) ?? 0)
+      // Pressure frames also retain their H/L centers and thickness level set.
+      + (frame.centers?.length ?? 0) * 32
+      + (frame.thickness?.labels.length ?? 0) * 128
+      + (frame.thickness?.paths.reduce((sum, path) => sum + 96 + path.points.length * 64, 0) ?? 0);
   const cache = queryClient.getQueryCache();
   const queries = cache
     .findAll()

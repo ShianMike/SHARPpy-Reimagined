@@ -78,10 +78,9 @@ pub(crate) fn decode(
             ),
             Period::SixHours => (
                 "accum",
-                frame
-                    .hour
-                    .checked_sub(6)
-                    .ok_or_else(|| GribError::new("HRDPS 6-h QPF requires six forecast hours"))?,
+                frame.hour.checked_sub(6).ok_or_else(|| {
+                    GribError::new("the rolling 6-h accumulation requires six forecast hours")
+                })?,
                 1.0,
             ),
             Period::TwelveHours => (

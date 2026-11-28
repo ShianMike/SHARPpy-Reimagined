@@ -695,10 +695,10 @@ cargo test --manifest-path rust/sharpmod-rs/Cargo.toml --locked --release --test
 On Linux, use the absolute path to the installed `libeccodes.so`. Ensure the
 library's dependent binaries are discoverable by the OS loader.
 
-## Additional Python-to-Rust migrations (M9–M14)
+## Additional Python-to-Rust migrations (M9–M44)
 
 While keeping `BACKEND_API_VERSION = 7`, `sharpmod_rs` and `sharpmod-weather`
-also own six additional compute, planning, and I/O modules registered in
+also own additional compute, planning, and I/O modules registered in
 `REQUIRED_RUST_CAPABILITIES`:
 
 - **M9 Model field & HTTP byte-range planning** (`rust/sharpmod-rs/src/model_planning.rs`):
@@ -731,6 +731,145 @@ also own six additional compute, planning, and I/O modules registered in
 - **M14 Batch extraction manifest, containment & SHA-256** (`rust/sharpmod-rs/src/batch_manifest.rs`):
   `batch_safe_identifier`, `batch_contained_path`, `batch_file_sha256`,
   `batch_json_fingerprint`, and `batch_load_manifest` backing `sharpmod.analysis.batch_extract`.
+- **M15 Map overlays & raster bounds** (`rust/sharpmod-rs/src/map_overlay_geometry.rs`):
+  `overlay_rings_from_geometry`, `overlay_bounds_of`, `overlay_shape_contains`,
+  `overlay_looks_like_image`, `overlay_format_age`, and `overlay_raster_intersects`.
+- **M16 Map geography, label decluttering & scale bars** (`rust/sharpmod-rs/src/map_geography.rs`):
+  `geo_boundary_draw_order`, `geo_boundary_width`, `geo_normalise_label_density`,
+  `geo_labels_visible_for_span`, `geo_declutter_labels`,
+  `geo_km_per_pixel_at_latitude`, `geo_pick_scale_length`,
+  `geo_format_scale_length`, `geo_luminance`, and `geo_contrast_ratio`.
+- **M17 Locator geometry & overlay spec rules** (`rust/sharpmod-rs/src/locator_geometry.rs`):
+  `locator_normalise_bounds`, `locator_area_to_map_box`, `locator_centred_bounds`,
+  `locator_fit_bounds`, `locator_parse_overlay_spec`,
+  `locator_enforce_overlay_exclusivity`, `inspection_haversine_km`, and
+  `inspection_format_field_value`.
+- **M18 ERA5 geodesic, dewpoint & vorticity math** (`rust/sharpmod-rs/src/era5_math.rs`):
+  `era5_great_circle_distance_km`, `era5_select_nearest_grid_point_1d`,
+  `era5_select_nearest_grid_point_2d`, `era5_dewpoint_from_rh`,
+  `era5_dewpoint_from_specific_humidity`, `era5_surface_relative_vorticity`,
+  `era5_east_west_distance_m`, and `era5_north_south_distance_m`.
+- **M19 Vertical profile interpolation & isotherm crossings** (`rust/sharpmod-rs/src/vertical_profile.rs`):
+  `isotherm_pres_and_hght`, `prepare_vertical_interpolator`,
+  `NativeVerticalInterpolator`, and `native_six_km_cape_eligible`.
+- **M20 Timeline planning & ensemble ledger validation** (`rust/sharpmod-rs/src/timeline_ledger.rs`):
+  `timeline_forecast_hour_range`, `timeline_normalize_state`,
+  `timeline_frame_describe`, `timeline_coverage_summary`, `animation_frame_caption`,
+  `animation_plan_frames`, and `ensemble_validate_ledger`.
+- **M21 Theme palette, tier colors & box field ramps** (`rust/sharpmod-rs/src/viz_colors.rs`):
+  `color_parse_rgb`, `color_contrast_ratio`, `color_resolve_theme`,
+  `color_semantic_palette`, `color_is_missing`, `color_common_gradient`,
+  `color_tier_for_param`, `box_field_ramp_rgb`, `box_field_normalize`,
+  `box_field_scale_range`, and `box_field_cell_vertices`.
+- **M22 Chart marker, Skew-T label & unit layout** (`rust/sharpmod-rs/src/chart_layout.rs`):
+  `hodo_label_for_height`, `hodo_prepare_height_wind_samples`,
+  `hodo_layout_height_level_markers`, `skewt_fit_rect`, `skewt_surface_label_rect`,
+  `skewt_layout_surface_labels`, `skewt_centered_rect`, and `unit_split_value_suffix`.
+- **M23 Open-Meteo access, redaction & profile selection** (`rust/sharpmod-rs/src/openmeteo_logic.rs`):
+  `openmeteo_redact`, `openmeteo_host_of`, `openmeteo_normalise_base_url`,
+  `openmeteo_credential_scope`, `openmeteo_resolve_access`,
+  `openmeteo_retry_after_seconds`, `openmeteo_namespaced_key`,
+  `openmeteo_api_model_for_key`, `openmeteo_is_selectable_api_model`,
+  `openmeteo_hourly_variables`, `openmeteo_normalise_longitude`,
+  `openmeteo_point_in_domain`, `openmeteo_floor_cycle_epoch`,
+  `openmeteo_select_time_index`, `openmeteo_derive_surface_height`, and
+  `openmeteo_weighted_units`.
+- **M24 Box-sounding export formatting & GeoJSON geometry** (`rust/sharpmod-rs/src/box_export_format.rs`):
+  `box_export_normalize_lon180`, `box_export_format_number`, `box_export_cell_steps`,
+  `box_export_cell_geometry`, `box_export_csv_rows`, and `box_export_summarize`.
+- **M25 IGRA2 selection & ERA5 grid normalization** (`rust/sharpmod-rs/src/igra2_selection.rs`):
+  `igra2_resolve_station_index`, `igra2_select_nearest_header_index`,
+  `igra2_y2d_candidate_years`, `era5_grid_surface_relative_vorticity`,
+  `era5_select_surface_level_index`, `era5_normalize_surface_pressures_hpa`, and
+  `era5_normalize_surface_scalars`.
+- **M26 Render density scaling, hour cache keys & IFS checks** (`rust/sharpmod-rs/src/render_and_cache_rules.rs`):
+  `render_bounded_float`, `render_bounded_int`, `render_normalise_png_mode`,
+  `render_map_copy_axis`, `render_scale_dimensions`, `render_logical_extent`,
+  `hour_cache_canonical_key_parts`, `hour_cache_directory_prefix`,
+  `ifs_validate_request`, and `ifs_nearest_cycle_hour`.
+- **M27 Hodograph locator tiles & inset math** (`rust/sharpmod-rs/src/locator_tiles.rs`):
+  `hodo_locator_point_valid`, `hodo_locator_requested_distinct`,
+  `hodo_locator_normalise_box`, `hodo_locator_zoom_bounds`,
+  `hodo_locator_raster_source_rect`, `hodo_locator_raster_draw_rects`,
+  `hodo_locator_decode_county_tile`, `hodo_locator_county_tile_coords`,
+  `hodo_locator_filter_global_lines`, `hodo_locator_inset_rect`, and
+  `hodo_locator_marker_position`.
+- **M28 Locator overlay drawing & label filtering** (`rust/sharpmod-rs/src/locator_overlay_geom.rs`):
+  `hodo_overlay_raster_copy_range`, `hodo_overlay_clamp_opacity`,
+  `hodo_overlay_project_shape_rings`, `hodo_overlay_project_marker_point`,
+  `hodo_overlay_timing_text`, and `hodo_overlay_strip_coordinate_label`.
+- **M29 Skew-T buoyancy fills & inset cursor readouts** (`rust/sharpmod-rs/src/skewt_buoyancy.rs`):
+  `skew_hgz_band_pixels`, `skew_interp_env_on_parcel`, `skew_cape_fill_polygons`,
+  `inset_thetae_readout`, `inset_srwinds_readout`, `inset_slinky_nearest_height`, and
+  `inset_readout_box_rect`.
+- **M30 Index board, SHIP & custom panel formatting** (`rust/sharpmod-rs/src/board_formatting.rs`):
+  `board_format_i0`, `board_format_f1`, `board_format_f2`, `board_format_dirspd`,
+  `board_format_uv_dirspd`, `board_format_temp`, `board_format_pwat`,
+  `board_barb_components`, `board_cinh_legacy_tier`, `board_cape3_tier`,
+  `ship_scale_fraction`, `ship_format_value`, `custom_panel_normalise_unit`, and
+  `custom_panel_format_number`.
+- **M31 Export composition layout, patch validation & sequence hours** (`rust/sharpmod-rs/src/export_layout_rules.rs`):
+  `export_compose_layout`, `export_composition_theme_hex`, `export_valid_png_file`,
+  `patch_registry_validate_specs`, `patch_registry_validate_version`,
+  `box_extract_sequence_hours`, and `observed_safe_token`.
+- **M32 SharpTab clamps, download progress & bridge validation** (`rust/sharpmod-rs/src/profile_and_progress_rules.rs`):
+  `profile_clamp_scalar_in_range`, `profile_clamp_vector_in_range`,
+  `progress_validate_id`, `progress_stage_phase`, `progress_window_snapshot`,
+  `bridge_validate_param_keys`, `bridge_validate_text`, `bridge_validate_number`,
+  `bridge_validate_integer`, `bridge_validate_choice`, and `backend_validate_sfc_index`.
+- **M33 SPC convective outlook rules** (`rust/sharpmod-rs/src/spc_outlook_rules.rs`):
+  `spc_cig_level`, `spc_is_qualifier_label`, `spc_convective_day_start_epoch`,
+  `spc_outlook_day_offset`, `spc_format_product_days`, `spc_covers_location`,
+  `spc_candidates_for`, `spc_parse_stamp_epoch`, `spc_feature_style`,
+  `spc_display_label`, and `spc_validate_colour`.
+- **M34 Storm report rules & filtering** (`rust/sharpmod-rs/src/storm_report_rules.rs`):
+  `report_magnitude_text`, `report_is_significant`, `report_normalise_filter`,
+  `report_window_label`, `report_count_label`, `report_marker_radius`,
+  `report_marker_ring`, `report_normalise_view`, `report_build_url`,
+  `report_cache_key`, `report_window_is_settled`, and `report_layer_shape_matches`.
+- **M35 ECCC GeoMet rotated-grid & capabilities rules** (`rust/sharpmod-rs/src/geomet_grid.rs`):
+  `geomet_to_rotated`, `geomet_to_geographic`, `geomet_rotated_contains`,
+  `geomet_rotated_outline`, `geomet_point_in_bounds`, `geomet_floor_cycle_epoch`,
+  `geomet_feature_info_bbox`, and `geomet_parse_dimension_defaults`.
+- **M36 Radar scan selection, mosaic & site rules** (`rust/sharpmod-rs/src/radar_rules.rs`):
+  `radar_select_scan_epoch`, `radar_mosaic_covers`, `radar_mosaic_frame_size`,
+  `radar_service_exception_text`, `radar_site_bounds`, `radar_site_distance_km`,
+  `radar_site_nearest_index`, and `radar_site_frame_size`.
+- **M37 Surface observation overlays & CSV export** (`rust/sharpmod-rs/src/surface_overlay_rules.rs`):
+  `surface_wind_state`, `surface_wind_uv_kt`, `surface_declutter_indices`,
+  `surface_station_ring`, `surface_ring_radii`, `surface_format_observation_text`,
+  `surface_format_subtitle`, and `surface_write_csv`.
+- **M38 Overlay hit testing & place-name geometry** (`rust/sharpmod-rs/src/overlay_hit_testing.rs`):
+  `overlay_marker_hits_select`, `overlay_format_description`,
+  `overlay_marker_hit_label`, `place_needs_town_name`,
+  `place_from_address_fields`, `place_is_us_address`,
+  `place_parse_record_fields`, `place_area_proxy_radius_km`, and
+  `place_point_in_polygon`.
+- **M39 UWyo sounding & station catalog rules** (`rust/sharpmod-rs/src/uwyo_rules.rs`):
+  `uwyo_pressure_spaced_indices`, `uwyo_subsample_indices`,
+  `uwyo_looks_unavailable`, `uwyo_parse_metadata`, `uwyo_clean_station_name`,
+  `uwyo_search_stations`, and `uwyo_resolve_station_index`.
+- **M40 Box-mean profile composition & interpolation** (`rust/sharpmod-rs/src/box_mean_rules.rs`):
+  `box_mean_model_label`, `box_mean_badge_lines`, `box_mean_describe`,
+  `box_mean_reference_member_index`, `box_mean_interpolate_log_pressure`,
+  `box_mean_nanmean_stack`, `box_mean_speed_direction`,
+  `box_mean_strictly_stacked_mask`, and `box_mean_circular_centre`.
+- **M41 Ensemble threshold validation & reconciliation** (`rust/sharpmod-rs/src/threshold_rules.rs`):
+  `threshold_validate_condition`, `threshold_validate_definition`,
+  `threshold_derive_member_state`, `threshold_evaluate_member_conditions`,
+  `threshold_result_counts_reconcile`, and `threshold_validate_resume_members`.
+- **M42 Bridge protocol framing & RFC3339 time rules** (`rust/sharpmod-rs/src/bridge_protocol_rules.rs`):
+  `bridge_decode_request_frame`, `bridge_check_request_params`,
+  `bridge_encode_frame_check`, `bridge_validate_rfc3339_time`, and
+  `bridge_format_iso_utc`.
+- **M43 Model domain bounds & forecast hour rules** (`rust/sharpmod-rs/src/model_domain_rules.rs`):
+  `model_longitude_segments`, `model_domain_rect_intersects`,
+  `model_domain_rect_contains`, `model_outline_sample_points`,
+  `model_outline_vertex_in_bounds`, and `model_filter_forecast_hours`.
+- **M44 SharpTab lapse rates & export path probes** (`rust/sharpmod-rs/src/sharptab_lapse_and_paths.rs`):
+  `sharptab_lapse_rate_from_bounds`, `sharptab_lapse_rate_agl`,
+  `sharptab_lapse_rate_pres`, `export_validate_filename`, and
+  `export_probe_writable_dir`.
 
 ## Current limitations
 

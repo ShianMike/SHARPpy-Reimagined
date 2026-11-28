@@ -521,6 +521,25 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
     assert_eq!(uh25_run.palette.stops.len(), 61);
     assert_eq!(uh25_run.palette.floor, Some(10.0));
     assert!(uh25_run.contour.is_none() && !uh25_run.wind);
+    let refd_ptype = catalog
+        .products
+        .iter()
+        .find(|product| product.key == "refd-1km-ptype")
+        .unwrap();
+    assert_eq!(
+        refd_ptype.label,
+        "1 km AGL Reflectivity, Type, 1000-500 mb Thickness"
+    );
+    assert_eq!(refd_ptype.short_label, "1km P-Type");
+    assert_eq!(refd_ptype.category, "Precipitation");
+    assert_eq!(refd_ptype.palette.units, "dBZ");
+    assert_eq!(refd_ptype.palette.stops.len(), 68);
+    assert_eq!(refd_ptype.palette.floor, Some(5.0));
+    assert_eq!(refd_ptype.minimum_forecast_hour, Some(1));
+    let refd_contour = refd_ptype.contour.as_ref().unwrap();
+    assert_eq!(refd_contour.label, "hPa");
+    assert_eq!(refd_contour.interval, 2.0);
+    assert!(!refd_ptype.wind);
     for (model, data) in value("bridge/map/catalog.models.json").as_object().unwrap() {
         let catalog: MapCatalog = serde_json::from_value(data.clone()).unwrap();
         catalog.validate().unwrap();
@@ -559,14 +578,20 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                     .iter()
                     .find(|product| product.key == "qpf-1h-ptype")
                     .unwrap();
-                assert_eq!(qpf_ptype.label, "1-h QPF and Dominant Precipitation Type");
-                assert_eq!(qpf_ptype.short_label, "1-h QPF & P-Type");
+                assert_eq!(
+                    qpf_ptype.label,
+                    "1-h QPF, Precipitation Type, 1000-500 mb Thickness"
+                );
+                assert_eq!(qpf_ptype.short_label, "1h QPF / P-Type + Thick");
                 assert_eq!(qpf_ptype.category, "Precipitation");
                 assert_eq!(qpf_ptype.palette.units, "in");
                 assert_eq!(qpf_ptype.palette.stops.len(), 68);
                 assert_eq!(qpf_ptype.palette.floor, Some(0.01));
                 assert_eq!(qpf_ptype.minimum_forecast_hour, Some(1));
-                assert!(qpf_ptype.contour.is_none() && !qpf_ptype.wind);
+                let qpf_contour = qpf_ptype.contour.as_ref().unwrap();
+                assert_eq!(qpf_contour.label, "hPa");
+                assert_eq!(qpf_contour.interval, 2.0);
+                assert!(!qpf_ptype.wind);
                 let water = catalog
                     .products
                     .iter()
@@ -701,7 +726,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                 assert_eq!(snow.palette.floor, Some(0.1));
                 assert_eq!(snow.minimum_forecast_hour, Some(1));
                 assert!(snow.contour.is_none() && !snow.wind);
-                31
+                33
             } else if model.starts_with("refs-") {
                 assert!(catalog
                     .categories
@@ -716,6 +741,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                     "ehi-0-1km",
                     "ehi-0-3km",
                     "qpf-1h",
+                    "qpf-1h-ptype",
                     "qpf-6h",
                     "qpf-12h",
                     "qpf-24h",
@@ -726,26 +752,34 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                         "{model} missing {key}"
                     );
                 }
-                36
+                39
             } else if model == "nam-3km-conus" {
-                42
+                44
             } else if model == "nam" {
-                37
+                39
             } else if model.starts_with("hrw-") {
-                31
+                33
             } else if model == "gfs" {
                 assert!(catalog.products.iter().any(|product| product.key == "refc"));
-                24
+                assert!(catalog
+                    .products
+                    .iter()
+                    .any(|product| product.key == "prate-ptype"));
+                28
             } else if model == "gdps" {
                 assert_eq!(catalog.max_forecast_hours[0], 240);
                 assert_eq!(catalog.max_forecast_hours[6], 0);
                 assert_eq!(catalog.max_forecast_hours[12], 240);
                 assert!(catalog.products.iter().any(|product| product.key == "cape"));
+                assert!(catalog
+                    .products
+                    .iter()
+                    .any(|product| product.key == "prate-ptype"));
                 assert!(!catalog
                     .products
                     .iter()
                     .any(|product| matches!(product.key.as_str(), "refc" | "pwat" | "mucape")));
-                21
+                25
             } else if model == "rap" {
                 assert_eq!(catalog.max_forecast_hours[0], 21);
                 assert_eq!(catalog.max_forecast_hours[3], 51);
@@ -754,11 +788,15 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                     .products
                     .iter()
                     .any(|product| matches!(product.key.as_str(), "ltng" | "stp")));
-                38
+                40
             } else if model == "rdps" {
                 assert_eq!(catalog.max_forecast_hours[0], 84);
                 assert_eq!(catalog.max_forecast_hours[6], 84);
                 assert!(catalog.products.iter().any(|product| product.key == "cape"));
+                assert!(catalog
+                    .products
+                    .iter()
+                    .any(|product| product.key == "prate-ptype"));
                 assert!(!catalog
                     .products
                     .iter()
@@ -772,7 +810,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                         .minimum_forecast_hour,
                     Some(1)
                 );
-                21
+                24
             } else if model == "hrdps" {
                 assert_eq!(catalog.max_forecast_hours[0], 48);
                 assert_eq!(catalog.max_forecast_hours[6], 48);
@@ -799,6 +837,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                     "shear-sfc-500",
                     "srh-0-3km",
                     "ehi-0-3km",
+                    "mslp",
                 ] {
                     assert!(
                         catalog.products.iter().any(|product| product.key == key),
@@ -812,7 +851,10 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                     .unwrap();
                 assert_eq!(ptype.palette.units, "in/h");
                 assert_eq!(ptype.palette.stops.len(), 68);
-                assert_eq!(ptype.minimum_forecast_hour, Some(1));
+                assert_eq!(ptype.minimum_forecast_hour, Some(6));
+                let ptype_contour = ptype.contour.as_ref().unwrap();
+                assert_eq!(ptype_contour.label, "hPa");
+                assert_eq!(ptype_contour.interval, 2.0);
                 let snow = catalog
                     .products
                     .iter()
@@ -820,22 +862,118 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                     .unwrap();
                 assert_eq!(snow.palette.units, "in");
                 assert_eq!(snow.minimum_forecast_hour, Some(1));
-                20
-            } else if matches!(
-                model.as_str(),
-                "ecmwf-ifs-9km" | "openmeteo-ecmwf-ifs025" | "openmeteo-icon-global"
-            ) {
-                21
+                23
+            } else if matches!(model.as_str(), "ecmwf-ifs-9km" | "openmeteo-ecmwf-ifs025") {
+                assert!(catalog
+                    .products
+                    .iter()
+                    .any(|product| product.key == "prate-ptype"));
+                25
+            } else if model == "openmeteo-icon-global" {
+                let icon_ptype = catalog
+                    .products
+                    .iter()
+                    .find(|product| product.key == "prate-ptype")
+                    .unwrap();
+                assert_eq!(
+                    icon_ptype.palette.ptype_labels.as_ref(),
+                    Some(&[
+                        "Rain".to_owned(),
+                        "Snow".to_owned(),
+                        "Frzr".to_owned(),
+                        "Mix".to_owned(),
+                    ])
+                );
+                24
             } else if model == "aigfs" {
-                9
+                11
+            } else if matches!(model.as_str(), "nssl-mpas-htpo" | "nssl-mpas-rn") {
+                assert!(catalog
+                    .products
+                    .iter()
+                    .any(|product| product.key == "refd-1km-ptype"));
+                38
             } else {
-                45
+                47
             }
         );
+        let anomaly = catalog
+            .products
+            .iter()
+            .find(|product| product.key == "hgt-anom-500");
+        if matches!(
+            model.as_str(),
+            "gfs"
+                | "aigfs"
+                | "openmeteo-ecmwf-ifs025"
+                | "ecmwf-ifs-9km"
+                | "gdps"
+                | "openmeteo-icon-global"
+        ) {
+            let anomaly = anomaly.unwrap_or_else(|| panic!("{model} missing hgt-anom-500"));
+            assert_eq!(anomaly.category, "Height and Wind");
+            assert_eq!(anomaly.palette.units, "dam");
+            assert!(anomaly.palette.stepped);
+            assert_eq!(anomaly.palette.stops.len(), 83);
+            assert_eq!(anomaly.palette.floor, Some(-200.0));
+            let contour = anomaly.contour.as_ref().unwrap();
+            assert_eq!(contour.interval, 3.0);
+            assert_eq!(contour.label, "dam");
+            assert!(!anomaly.wind);
+        } else {
+            assert!(
+                anomaly.is_none(),
+                "{model} unexpectedly exposed hgt-anom-500"
+            );
+        }
+        for (key, base_key, supported) in [
+            ("tmp-2m-wind", "tmp-2m", true),
+            ("dpt-2m-wind", "dpt-2m", model != "aigfs"),
+        ] {
+            let surface_wind = catalog.products.iter().find(|product| product.key == key);
+            if supported {
+                let surface_wind = surface_wind.unwrap_or_else(|| panic!("{model} missing {key}"));
+                let base = catalog
+                    .products
+                    .iter()
+                    .find(|product| product.key == base_key)
+                    .unwrap_or_else(|| panic!("{model} missing {base_key}"));
+                assert_eq!(surface_wind.category, "Surface");
+                assert!(surface_wind.wind);
+                let isobars = surface_wind.contour.as_ref().unwrap();
+                assert_eq!(isobars.interval, 2.0);
+                assert_eq!(isobars.label, "hPa");
+                assert_eq!(surface_wind.palette, base.palette);
+            } else {
+                assert!(surface_wind.is_none(), "{model} unexpectedly exposed {key}");
+            }
+        }
         assert_eq!(
             serde_json::to_value(catalog).unwrap(),
             value("public/map/catalog.models.json")[model]
         );
+    }
+    assert!(!catalog
+        .products
+        .iter()
+        .any(|product| product.key == "hgt-anom-500"));
+    for (key, base_key) in [("tmp-2m-wind", "tmp-2m"), ("dpt-2m-wind", "dpt-2m")] {
+        let surface_wind = catalog
+            .products
+            .iter()
+            .find(|product| product.key == key)
+            .unwrap_or_else(|| panic!("hrrr missing {key}"));
+        let base = catalog
+            .products
+            .iter()
+            .find(|product| product.key == base_key)
+            .unwrap();
+        assert_eq!(surface_wind.category, "Surface");
+        assert!(surface_wind.wind);
+        let isobars = surface_wind.contour.as_ref().unwrap();
+        assert_eq!(isobars.interval, 2.0);
+        assert_eq!(isobars.label, "hPa");
+        assert_eq!(surface_wind.palette, base.palette);
     }
     for product in ["cat", "torn", "wind"] {
         let outlook: SpcOutlook = bridge_to_public(

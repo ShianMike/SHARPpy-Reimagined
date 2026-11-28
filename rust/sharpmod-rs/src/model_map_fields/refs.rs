@@ -5,9 +5,7 @@ use pyo3::{
     types::{PyDateAccess, PyDateTime, PyDict, PyTimeAccess, PyTuple},
 };
 
-use crate::map_products::{
-    derive_refs_member_ehi_0_1km, derive_refs_member_ehi_0_3km, pressure_contour,
-};
+use crate::map_products::{derive_refs_member_ehi_0_1km, derive_refs_member_ehi_0_3km, ptype};
 
 struct SpcCapeSpec<'a> {
     key: &'a str,
@@ -165,20 +163,7 @@ const RADAR_WINDOW_SPECS: [SpcWindowSpec<'static>; 2] = [
     },
 ];
 
-const PRECIPITATION_WINDOW_SPECS: [SpcWindowSpec<'static>; 5] = [
-    SpcWindowSpec {
-        key: "qpf-1h-ptype",
-        label: "1-h QPF and Dominant Precipitation Type",
-        chip: "1-h QPF & P-Type",
-        category: "Precipitation",
-        field_name: "qpf1h_ptype",
-        variable: "APCP",
-        level: "surface",
-        palette_attr: "PALETTE_QPF_PTYPE",
-        max_hours: 1,
-        description: "Ensemble-mean 1-hour quantitative precipitation forecast (QPF) in inches, shaded by consensus dominant precipitation type (rain, snow, freezing rain, or mix).",
-        caveat: "Uses SPC's 11-member REFS ensemble (HRRR, RRFS, and REFS members) from F001 through F060; only cells with at least 0.01 in of 1-hour QPF are shaded.",
-    },
+const PRECIPITATION_WINDOW_SPECS: [SpcWindowSpec<'static>; 4] = [
     SpcWindowSpec {
         key: "qpf-3h",
         label: "3-h QPF Mean",
@@ -233,6 +218,50 @@ const PRECIPITATION_WINDOW_SPECS: [SpcWindowSpec<'static>; 5] = [
     },
 ];
 
+/// The 1-h QPF / consensus P-Type composite with mean isobars and thickness.
+///
+/// The Zarr decode publishes `pmsl_mean` already converted to hectopascals,
+/// so the isobar contour needs no converter. The thickness comes alongside it
+/// in the same decoded frame.
+fn qpf_ptype_product(py: Python<'_>, catalogue: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
+    let field = catalogue
+        .getattr("FieldSpec")?
+        .call1(("qpf1h_ptype", "sfc", "APCP", "surface"))?;
+    let contour_options = PyDict::new(py);
+    contour_options.set_item("label", "hPa")?;
+    let options = PyDict::new(py);
+    options.set_item("key", "qpf-1h-ptype")?;
+    options.set_item(
+        "label",
+        "1-h QPF, Precipitation Type, 1000-500 mb Thickness",
+    )?;
+    options.set_item("chip", "1h QPF / P-Type + Thick")?;
+    options.set_item("category", "Precipitation")?;
+    options.set_item("fields", (field,))?;
+    options.set_item(
+        "derive",
+        catalogue.getattr("_single")?.call1(("qpf1h_ptype",))?,
+    )?;
+    options.set_item(
+        "palette",
+        ptype::rate_palette(catalogue, "in", ptype::PTYPE_LABELS)?,
+    )?;
+    options.set_item("max_hours", 1u16)?;
+    options.set_item(
+        "contour",
+        catalogue
+            .getattr("ContourSpec")?
+            .call(("mslp", 2.0), Some(&contour_options))?,
+    )?;
+    options.set_item("thickness_interval", 6.0)?;
+    options.set_item("description", "Ensemble-mean 1-hour quantitative precipitation forecast (QPF) in inches, shaded by the consensus dominant precipitation type (rain, snow, freezing rain, or sleet), with 2 hPa ensemble-mean sea-level-pressure isobars and 1000-500 mb thickness lines.")?;
+    options.set_item("caveat", "Uses SPC's 11-member REFS ensemble (HRRR, RRFS, and REFS members) from F001 through F060; only cells with at least 0.01 in of 1-hour QPF are shaded. The REFS mean omits 1000 mb height, so the thickness uses z500_mean over a hydrostatic 1000 mb height derived from pmsl_mean and t2m_mean.")?;
+    Ok(catalogue
+        .getattr("HrrrProduct")?
+        .call((), Some(&options))?
+        .unbind())
+}
+
 const WINTER_WINDOW_SPECS: [SpcWindowSpec<'static>; 1] = [SpcWindowSpec {
     key: "snow-1h",
     label: "1-h Snowfall",
@@ -260,7 +289,7 @@ pub(crate) fn catalogue(py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         catalogue
             .getattr("FieldSpec")?
             .call1(("mslp", "sfc", "MSLET", "mean sea level"))?;
-    let isobars = pressure_contour(&catalogue)?;
+    let isobars = ptype::sea_level_contour(&catalogue, 2.0)?;
     let u = catalogue.getattr("F_U10")?;
     let v = catalogue.getattr("F_V10")?;
     for (key, field, label) in [
@@ -278,13 +307,14 @@ pub(crate) fn catalogue(py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         updates.set_item("wind", true)?;
         updates.set_item(
             "description",
-            format!("{description} Mean sea-level pressure is contoured every 4 hPa, with 10 m wind barbs in knots."),
+            format!("{description} Mean sea-level pressure is contoured every 2 hPa, with 10 m wind barbs in knots."),
         )?;
         products.push(replace.call((template,), Some(&updates))?.unbind());
     }
     for spec in &SURFACE_WIND_WINDOW_SPECS {
         products.push(spc_window_product(py, &catalogue, spec)?);
     }
+    products.push(qpf_ptype_product(py, &catalogue)?);
     for spec in &PRECIPITATION_WINDOW_SPECS {
         products.push(spc_window_product(py, &catalogue, spec)?);
     }

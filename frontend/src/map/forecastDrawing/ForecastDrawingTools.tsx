@@ -64,8 +64,10 @@ export function ForecastDrawingTools({ feedbackTarget }: { feedbackTarget: HTMLE
   const copiedName = copiedOutline === null ? null : FORECAST_CATEGORIES[copiedOutline.level] ?? null;
   const transferring = open && !active && applyingOutline && copiedName !== null;
   const moving = editTool === "move";
+  const areaActionLabel = active ? "Finish area" : "Draw area";
   const busy = saving || dragging || exporting;
   const hasAreas = (result?.areas.length ?? 0) > 0;
+  const areasOpen = showAreas && polygons.length > 0;
   const retryRestore = !active && error !== null && result === undefined && polygons.length > 0;
   const selectedRisk = riskLabel(product, level, hatch);
   const selection = `${FORECAST_PRODUCT_LABELS[product]} · ${selectedRisk}`;
@@ -131,22 +133,22 @@ export function ForecastDrawingTools({ feedbackTarget }: { feedbackTarget: HTMLE
     })}
   </div>;
 
-  return <div className={styles.tools} role="group" aria-label="Forecast drawing">
+  return <div className={styles.tools} role="group" aria-label="Forecast drawing" data-motion="enter">
     <IconAction ref={setAnchor} className={styles.tool} icon={SwatchBook} label="Forecast risk" hintSide="right" hintText={selection}
       aria-description={selection} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined}
       onClick={() => { if (open) closePicker(); else setOpen(true); }} />
-    {active ? <IconAction className={styles.tool} icon={Check} label="Finish area" hintSide="right" loading={saving}
-      disabled={busy || vertexCount < 3} onClick={() => { void useForecastDrawingStore.getState().finish(backend); }} />
-      : <IconAction className={styles.tool} icon={Pentagon} label="Draw area" hintSide="right" disabled={busy}
-        hintText={savedAreaHint === undefined ? "Draw area" : `Draw area · ${savedAreaHint}`} aria-description={savedAreaHint}
-        onClick={startDrawing} />}
+    <IconAction className={styles.tool} icon={Pentagon} alternateIcon={{ icon: Check, active }}
+      label={areaActionLabel} hintSide="right" loading={active && saving}
+      hintText={!active && savedAreaHint !== undefined ? `${areaActionLabel} · ${savedAreaHint}` : areaActionLabel}
+      aria-description={active ? undefined : savedAreaHint} disabled={busy || (active && vertexCount < 3)}
+      onClick={active ? () => { void useForecastDrawingStore.getState().finish(backend); } : startDrawing} />
     {mode !== "draw" && (hasAreas || active) ? <IconAction className={styles.tool} icon={Move} label="Move area"
       hintSide="right" hintText={moving ? "Return to vertex editing" : "Move area"} aria-pressed={moving} disabled={busy}
       onClick={() => { useForecastDrawingStore.getState().setEditTool(moving ? "reshape" : "move"); }} /> : null}
     <VisuallyHidden role="status">{active ? status : outlineNotice ?? status}</VisuallyHidden>
     {feedbackTarget !== null && !open && (status !== null || error !== null) ? createPortal(
       <GlassContextBoundary>
-        <Surface as="section" className={styles.feedback} aria-labelledby={`${id}-feedback-title`}>
+        <Surface as="section" className={styles.feedback} aria-labelledby={`${id}-feedback-title`} data-motion="fade">
           <div className={styles.feedbackCopy}>
             <strong id={`${id}-feedback-title`}>{feedbackTitle}</strong>
             {feedbackNote}
@@ -159,7 +161,10 @@ export function ForecastDrawingTools({ feedbackTarget }: { feedbackTarget: HTMLE
               aria-keyshortcuts="Control+Y Control+Shift+Z Meta+Y Meta+Shift+Z" disabled={busy || !canRedo}
               onClick={() => { useForecastDrawingStore.getState().redo(); }} />
             <IconAction icon={X} size="sm" label={mode === "edit" ? "Cancel edit" : "Cancel drawing"} disabled={busy}
-              onClick={() => { useForecastDrawingStore.getState().cancel(); }} />
+              onClick={(event) => {
+                if (document.activeElement === event.currentTarget) anchor?.focus({ preventScroll: true });
+                useForecastDrawingStore.getState().cancel();
+              }} />
           </div> : null}
           {feedbackError}
         </Surface>
@@ -207,11 +212,12 @@ export function ForecastDrawingTools({ feedbackTarget }: { feedbackTarget: HTMLE
             <ClipboardPaste className="icon-sm" aria-hidden="true" />Use {copiedName} outline
           </Action> : null}
           {!active && outlineNotice !== null ? <p className={styles.note} aria-hidden="true">{outlineNotice}</p> : null}
-          {polygons.length > 0 ? <Action className={cx(styles.choice, styles.areaToggle)} aria-expanded={showAreas}
-            aria-controls={showAreas ? `${id}-areas` : undefined} onClick={() => { setOutlineNotice(null); setShowAreas(!showAreas); }}>
+          {polygons.length > 0 ? <Action className={cx(styles.choice, styles.areaToggle)} aria-expanded={areasOpen}
+            aria-controls={`${id}-areas`} onClick={() => { setOutlineNotice(null); setShowAreas(!areasOpen); }}>
             Areas <ChevronDown className="icon-sm" aria-hidden="true" />
           </Action> : null}
-          {showAreas && polygons.length > 0 ? <div className={styles.areaManager} id={`${id}-areas`}>
+          {polygons.length > 0 ? <div className={styles.areaManager} id={`${id}-areas`}
+            data-motion="disclosure" hidden={!areasOpen} inert={!areasOpen} aria-hidden={!areasOpen || undefined}>
             <section className={styles.areas} aria-labelledby={`${id}-authored`}>
               <h3 id={`${id}-authored`}>Authored areas</h3>
               <ul className={styles.areaList}>

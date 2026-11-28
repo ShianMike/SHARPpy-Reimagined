@@ -27,6 +27,7 @@ mod benchmark;
 mod fixtures;
 pub(crate) mod grefs;
 mod inventory;
+pub(crate) mod nssl_mpas;
 mod plan;
 pub(crate) mod refs;
 pub(crate) mod refs_zarr;
@@ -88,6 +89,17 @@ fn download_map_fields(
     should_cancel: Option<Py<PyAny>>,
     model: String,
 ) -> PyResult<Py<PyDict>> {
+    if crate::nssl_mpas_archive::is_model(&model) {
+        return nssl_mpas::download_nssl_mpas_map_fields(
+            py,
+            product,
+            run.extract()?,
+            hour,
+            timeout,
+            should_cancel,
+            &model,
+        );
+    }
     let plan::Plan {
         fields,
         identities,
@@ -161,14 +173,23 @@ fn download_map_fields(
                 .into_pyarray(py),
         )?;
     }
+    if product.getattr("key")?.extract::<String>()? == "hgt-anom-500" {
+        let run: time::OffsetDateTime = run.extract()?;
+        result.set_item(
+            "__valid_time",
+            (run + time::Duration::hours(i64::from(hour))).unix_timestamp(),
+        )?;
+    }
     Ok(result.unbind())
 }
 
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     grefs::register(module)?;
+    nssl_mpas::register(module)?;
     refs::register(module)?;
     refs_zarr::register(module)?;
     module.add_function(wrap_pyfunction!(download_map_fields, module)?)?;
+    module.add_function(wrap_pyfunction!(plan::map_field_trailing_window, module)?)?;
     module.add_function(wrap_pyfunction!(clear_model_field_cache, module)?)?;
     module.add_function(wrap_pyfunction!(model_field_cache_info, module)?)?;
     Ok(())

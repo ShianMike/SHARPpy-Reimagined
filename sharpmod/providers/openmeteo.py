@@ -364,17 +364,16 @@ _SEAMLESS_SUFFIX = "_seamless"
 
 def namespaced_key(api_model: str) -> str:
     """Return the SHARPpy key for a provider identifier."""
-    return "openmeteo-%s" % str(api_model or "").strip().lower().replace(
-        "_", "-")
+    import sharpmod_rs
+
+    return sharpmod_rs.openmeteo_namespaced_key(str(api_model or ""))
 
 
 def _api_model_for_key(model_key: str) -> str:
     """Return the provider identifier a namespaced SHARPpy key refers to."""
-    text = str(model_key or "").strip().lower()
-    prefix = "openmeteo-"
-    if text.startswith(prefix):
-        text = text[len(prefix):]
-    return text.replace("-", "_")
+    import sharpmod_rs
+
+    return sharpmod_rs.openmeteo_api_model_for_key(str(model_key or ""))
 
 
 def unsupported_models() -> dict[str, str]:
@@ -401,16 +400,18 @@ def is_selectable_api_model(api_model: str) -> bool:
     as by list, so a provider adding one later cannot become selectable through
     an omission here.
     """
-    text = str(api_model or "").strip().lower()
-    if not text or text in WITHHELD_API_MODELS:
-        return False
-    if text == "best_match" or text.endswith(_SEAMLESS_SUFFIX):
-        return False
-    if "ensemble" in text or "_member" in text:
-        return False
-    return any(
-        capability.api_model == text and not capability.withheld_reason
-        for capability in CAPABILITIES.values())
+    import sharpmod_rs
+
+    enabled = [
+        capability.api_model
+        for capability in CAPABILITIES.values()
+        if not capability.withheld_reason
+    ]
+    return sharpmod_rs.openmeteo_is_selectable_api_model(
+        str(api_model or ""),
+        enabled,
+        list(WITHHELD_API_MODELS),
+    )
 
 
 def available_capabilities() -> tuple[OpenMeteoCapability, ...]:
@@ -449,48 +450,49 @@ def hourly_variables(capability: OpenMeteoCapability) -> tuple[str, ...]:
     or per family would multiply a user's billable calls by twenty or more for
     no benefit.
     """
-    names: list[str] = []
-    for family in PRESSURE_FAMILIES:
-        for level in capability.pressure_levels:
-            names.append("%s_%dhPa" % (family, int(level)))
-    names.extend(SURFACE_VARIABLES)
-    return tuple(names)
+    import sharpmod_rs
+
+    return tuple(sharpmod_rs.openmeteo_hourly_variables(
+        [int(level) for level in capability.pressure_levels]
+    ))
 
 
 def normalise_longitude(lon: float) -> float:
     """Return ``lon`` on the -180..180 convention used across the adapters."""
-    return ((float(lon) + 180.0) % 360.0) - 180.0
+    import sharpmod_rs
+
+    return sharpmod_rs.openmeteo_normalise_longitude(float(lon))
 
 
 def point_in_domain(
         capability: OpenMeteoCapability, lat: float, lon: float) -> bool:
     """Report whether a point lies inside this model's domain."""
-    latitude = float(lat)
-    if not -90.0 <= latitude <= 90.0:
-        return False
-    lon0, lon1, lat0, lat1 = capability.domain_bounds
-    if not lat0 <= latitude <= lat1:
-        return False
-    longitude = normalise_longitude(lon)
-    if lon0 <= lon1:
-        return lon0 <= longitude <= lon1
-    # Wrapped box across the antimeridian.
-    return longitude >= lon0 or longitude <= lon1
+    import sharpmod_rs
+
+    return sharpmod_rs.openmeteo_point_in_domain(
+        tuple(float(v) for v in capability.domain_bounds),
+        float(lat),
+        float(lon),
+    )
 
 
 def _floor_cycle(when: datetime, cycles: tuple[int, ...]) -> datetime:
     """Return the most recent cycle at or before ``when``."""
-    ordered = sorted({int(cycle) for cycle in cycles})
-    if not ordered:
-        raise RetrievalError("model publishes no cycles")
+    import math
+    import sharpmod_rs
+
     stamp = when.astimezone(timezone.utc) if when.tzinfo \
         else when.replace(tzinfo=timezone.utc)
-    day = stamp.replace(minute=0, second=0, microsecond=0)
-    for cycle in reversed(ordered):
-        if cycle <= day.hour:
-            return day.replace(hour=cycle)
-    previous = day - timedelta(days=1)
-    return previous.replace(hour=ordered[-1])
+    epoch = int(math.floor(stamp.timestamp()))
+    try:
+        floored = sharpmod_rs.openmeteo_floor_cycle_epoch(
+            epoch, [int(cycle) for cycle in cycles]
+        )
+    except ValueError as exc:
+        if str(exc) == "model publishes no cycles":
+            raise RetrievalError(str(exc)) from None
+        raise
+    return datetime.fromtimestamp(floored, tz=timezone.utc)
 
 
 def latest_reference_time(
@@ -685,26 +687,18 @@ def _select_time_index(times, valid_time: datetime,
     would silently return a different hour whenever the provider changed its
     cadence, shifted a window, or trimmed a run.
     """
-    if not isinstance(times, (list, tuple)) or not times:
-        raise RetrievalError(
-            "Open-Meteo returned no time axis for %s run %s"
-            % (capability.label, run_time.strftime("%Y-%m-%d %H:%MZ")))
-    target = int(valid_time.timestamp())
-    matches = [index for index, stamp in enumerate(times)
-               if _as_epoch(stamp) == target]
-    if not matches:
-        raise RetrievalError(
-            "%s run %s does not contain %s. The run may not be ingested yet, "
-            "or that forecast hour may lie past its horizon."
-            % (capability.label,
-               run_time.strftime("%Y-%m-%d %H:%MZ"),
-               valid_time.strftime("%Y-%m-%d %H:%MZ")))
-    if len(matches) > 1:
-        raise RetrievalError(
-            "Open-Meteo returned %d values for %s; refusing an ambiguous "
-            "timestamp" % (len(matches),
-                           valid_time.strftime("%Y-%m-%d %H:%MZ")))
-    return matches[0]
+    import sharpmod_rs
+
+    try:
+        return sharpmod_rs.openmeteo_select_time_index(
+            times,
+            int(valid_time.timestamp()),
+            capability.label,
+            run_time.strftime("%Y-%m-%d %H:%MZ"),
+            valid_time.strftime("%Y-%m-%d %H:%MZ"),
+        )
+    except ValueError as exc:
+        raise RetrievalError(str(exc)) from None
 
 
 def _as_epoch(stamp) -> int | None:
@@ -762,37 +756,17 @@ def _derive_surface_height(
     must not have been filtered to levels above ground yet, so a bracketing
     interpolation is available for high terrain instead of a long extrapolation.
     """
-    import math
+    import sharpmod_rs
 
-    if len(pairs) < 2:
-        raise RetrievalError(
-            "Open-Meteo returned too few pressure levels to place the surface")
-
-    # Prefer the pair straddling the surface; fall back to the nearest edge pair
-    # and extrapolate, which is a short step when the ground sits just below the
-    # lowest isobar.
-    lower = pairs[0]
-    upper = pairs[1]
-    for first, second in zip(pairs, pairs[1:]):
-        if first[0] >= surface_pressure >= second[0]:
-            lower, upper = first, second
-            break
-    else:
-        if surface_pressure > pairs[0][0]:
-            lower, upper = pairs[0], pairs[1]
-        else:
-            lower, upper = pairs[-2], pairs[-1]
-
-    p_low, h_low = lower
-    p_high, h_high = upper
-    if p_low <= 0.0 or p_high <= 0.0 or p_low == p_high:
-        raise RetrievalError(
-            "Open-Meteo pressure levels are unusable for a surface height")
-    slope = (h_high - h_low) / (math.log(p_high) - math.log(p_low))
-    derived = h_low + slope * (math.log(surface_pressure) - math.log(p_low))
-    if not math.isfinite(derived):
-        raise RetrievalError("derived Open-Meteo surface height is not finite")
-    return derived
+    try:
+        return sharpmod_rs.openmeteo_derive_surface_height(
+            [(float(pressure), float(height)) for pressure, height in pairs],
+            float(surface_pressure),
+        )
+    except ValueError as exc:
+        if str(exc) == "math domain error":
+            raise
+        raise RetrievalError(str(exc)) from None
 
 
 def _provider_elevation(response: dict) -> float:
@@ -849,7 +823,9 @@ def weighted_units(variable_count: int) -> float:
     as a single unit would under-count a user's consumption by an order of
     magnitude and let a local budget sail past the real limit.
     """
-    return max(1.0, float(variable_count) / 10.0)
+    import sharpmod_rs
+
+    return sharpmod_rs.openmeteo_weighted_units(int(variable_count))
 
 
 # --------------------------------------------------------------------------- #

@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef, type ReactNode } from "react";
+import { Fragment, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { Surface } from "../../ui/Surface";
 import { IconAction } from "../../ui/Controls";
@@ -6,6 +6,7 @@ import { cx } from "../../lib/cx";
 import { convertUnit, displayReading, displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
 import { SPOTTER_MARKER_LABELS, spotterMarkerKind } from "../layers/SpotterLayer";
+import { useTooltipSize } from "./FieldTooltip";
 import { useHoverStore } from "./hoverStore";
 import styles from "./StationTooltip.module.css";
 
@@ -19,18 +20,8 @@ export function ReportTooltip(): ReactNode {
   const closeButton = useRef<HTMLButtonElement | null>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const anchor = pinned ?? report;
-
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (element === null || anchor === null) {
-      return;
-    }
-    const box = element.getBoundingClientRect();
-    element.style.setProperty("--tooltip-x", `${String(anchor.x)}px`);
-    element.style.setProperty("--tooltip-y", `${String(anchor.y)}px`);
-    element.style.setProperty("--tooltip-w", `${String(box.width)}px`);
-    element.style.setProperty("--tooltip-h", `${String(box.height)}px`);
-  });
+  const sizeKey = pinned === null ? report?.label ?? null : `pinned:${pinned.position.updatedAt}`;
+  useTooltipSize(ref, sizeKey);
 
   useLayoutEffect(() => {
     if (pinned === null || closeButton.current === null) return;
@@ -40,7 +31,7 @@ export function ReportTooltip(): ReactNode {
   }, [pinned]);
 
   const spotter = pinned?.position ?? report?.source?.position;
-  if (spotter !== undefined) {
+  if (anchor !== null && spotter !== undefined) {
     const kind = SPOTTER_MARKER_LABELS[spotterMarkerKind(spotter)];
     const title = spotter.displayName ?? kind;
     const motion = spotter.motion;
@@ -51,7 +42,9 @@ export function ReportTooltip(): ReactNode {
     };
     return <Surface ref={ref} elevation="popover" role={pinned === null ? "tooltip" : "dialog"} aria-label={pinned === null ? undefined : `Spotter details for ${title}`}
       className={cx(styles.tooltip, styles.report, styles.spotterCard, pinned === null ? undefined : styles.pinnedSpotterCard)}
+      data-motion={pinned === null ? undefined : "fade"}
       data-testid={pinned === null ? "report-tooltip" : "spotter-details"}
+      style={{ "--tooltip-x": `${String(anchor.x)}px`, "--tooltip-y": `${String(anchor.y)}px` } as CSSProperties}
       onKeyDown={(event) => {
         if (pinned !== null && event.key === "Escape") { event.stopPropagation(); close(); }
       }}>
@@ -116,7 +109,8 @@ export function ReportTooltip(): ReactNode {
     else if (name !== "Magnitude" || !report.label.includes(value)) facts.push({ name, value: name === "Magnitude" ? displayReading(value, units) : value });
   }
   return (
-    <Surface ref={ref} elevation="popover" role="tooltip" className={cx(styles.tooltip, styles.report)} data-testid="report-tooltip">
+    <Surface ref={ref} elevation="popover" role="tooltip" className={cx(styles.tooltip, styles.report)} data-testid="report-tooltip"
+      style={{ "--tooltip-x": `${String(report.x)}px`, "--tooltip-y": `${String(report.y)}px` } as CSSProperties}>
       <header className={styles.reportHeading}>
         <p className={styles.reportTitle}>{title}</p>
         {location === "" ? null : <p className={styles.meta}>{location}</p>}

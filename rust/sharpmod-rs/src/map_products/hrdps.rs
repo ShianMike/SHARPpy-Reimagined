@@ -3,6 +3,7 @@
 use super::{
     derive_refs_member_ehi_0_3km, derive_refs_member_lcl,
     palettes::{lcl_stops, LCL_TICKS},
+    pressure_product, ptype,
 };
 use numpy::{
     ndarray::{ArrayD, IxDyn},
@@ -15,7 +16,6 @@ use pyo3::{
 };
 
 const MS_TO_KT: f32 = 1.943_844_5;
-const KG_M2_S_TO_IN_H: f32 = 3600.0 / 25.4;
 const SWE_MM_TO_SNOW_10_1_IN: f32 = 10.0 / 25.4;
 
 fn extract_f32_grid(fields: &Bound<'_, PyDict>, name: &str) -> PyResult<(Vec<usize>, Vec<f32>)> {
@@ -29,30 +29,19 @@ fn extract_f32_grid(fields: &Bound<'_, PyDict>, name: &str) -> PyResult<(Vec<usi
     ))
 }
 
-/// Encode HRDPS instantaneous precipitation rate (in/h) with ECCC PTYPE_Sfc offsets:
-/// Rain (+0), Snow (+10), Freezing Rain (+20), Mix (+30).
-fn encode_hrdps_prate_ptype(prate: &[f32], ptype: &[f32]) -> Vec<f32> {
-    prate
+/// Encode HRDPS's rolling 6-h accumulation as an average liquid-equivalent
+/// rate (in/h) with the ECCC PTYPE_Sfc offsets: Rain (+0), Snow (+10),
+/// Freezing Rain (+20), Sleet (+30).
+fn encode_hrdps_prate_ptype(accum_mm: &[f32], ptype: &[f32]) -> Vec<f32> {
+    accum_mm
         .iter()
         .zip(ptype)
-        .map(|(&rate, &code)| {
-            if !rate.is_finite() || !code.is_finite() {
+        .map(|(&accum, &code)| {
+            if !accum.is_finite() || !code.is_finite() {
                 return f32::NAN;
             }
-            let rate_in_h = ((rate * KG_M2_S_TO_IN_H) * 1000.0).round() / 1000.0;
-            if rate_in_h < 0.01 {
-                return f32::NAN;
-            }
-            // ECCC PTYPE_Sfc codes: 1=Rain, 2=Rain/Snow, 3=Freezing Rain, 4=Ice Pellets,
-            // 5=Snow, 6=None, 7=Drizzle, 8=Freezing Drizzle, 9=Freezing Rain/Ice Pellets.
-            let offset = match code.round() as i32 {
-                1 | 7 => 0.0f32,
-                5 => 10.0f32,
-                3 | 8 => 20.0f32,
-                2 | 4 | 9 => 30.0f32,
-                _ => return f32::NAN,
-            };
-            offset + rate_in_h.min(9.99) + 0.0004
+            let rate_in_h = f64::from(accum.max(0.0)) / (6.0 * 25.4);
+            ptype::encode_ptype_rate(rate_in_h, ptype::eccc_ptype_offset(f64::from(code))) as f32
         })
         .collect()
 }
@@ -90,14 +79,14 @@ fn derive_hrdps_prate_ptype<'py>(
     py: Python<'py>,
     fields: &Bound<'py, PyDict>,
 ) -> PyResult<Bound<'py, PyArrayDyn<f32>>> {
-    let (shape, prate) = extract_f32_grid(fields, "prate")?;
+    let (shape, accum) = extract_f32_grid(fields, "qpf6h")?;
     let (ptype_shape, ptype) = extract_f32_grid(fields, "ptype")?;
     if ptype_shape != shape {
         return Err(PyValueError::new_err(
-            "HRDPS precipitation rate and type grids must have equal dimensions",
+            "HRDPS accumulation and type grids must have equal dimensions",
         ));
     }
-    let values = py.detach(|| encode_hrdps_prate_ptype(&prate, &ptype));
+    let values = py.detach(|| encode_hrdps_prate_ptype(&accum, &ptype));
     Ok(ArrayD::from_shape_vec(IxDyn(&shape), values)
         .expect("preserved HRDPS precipitation grid dimensions")
         .into_pyarray(py))
@@ -160,37 +149,46 @@ pub(crate) fn catalogue(py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
                 replace.call((template,), Some(&updates))?.unbind()
             }
             "prate-ptype" => {
-                let ptype_palette = {
-                    let palette_updates = PyDict::new(py);
-                    palette_updates.set_item("units", "in/h")?;
-                    replace.call(
-                        (source.getattr("PALETTE_QPF_PTYPE")?,),
-                        Some(&palette_updates),
-                    )?
-                };
+                let ptype_palette = ptype::rate_palette(&source, "in/h", ptype::PTYPE_LABELS)?;
+                // APCP-Accum6h is the average rate source; PTYPE_Sfc picks the band.
                 let ptype_field = field_spec.call1(("ptype", "sfc", "PTYPE", "surface"))?;
+                let qpf6h = field_spec.call1(("qpf6h", "sfc", "APCP-Accum6h", "surface"))?;
+                let mslp = field_spec.call1(("mslp", "sfc", "PRMSL", "mean sea level"))?;
+                let hgt500 = field_spec.call1(("hgt500", "prs", "HGT", "500 mb"))?;
+                let hgt1000 = field_spec.call1(("hgt1000", "prs", "HGT", "1000 mb"))?;
                 let kwargs = PyDict::new(py);
                 kwargs.set_item("key", "prate-ptype")?;
-                kwargs.set_item("label", "Precipitation Type, Rate")?;
-                kwargs.set_item("chip", "P-Type & Rate")?;
+                kwargs.set_item(
+                    "label",
+                    "Precipitation Type, 6-h Avg Rate, 1000-500 mb Thickness",
+                )?;
+                kwargs.set_item("chip", "P-Type / 6h Rate + Thick")?;
                 kwargs.set_item("category", "Precipitation")?;
-                kwargs.set_item("fields", (source.getattr("F_PRATE")?, ptype_field))?;
+                kwargs.set_item("fields", (qpf6h, ptype_field))?;
                 kwargs.set_item("derive", wrap_pyfunction!(derive_hrdps_prate_ptype, py)?)?;
                 kwargs.set_item("palette", ptype_palette)?;
-                kwargs.set_item("max_hours", 1u32)?;
+                kwargs.set_item("max_hours", 6u32)?;
+                kwargs.set_item("contour", ptype::sea_level_contour(&source, 2.0)?)?;
+                kwargs.set_item("contour_fields", (mslp, hgt500, hgt1000))?;
+                kwargs.set_item("thickness_interval", 6.0)?;
                 kwargs.set_item(
                     "description",
-                    "Instantaneous liquid-equivalent precipitation rate in inches per hour, shaded by HRDPS surface precipitation type (rain, snow, freezing rain, or mix).",
+                    "Average liquid-equivalent precipitation rate in inches per hour over the six hours ending at the selected forecast time, shaded by HRDPS's surface precipitation type (rain, snow, freezing rain, or sleet), with 2 hPa mean sea-level isobars and 1000-500 mb thickness lines.",
                 )?;
                 kwargs.set_item(
                     "caveat",
-                    "Combines HRDPS PRATE_Sfc and PTYPE_Sfc; only cells with at least 0.01 in/h are shaded. Available from F001.",
+                    "Combines HRDPS's rolling APCP-Accum6h_Sfc accumulation with PTYPE_Sfc (drizzle counts as rain, freezing drizzle as freezing rain, and mixed or ice-pellet phases as sleet); PRMSL_MSL supplies the isobars and HGT at 500 and 1000 mb the thickness. Available from F006.",
                 )?;
                 source
                     .getattr("HrrrProduct")?
                     .call((), Some(&kwargs))?
                     .unbind()
             }
+            "mslp" => pressure_product(
+                py,
+                "PRMSL",
+                Some(shared.get_item("mslp")?.getattr("palette")?.unbind()),
+            )?,
             "qpf-6h" | "qpf-12h" | "qpf-24h" => {
                 let (field_name, label, hours) = match key {
                     "qpf-6h" => ("qpf6h", "6-h QPF", 6u32),
@@ -377,21 +375,21 @@ mod tests {
 
     #[test]
     fn encodes_eccc_ptype_codes_and_rate_thresholds() {
-        // 0.10 in/h = 0.10 * 25.4 / 3600 kg/m^2/s
-        let r01 = 0.10 / KG_M2_S_TO_IN_H;
-        let r_trace = 0.004 / KG_M2_S_TO_IN_H;
+        // 0.10 in/h averaged over 6 h is 0.10 * 6 * 25.4 mm of accumulation.
+        let a01 = 0.10 * 6.0 * 25.4;
+        let a_trace = 0.004 * 6.0 * 25.4;
         let out = encode_hrdps_prate_ptype(
             &[
-                r01,
-                r01,
-                r01,
-                r01,
-                r01,
-                r01,
-                r01,
-                r01,
-                r01,
-                r_trace,
+                a01,
+                a01,
+                a01,
+                a01,
+                a01,
+                a01,
+                a01,
+                a01,
+                a01,
+                a_trace,
                 f32::NAN,
             ],
             &[1.0, 7.0, 5.0, 3.0, 8.0, 2.0, 4.0, 9.0, 6.0, 1.0, 1.0],

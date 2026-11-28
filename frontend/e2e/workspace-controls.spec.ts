@@ -166,13 +166,13 @@ test("panel titles open their parameter picker and selected categories stay on o
   }
   await categories.getByRole("button", { name: /^All/u }).click();
   for (const [label, unit] of [
-    ["Updraft Helicity: 0-3 km AGL (1 h max)", "m²/s²"],
-    ["1-hr Maximum Updraft Helicity: 2-5 km AGL", "m²/s²"],
-    ["3-hr Maximum Updraft Helicity: 2-5 km AGL", "m²/s²"],
+    ["Updraft Helicity: 0–3 km AGL (1 h Max)", "m²/s²"],
+    ["Updraft Helicity: 2–5 km AGL (1 h Max)", "m²/s²"],
+    ["Updraft Helicity: 2–5 km AGL (3 h Max)", "m²/s²"],
     ["Significant Tornado Parameter", "Index"],
-    ["Effective Storm Relative Helicity", "m²/s²"],
-    ["Energy Helicity Index: 0-1 km AGL", "Index"],
-    ["Energy Helicity Index: 0-3 km AGL", "Index"],
+    ["Effective Storm-Relative Helicity", "m²/s²"],
+    ["Energy Helicity Index: 0–1 km AGL", "Index"],
+    ["Energy Helicity Index: 0–3 km AGL", "Index"],
   ] as const) {
     const product = results.getByRole("button", { name: `${label}, ${unit}`, exact: true });
     await product.scrollIntoViewIfNeeded();

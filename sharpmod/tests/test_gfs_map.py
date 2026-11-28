@@ -16,9 +16,11 @@ REQUEST = {"model": "gfs", "run_time": "2026-10-27T00:00:00Z", "forecast_hour": 
 
 def test_gfs_reuses_ecmwf_parameter_choices_with_its_own_native_ingredients():
     products = hp.available_products("gfs")
-    assert {p.key for p in products} == {p.key for p in ec.products()} | {"mslp", "refc", "refd-1km", "sbcin"}
-    assert len(products) == 24
-    assert all(product is hp.PRODUCTS[product.key] for product in products if product.key in hp.PRODUCTS and product.key != "mslp")
+    assert {p.key for p in products} == {p.key for p in ec.products()} | {
+        "mslp", "refc", "refd-1km", "sbcin", "prate-ptype", "hgt-anom-500", "tmp-2m-wind", "dpt-2m-wind"}
+    assert len(products) == 28
+    assert all(product.fields == hp.PRODUCTS[product.key].fields
+               for product in products if product.key in hp.PRODUCTS and product.key != "mslp")
     catalog = fields.catalog({"model": "gfs"})
     assert catalog["field_model"] == "gfs" and catalog["default_product"] == "tmp-2m"
     assert catalog["field_bounds"] == fields._bounds(ec.BOUNDS)
@@ -49,12 +51,13 @@ def test_selected_run_inventory_hides_missing_fields_and_f000_precipitation(monk
 
     monkeypatch.setattr(hf, "fetch_inventory", inventory)
     catalog = fields.catalog(REQUEST)
-    assert len(catalog["products"]) == 21
+    assert len(catalog["products"]) == 25
     assert not {p["key"] for p in catalog["products"]} & {"mucape", "snod", "refc"}
     assert set(calls) == {"https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.20261027/00/atmos/gfs.t00z.pgrb2.0p25.f006"}
     missing.clear()
-    assert len(fields.catalog({**REQUEST, "forecast_hour": 0})["products"]) == 23
-    assert len(fields.catalog({**REQUEST, "forecast_hour": 384})["products"]) == 24
+    analysis_keys = {p["key"] for p in fields.catalog({**REQUEST, "forecast_hour": 0})["products"]}
+    assert "tmp-2m" in analysis_keys and not analysis_keys & {"apcp", "prate-ptype"}
+    assert len(fields.catalog({**REQUEST, "forecast_hour": 384})["products"]) == 28
     monkeypatch.setattr(hf, "fetch_inventory", lambda _url: ())
     with pytest.raises(BridgeError, match="No supported GFS"):
         fields.catalog(REQUEST)

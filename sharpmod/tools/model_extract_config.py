@@ -264,15 +264,10 @@ def forecast_hours(model, cycle_hour=None):
         # The provider adapter owns its own cadence and cut-off rules, so ask it
         # rather than restating them here.
         return openmeteo.get_capability(cfg.key).hours_for_cycle(cycle_hour)
-    if cfg.key == "hrrr" and cycle_hour is not None \
-            and int(cycle_hour) not in (0, 6, 12, 18):
-        return tuple(v for v in values if int(v) <= 18)
-    if cfg.key in {"ecmwf-ifs", "ecmwf-ifs-9km"} and cycle_hour is not None \
-            and int(cycle_hour) in _api.IFS_SHORT_CUTOFF_CYCLES:
-        return tuple(
-            v for v in values if int(v) <= _api.IFS_SHORT_CUTOFF_MAX_FXX
-        )
-    return values
+    import sharpmod_rs
+    return tuple(sharpmod_rs.model_filter_forecast_hours(
+        cfg.key, [int(v) for v in values],
+        None if cycle_hour is None else int(cycle_hour)))
 
 
 def provider_capability(model, cycle_hour=None):
@@ -377,55 +372,37 @@ def domain_intersects_bounds(model, bounds):
 
     ``bounds`` is ``(lon0, lon1, lat0, lat1)`` in degrees.
     """
+    import sharpmod_rs
+
     cfg = _api._coerce_config(model)
     if cfg.domain_outline:
-        blo0, blo1, bla0, bla1 = bounds
-        lat_mid = (float(bla0) + float(bla1)) / 2.0
-        samples = []
-        for left, right in _api._longitude_segments(blo0, blo1):
-            lon_mid = (left + right) / 2.0
-            samples.extend(
-                (lat, lon)
-                for lat in (bla0, lat_mid, bla1)
-                for lon in (left, lon_mid, right)
-            )
-        if any(_api.point_in_domain(cfg, lat, lon) for lat, lon in samples):
+        if any(
+            _api.point_in_domain(cfg, lat, lon)
+            for lat, lon in sharpmod_rs.model_outline_sample_points(bounds)
+        ):
             return True
-        return any(
-            bla0 <= lat <= bla1
-            and any(left <= lon <= right for left, right in
-                    _api._longitude_segments(blo0, blo1))
-            for lon, lat in cfg.domain_outline
+        return sharpmod_rs.model_outline_vertex_in_bounds(
+            cfg.domain_outline, bounds
         )
-    lon0, lon1, lat0, lat1 = cfg.domain_bounds
-    blo0, blo1, bla0, bla1 = bounds
-    if lat1 < bla0 or lat0 > bla1:
-        return False
-    return any(
-        not (right < other_left or left > other_right)
-        for left, right in _api._longitude_segments(lon0, lon1)
-        for other_left, other_right in _api._longitude_segments(blo0, blo1)
+    return sharpmod_rs.model_domain_rect_intersects(
+        cfg.domain_bounds, bounds
     )
 
 
 def domain_contains_bounds(model, bounds):
     """Return whether a model domain fully contains a map extent."""
+    import sharpmod_rs
+
     cfg = _api._coerce_config(model)
     if cfg.domain_outline:
         blo0, blo1, bla0, bla1 = bounds
         return all(
             _api.point_in_domain(cfg, lat, lon)
-            for left, right in _api._longitude_segments(blo0, blo1)
+            for left, right in sharpmod_rs.model_longitude_segments(
+                float(blo0), float(blo1))
             for lon in (left, right)
             for lat in (bla0, bla1)
         )
-    lon0, lon1, lat0, lat1 = cfg.domain_bounds
-    blo0, blo1, bla0, bla1 = bounds
-    if lat0 > bla0 or lat1 < bla1:
-        return False
-    model_segments = _api._longitude_segments(lon0, lon1)
-    return all(
-        any(left <= other_left and right >= other_right
-            for left, right in model_segments)
-        for other_left, other_right in _api._longitude_segments(blo0, blo1)
+    return sharpmod_rs.model_domain_rect_contains(
+        cfg.domain_bounds, bounds
     )

@@ -20,8 +20,8 @@ REQUEST = {"run_time": "2026-10-26T12:00:00Z", "forecast_hour": 12}
 def test_supported_products_and_native_forecast_steps(model):
     catalog = fields.catalog({"model": model})
     keys = {product["key"] for product in catalog["products"]}
-    assert len(keys) == 21
-    assert {"tmp-2m", "rh-2m", "snod", "mucape", "prate-frzr", "hgt-wind-200"} <= keys
+    assert len(keys) == 25
+    assert {"tmp-2m", "tmp-2m-wind", "dpt-2m-wind", "rh-2m", "snod", "mucape", "prate-frzr", "hgt-wind-200", "hgt-anom-500"} <= keys
     assert not keys & {"refc", "ltng", "sbcape", "mlcape", "stp", "shear-0-1km", "uh-0-3km", "uh-0-3km-run", "uh-2-5km-1h", "uh-2-5km-3h", "uh-2-5km-run"}
     assert catalog["default_product"] == "tmp-2m"
     assert [catalog["max_forecast_hours"][h] for h in (0, 6, 12, 18)] == [360, 144, 360, 144]
@@ -49,7 +49,7 @@ def test_eccodes_inventory_preserves_levels_ranges_and_accumulations():
 @pytest.mark.parametrize("model", hp.ECMWF_MODELS)
 def test_catalog_hides_missing_ingredients_for_the_exact_run_and_hour(monkeypatch, tmp_path, model):
     monkeypatch.setenv("SHARPMOD_HRRR_FIELD_CACHE", str(tmp_path))
-    specs = {spec for product in ec.products() for spec in product.all_fields}
+    specs = {spec for product in hp.available_products(model) for spec in product.all_fields}
     rows = tuple(hf.InventoryRow(i, i * 100, 100, spec.variable, spec.level,
                                 spec.forecast.replace("*", "12")) for i, spec in enumerate(specs))
     missing = {"ptype", "rsn", "CAPE"}
@@ -62,8 +62,8 @@ def test_catalog_hides_missing_ingredients_for_the_exact_run_and_hour(monkeypatc
     monkeypatch.setattr(hf, "fetch_inventory", inventory)
     catalog = fields.catalog({**REQUEST, "model": model})
     keys = {product["key"] for product in catalog["products"]}
-    assert len(keys) == 15
-    assert not keys & {"mucape", "snod", "prate-frzr", "prate-sleet", "prate-snow"}
+    assert len(keys) == 19
+    assert not keys & {"mucape", "snod", "prate-frzr", "prate-sleet", "prate-snow", "prate-ptype"}
     assert all("20261026120000-12h" in url for url in urls)
     assert len(set(urls)) == (2 if model == "ecmwf-ifs-9km" else 1)
     if model == "ecmwf-ifs-9km":
@@ -74,7 +74,7 @@ def test_catalog_hides_missing_ingredients_for_the_exact_run_and_hour(monkeypatc
             return inventory(url)
         monkeypatch.setattr(hf, "fetch_inventory", partial_inventory)
         partial = fields.catalog({**REQUEST, "model": model})
-        assert len(partial["products"]) == 14
+        assert len(partial["products"]) == 17
         assert not any(product["category"] == "Height and Wind" for product in partial["products"])
     monkeypatch.setattr(hf, "fetch_inventory", lambda _url: ())
     with pytest.raises(BridgeError, match="No supported ECMWF"):

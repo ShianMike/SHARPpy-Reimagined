@@ -46,7 +46,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -67,8 +67,6 @@ OVERLAY_KEY = "spc_outlook"
 
 OVERLAY_TITLE = "SPC convective outlook"
 ATTRIBUTION = "NOAA/NWS Storm Prediction Center"
-
-_BASE = "https://www.spc.noaa.gov/products/outlook"
 
 #: The categorical GeoJSON archive starts here; earlier dates 404 everywhere.
 ARCHIVE_FIRST_YEAR = 2020
@@ -157,20 +155,16 @@ def cig_level(label: Any) -> int:
     ungraded one, and reporting it as level 1 would assert an intensity SPC
     never published for it.
     """
-    text = str(label or "").strip().upper()
-    if not text.startswith(CIG_LABEL_PREFIX):
-        return 0
-    try:
-        level = int(text[len(CIG_LABEL_PREFIX):])
-    except ValueError:
-        return 0
-    return level if 1 <= level <= CIG_MAX_LEVEL else 0
+    import sharpmod_rs
+
+    return sharpmod_rs.spc_cig_level(str(label or ""))
 
 
 def is_qualifier_label(label: Any) -> bool:
     """Report whether ``label`` names an area qualifying a band beneath it."""
-    return (str(label or "").strip().upper() == SIGNIFICANT_LABEL
-            or cig_level(label) > 0)
+    import sharpmod_rs
+
+    return sharpmod_rs.spc_is_qualifier_label(str(label or ""))
 
 
 @dataclass(frozen=True)
@@ -245,20 +239,6 @@ _PRODUCT_PALETTES: dict[str, dict[str, tuple[str, str]]] = {
 _PRODUCT_PALETTES["hail"] = _PRODUCT_PALETTES["wind"]
 _PRODUCT_PALETTES["prob"] = _PRODUCT_PALETTES["hail"]
 
-#: Issuance clock times per outlook day. Order here is irrelevant: candidates
-#: are sorted chronologically at resolution time, because Day 1's 01Z update is
-#: filed under the following date and is therefore the *latest* issuance for its
-#: convective day despite having the smallest clock value.
-#: Superseded early-era times are included so archived cases still resolve.
-_ISSUANCES: dict[int, tuple[tuple[int, int], ...]] = {
-    1: ((20, 0), (16, 30), (13, 0), (12, 0), (1, 0)),
-    2: ((17, 30), (6, 0), (7, 0)),
-    3: ((19, 30), (7, 30), (8, 30)),
-}
-
-#: Day 1's 0100Z update is filed under the following calendar date.
-_NEXT_DAY_ISSUANCE_HOURS = {1: {1}}
-
 
 class OutlookError(RuntimeError):
     """Raised when an outlook could not be retrieved or decoded."""
@@ -267,6 +247,16 @@ class OutlookError(RuntimeError):
 # --------------------------------------------------------------------------- #
 # time resolution
 # --------------------------------------------------------------------------- #
+def _utc_epoch(when: datetime) -> int:
+    """Whole UTC epoch seconds for a tz-aware ``when``.
+
+    ``floor`` keeps a sub-second instant in the second it occupies, so the
+    native 12Z grid arithmetic sees exactly the calendar Python's own
+    datetime comparisons would.
+    """
+    return math.floor(when.astimezone(timezone.utc).timestamp())
+
+
 def convective_day_start(when: datetime) -> datetime:
     """Return the 12Z boundary at or before ``when``.
 
@@ -276,12 +266,11 @@ def convective_day_start(when: datetime) -> datetime:
     """
     if when.tzinfo is None:
         raise ValueError("convective_day_start requires a tz-aware datetime")
-    base = when.astimezone(timezone.utc)
-    start = base.replace(
-        hour=CONVECTIVE_DAY_START_HOUR, minute=0, second=0, microsecond=0)
-    if base < start:
-        start -= timedelta(days=1)
-    return start
+    import sharpmod_rs
+
+    return datetime.fromtimestamp(
+        sharpmod_rs.spc_convective_day_start_epoch(_utc_epoch(when)),
+        tz=timezone.utc)
 
 
 def outlook_day_offset(valid_time: datetime, now: datetime) -> int:
@@ -291,8 +280,12 @@ def outlook_day_offset(valid_time: datetime, now: datetime) -> int:
     Negative values are past days, for which the Day 1 archive is the best
     available record.
     """
-    return (convective_day_start(valid_time)
-            - convective_day_start(now)).days
+    if valid_time.tzinfo is None or now.tzinfo is None:
+        raise ValueError("convective_day_start requires a tz-aware datetime")
+    import sharpmod_rs
+
+    return sharpmod_rs.spc_outlook_day_offset(
+        _utc_epoch(valid_time), _utc_epoch(now))
 
 
 @dataclass(frozen=True)
@@ -304,17 +297,6 @@ class OutlookRequest:
     issued: datetime | None
     label: str
     live: bool = False
-
-
-def _archive_url(day: int, issued: datetime, product: str) -> str:
-    return (
-        f"{_BASE}/archive/{issued:%Y}/day{day}otlk_"
-        f"{issued:%Y%m%d}_{issued:%H%M}_{product}.nolyr.geojson"
-    )
-
-
-def _live_url(day: int, product: str) -> str:
-    return f"{_BASE}/day{day}otlk_{product}.nolyr.geojson"
 
 
 def resolve_product(product: str | None) -> OutlookProduct:
@@ -351,12 +333,9 @@ def format_product_days(spec: OutlookProduct) -> str:
     Single-day products are common enough to matter: the Day 3 total-severe
     probability would otherwise be described as spanning "Days 3-3".
     """
-    days = spec.days
-    if not days:
-        return ""
-    if len(days) == 1:
-        return f"Day {days[0]}"
-    return f"Days {days[0]}\u2013{days[-1]}"
+    import sharpmod_rs
+
+    return sharpmod_rs.spc_format_product_days(list(spec.days))
 
 
 def covers_location(lat: Any, lon: Any) -> bool:
@@ -369,31 +348,15 @@ def covers_location(lat: Any, lon: Any) -> bool:
     """
     try:
         latitude = float(lat)
+    except (TypeError, ValueError):
+        latitude = None
+    try:
         longitude = float(lon)
     except (TypeError, ValueError):
-        return True
-    if not math.isfinite(latitude) or not math.isfinite(longitude):
-        return True
-    lon0, lon1, lat0, lat1 = COVERAGE_BOUNDS
-    longitude = ((longitude + 180.0) % 360.0) - 180.0
-    return lon0 <= longitude <= lon1 and lat0 <= latitude <= lat1
+        longitude = None
+    import sharpmod_rs
 
-
-def _issuances_for(day: int, day_start: datetime) -> list[datetime]:
-    """Return every issuance datetime for ``day`` covering ``day_start``.
-
-    ``day_start`` is the 12Z start of the convective day being described. A
-    Day *N* outlook for that window is issued ``N-1`` days earlier.
-    """
-    base = day_start - timedelta(days=day - 1)
-    next_day_hours = _NEXT_DAY_ISSUANCE_HOURS.get(day, set())
-    issued: list[datetime] = []
-    for hour, minute in _ISSUANCES[day]:
-        stamp = base.replace(hour=hour, minute=minute)
-        if hour in next_day_hours:
-            stamp += timedelta(days=1)
-        issued.append(stamp)
-    return issued
+    return sharpmod_rs.spc_covers_location(latitude, longitude)
 
 
 def candidates_for(
@@ -418,53 +381,23 @@ def candidates_for(
         now = datetime.now(timezone.utc)
     if valid_time.tzinfo is None:
         raise ValueError("candidates_for requires a tz-aware valid_time")
+    if now.tzinfo is None:
+        raise ValueError("convective_day_start requires a tz-aware datetime")
+    import sharpmod_rs
 
-    day_start = convective_day_start(valid_time)
-    if day_start.year < ARCHIVE_FIRST_YEAR:
-        return ()
-
-    offset = outlook_day_offset(valid_time, now)
-    spec = resolve_product(product)
-    requests: list[OutlookRequest] = []
-
-    for day in SUPPORTED_DAYS:
-        if day not in spec.days:
-            continue
-        # Morning outlooks roll forward before 12Z; their payload windows,
-        # rather than the clock alone, decide which convective day they cover.
-        if offset == day - 1 or (offset == day and now.astimezone(timezone.utc).hour < 12):
-            requests.append(OutlookRequest(
-                url=_live_url(day, spec.key),
-                day=day,
-                issued=None,
-                label=f"Day {day} (current)",
-                live=True,
-            ))
-        issuances = [
-            issued for issued in _issuances_for(day, day_start)
-            if issued <= now and issued.year >= ARCHIVE_FIRST_YEAR
-        ]
-        # The outlook in force at a given hour is the newest one issued *before*
-        # that hour, so try those first, newest first. Issuances made after the
-        # target still follow as a fallback, since their validity window can
-        # extend over it -- but preferring them would answer a 06Z sounding with
-        # the previous evening's 20Z product instead of the 01Z update.
-        issuances.sort(reverse=True)
-        ordered = ([issued for issued in issuances if issued <= valid_time]
-                   + [issued for issued in issuances if issued > valid_time])
-        for issued in ordered:
-            requests.append(OutlookRequest(
-                url=_archive_url(day, issued, spec.key),
-                day=day,
-                issued=issued,
-                # "issuance" rather than a bare time: every issuance of a
-                # convective day shares one expiry, so a bare "2000Z" next to a
-                # validity window reads as a valid time and makes a correct
-                # answer look like the wrong day.
-                label=f"Day {day} \u00b7 {issued:%H%M}Z issuance",
-            ))
-
-    return tuple(requests[:MAX_CANDIDATES])
+    rows = sharpmod_rs.spc_candidates_for(
+        _utc_epoch(valid_time), _utc_epoch(now), product)
+    return tuple(
+        OutlookRequest(
+            url=url,
+            day=day,
+            issued=(datetime.fromtimestamp(issued, tz=timezone.utc)
+                    if issued is not None else None),
+            label=label,
+            live=live,
+        )
+        for url, day, issued, label, live in rows
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -502,17 +435,13 @@ def resolution_signature(
 
 def _parse_stamp(value: Any) -> datetime | None:
     """Decode an SPC ``YYYYMMDDHHMM`` stamp into tz-aware UTC."""
-    if not isinstance(value, str) or len(value) != 12 or not value.isdigit():
+    if not isinstance(value, str):
         return None
-    try:
-        return datetime.strptime(value, "%Y%m%d%H%M").replace(
-            tzinfo=timezone.utc)
-    except ValueError:
-        return None
+    import sharpmod_rs
 
-
-#: Ranks the hatched significant-severe area above every probability band.
-_SIGNIFICANT_RANK = 10_000
+    epoch = sharpmod_rs.spc_parse_stamp_epoch(value)
+    return (datetime.fromtimestamp(epoch, tz=timezone.utc)
+            if epoch is not None else None)
 
 
 def _feature_style(
@@ -528,38 +457,9 @@ def _feature_style(
     ``DN`` would collapse distinct areas onto one level, because SPC reuses the
     field -- the tornado 2% band and CIG1 are both ``DN=2``.
     """
-    palette = _PRODUCT_PALETTES.get(product, {})
-    level = cig_level(label)
-    if level or str(label or "").strip().upper() == SIGNIFICANT_LABEL:
-        stroke, fill = palette.get(
-            SIGNIFICANT_LABEL, ("#000000", "#888888"))
-        name = (f"Conditional Intensity Group {level}" if level
-                else "Significant severe")
-        # Above every probability band so the qualifier paints on top, and
-        # ordered among themselves so the higher group wins at a point both
-        # cover and reads on top where their boundaries touch.
-        return name, _SIGNIFICANT_RANK + level, stroke, fill, True, level
+    import sharpmod_rs
 
-    if product == "cat":
-        category = CATEGORIES.get(dn) if dn is not None else None
-        if category is not None:
-            return (category.name, category.rank,
-                    category.stroke, category.fill, False, 0)
-        # An unrecognised category sorts above every known one, so a new
-        # severity level is never hidden beneath the areas it supersedes.
-        return label or "Unknown", len(CATEGORIES) + (dn or 0), \
-            "#FFFFFF", "#FFFFFF", False, 0
-
-    stroke, fill = palette.get(label, ("#FFFFFF", "#FFFFFF"))
-    try:
-        rank = int(round(float(label) * 1000))
-    except (TypeError, ValueError):
-        rank = dn or 0
-    try:
-        name = f"{float(label) * 100:g}% probability"
-    except (TypeError, ValueError):
-        name = label
-    return name, rank, stroke, fill, False, 0
+    return sharpmod_rs.spc_feature_style(product, dn, label)
 
 
 def _display_label(product: str, raw: str) -> str:
@@ -569,25 +469,17 @@ def _display_label(product: str, raw: str) -> str:
     the raw form reads as an identifier rather than a quantity, and the swatch
     has no room for the longer description.
     """
-    if product == "cat" or is_qualifier_label(raw):
-        return raw
-    try:
-        return f"{float(raw) * 100:g}%"
-    except (TypeError, ValueError):
-        return raw
+    import sharpmod_rs
+
+    return sharpmod_rs.spc_display_label(product, raw)
 
 
 def _colour(value: Any, fallback: str) -> str:
     """Return a ``#rrggbb`` colour from the payload, or ``fallback``."""
-    if isinstance(value, str):
-        text = value.strip()
-        if len(text) == 7 and text[0] == "#":
-            try:
-                int(text[1:], 16)
-            except ValueError:
-                return fallback
-            return text
-    return fallback
+    import sharpmod_rs
+
+    return sharpmod_rs.spc_validate_colour(
+        value if isinstance(value, str) else None, fallback)
 
 
 def _layer_from_native(payload: dict[str, Any]) -> OverlayLayer:

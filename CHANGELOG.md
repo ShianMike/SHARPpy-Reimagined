@@ -7,6 +7,195 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v3.11.0] - 2026-11-28
+
+### Added
+
+- Add archive-backed CONUS maps for NSSL MPAS-HTPO (F000–F048) and NSSL
+  MPAS-RN (F000–F084). The forecast picker offers these models when NOAA has
+  a downloadable run. Maps share the HRRR definitions for fields the NSSL
+  grids supply, including 1 km reflectivity with precipitation type,
+  pressure and thickness contours, and 2 m surface fields with 10 m wind
+  barbs from F001. Rust reads the requested forecast hour by TAR byte
+  range and shares its decompressed grid across parameter changes.
+- Add `Precipitation Type, Rate, 1000–500 mb Thickness` (`prate-ptype`) for GFS
+  (`gfs`) and ECMWF IFS (`openmeteo-ecmwf-ifs025`, `ecmwf-ifs-9km`) on the
+  4×17 `Rain`/`Snow`/`Frzr`/`Sleet` rate scale (`in/h`, ticks `0.05`, `0.1`,
+  `0.2`, `0.5`) with 2 hPa MSLP isobars, `H`/`L` pressure centers, and dashed
+  6 dam 1000–500 mb thickness contours (blue `<= 540` dam, red `> 540` dam).
+- Add `1 km AGL Reflectivity, Precipitation Type, 1000–500 mb Thickness` (`refd-1km-ptype`)
+  for HRRR (`hrrr`, from F001, `dBZ`, floor `5 dBZ`, ticks `10–50 dBZ`) on the
+  matching 4×17 color table with 2 hPa MSLP isobars, `H`/`L` centers, and
+  1000–500 mb thickness.
+- Add `Precipitation Type, 1 h Average Rate, 1000–500 mb Thickness`
+  (`qpf-1h-ptype`) for REFS Members 1–5 (`refs-m1`–`refs-m5`, from F001)
+  combining 1-h `APCP` and `CRAIN`/`CSNOW`/`CFRZR`/`CICEP` flags with 2 hPa
+  `MSLET` isobars, `H`/`L` centers, and native 1000–500 mb thickness.
+- Add `Precipitation Type, 6 h Average Rate, 1000–500 mb Thickness` (`prate-ptype`,
+  from F006) for GDPS (`gdps`) and RDPS (`rdps`) using 6-hour rolling
+  accumulations at 6-hour multiples and 6-hour differences of run-total
+  accumulations on intermediate hours, plus standalone `Mean Sea-Level Pressure`
+  (`mslp`) on HRDPS (`hrdps`).
+- Add automated synoptic `H`/`L` sea-level pressure center detection
+  (`pressure_centers.rs`) and optional dashed 1000–500 mb thickness contour
+  overlays (`ContourLines.centers`, `ContourLines.thickness`) across
+  `sharpmod-rs`, Tauri DTOs, and the frontend contour/isobar layers.
+- Add `500 mb Height Anomaly` (`hgt-anom-500`) across GFS (`gfs`), AIGFS
+  (`aigfs`), ECMWF IFS (`openmeteo-ecmwf-ifs025`, `ecmwf-ifs-9km`), GDPS
+  (`gdps`), and DWD ICON Global (`openmeteo-icon-global`) on the 82-band stepped
+  `dam` scale (`-40` to `+40` dam ticks) with 3 dam 500 mb height contours,
+  computed against the bundled 1990–2019 ERA5 6-hourly 500 hPa harmonic
+  climatology (`sharpmod-weather`).
+
+### Changed
+
+- Set the application, workspace crate, frontend, and sidecar contract
+  versions to 3.11.0.
+- Replace frosted glass panels across the interface with a WebGL2 QuartzCore
+  Liquid Glass pipeline (`frontend/src/lib/liquidGlass/`), combining supercircle
+  SDFs, quarter-circle bevel refraction, chromatic dispersion, a separable
+  Gaussian mip pyramid, dark/light contrast calibration, dual-side key/fill
+  specular rim highlights, and two-layer compositing (base chrome/floating
+  panels plus top-level map popovers and tooltips) over live MapLibre and
+  deck.gl frames. Keep CSS Liquid Glass styling for DOM and sounding overlays,
+  preserve opaque panels under the Low graphics profile,
+  `prefers-reduced-transparency`, and unsupported browsers, update the Settings
+  profile comparison row to `Liquid glass` (`Off`, `Light`, `Full`), and
+  calibrate dark and light surface opacity and text contrast for readability.
+- Upgrade existing precipitation-type composites: add 2 hPa MSLP isobars,
+  `H`/`L` centers, and hydrostatic 1000–500 mb thickness to REFS Mean (`refs`)
+  `qpf-1h-ptype`; switch HRDPS (`hrdps`) `prate-ptype` to the 6-hour average
+  rate from F006 on the 4×17 `Rain`/`Snow`/`Frzr`/`Sleet` scale; update DWD
+  ICON Global (`openmeteo-icon-global`) `prate-ptype` to a 3-hour average rate
+  from F003 with `Rain`/`Snow`/`Frzr`/`Mix` labels and native `FI` 500/1000 hPa
+  thickness; unify all precipitation-type legends on the REFS icon-topped
+  4-column vertical map scale and single-column stacked icon export layout; and
+  decode HRRR `refd-1km-ptype` across its true 5–50 dBZ stop range.
+- Improve MSLP isobar contrast in both map themes with outlined strokes and
+  bold hPa labels. Distribute labels across local pressure levels, including
+  near closed highs and lows. Draw larger outlined blue `H` and red `L`
+  markers with a high-contrast pressure reading above on maps and forecast
+  exports.
+- Interpolate contour grids before tracing sea-level pressure, 1000–500 mb
+  thickness, and geopotential height. Join and round the lines in Rust within
+  the existing geometry budget. Antialias solid strokes and rounded thickness
+  dashes on maps and forecast exports, with previous contour caches available
+  offline.
+- Speed up precipitation-type composites and other contoured maps in Rust.
+  Classify grid samples once to find crossings, project contour coordinates
+  without formatting most points through strings, and skip precipitation
+  interpolation below the visible threshold. Preserve contour geometry,
+  precision, and precipitation categories.
+- Group All parameters by weather category and use the same field order in
+  every model's parameter picker and layer settings. Standardize full and
+  short names for equivalent fields, with averaging periods, ensemble
+  statistics, and added overlays identified where they apply.
+- Draw labeled 2 hPa mean sea-level pressure isobars with the 10 m wind barbs
+  on 2 m temperature, dewpoint, and theta-e composites. Use the pressure
+  record published by each model and refresh older wind-only overlay caches.
+- Filter small-scale pressure ripples before tracing isobars across all forecast
+  models, including REFS members 1–5. Scale the smoothing to grid spacing and
+  preserve missing-data boundaries, contour intervals, and H/L readings.
+- Preload all three Overview outlooks when the page opens, starting with the
+  Day 1 summaries and warming the remaining days and hazard products in the
+  background for faster switching.
+- Upgrade global and regional map reprojection to bounded bicubic in
+  `sharpmod-rs` (`grid-v3` / `grid-v4` cache keys). In Smooth WebGL rendering,
+  use monotone cubic interpolation for both scalar fields and precipitation
+  intensity to keep steep gradients from flattening into bands. Choose the
+  precipitation type separately and antialias coverage, type boundaries, and
+  scalar valid-data edges across one screen pixel.
+- Migrate additional Python backend geometry, geography, thermodynamic, and
+  planning modules into Rust (`sharpmod-rs`, M15–M20): map overlay polygon
+  decoding, containment, image detection, and raster intersection
+  (`map_overlay_geometry.rs`); map geography draw order, label decluttering,
+  scale bars, and contrast (`map_geography.rs`); locator bounds, overlay spec
+  exclusivity, and inspection formatting (`locator_geometry.rs`); ERA5 geodesic
+  grid selection, dewpoint, and vorticity math (`era5_math.rs`); isotherm
+  crossing, vertical interpolation, and 6 km CAPE eligibility
+  (`vertical_profile.rs`); and forecast timeline state, animation planning, and
+  ensemble ledger validation (`timeline_ledger.rs`).
+- Migrate remaining Python visualization, provider, cache, validation, and
+  export logic into Rust (`sharpmod-rs`, M21–M32), wiring existing Python
+  callers lazily to `sharpmod_rs` while preserving public contracts and
+  exceptions: theme contrast, semantic palettes, tier scales, and box field
+  ramps (`viz_colors.rs`); hodograph height-level placement, Skew-T surface
+  label packing, and unit suffix splitting (`chart_layout.rs`); Open-Meteo
+  access inference, credential redaction, URL/host handling, cycle flooring,
+  and surface height interpolation (`openmeteo_logic.rs`); box-sounding CSV,
+  antimeridian-safe GeoJSON cells, and export formatting (`box_export_format.rs`);
+  IGRA2 station/header selection and ERA5 grid scalar/vorticity math
+  (`igra2_selection.rs`); HD/UHD PNG density scaling, hour-cache key prefixes,
+  and IFS request checks (`render_and_cache_rules.rs`); hodograph locator bounds,
+  county tile decoding, global linework filtering, and overlay projections
+  (`locator_tiles.rs`, `locator_overlay_geom.rs`); Skew-T HGZ/CAPE buoyancy
+  polygons and inset cursor readouts (`skewt_buoyancy.rs`); index-board, SHIP,
+  and custom-panel formatting and barb decomposition (`board_formatting.rs`);
+  export composition layout, PNG verification, render-patch validation, box
+  sequence hours, and observed filename tokens (`export_layout_rules.rs`); and
+  SharpTab physical-range clamps, download-progress windows, bridge parameter
+  validation, and surface index validation (`profile_and_progress_rules.rs`).
+- Migrate additional Python provider, overlay, sounding, analysis, bridge,
+  domain, and export-path rules into Rust (`sharpmod-rs`, M33–M44; 94 PyO3
+  functions registered in `REQUIRED_RUST_CAPABILITIES` under
+  `BACKEND_API_VERSION = 7`), wiring 19 existing Python modules lazily to
+  `sharpmod_rs` while preserving public contracts and exceptions: SPC convective
+  outlook rules (`spc_outlook_rules.rs`); storm report formatting, filtering,
+  view, URL, and cache rules (`storm_report_rules.rs`); ECCC GeoMet
+  rotated-grid projection, cycle flooring, and capabilities parsing
+  (`geomet_grid.rs`); radar scan selection, mosaic bounds/sizing, and
+  nearest-site rules (`radar_rules.rs`); surface observation wind state,
+  decluttering, rings, descriptions, and CSV export (`surface_overlay_rules.rs`);
+  overlay marker hit testing and place-name geometry (`overlay_hit_testing.rs`);
+  UWyo sounding thinning, metadata parsing, and station catalog lookup
+  (`uwyo_rules.rs`); box-mean profile composition, log-pressure interpolation,
+  and centroid math (`box_mean_rules.rs`); ensemble threshold validation and
+  count reconciliation (`threshold_rules.rs`); bridge request framing and
+  RFC3339/UTC time validation (`bridge_protocol_rules.rs`); model domain bounds,
+  antimeridian longitude segments, and forecast-hour filtering
+  (`model_domain_rules.rs`); and SharpTab lapse rates and export path probes
+  (`sharptab_lapse_and_paths.rs`).
+- Shorten the Soundings sidebar controls tab label from `Sounding controls` to
+  `Controls`.
+- Update `docs/RUST_BACKEND.md`, `README.md`, and `frontend/release-notes.json`
+  for v3.11.0.
+- Update dependency pins for Ruff (`0.17.4` → `0.17.5`, mirrored in
+  `installation.txt`) and `sharpmod-rs` `base64` (`0.22.1` → `0.23.1`) and
+  `libloading` (`0.9.0` → `0.9.1`).
+
+### Fixed
+
+- Keep Overview outlook category hover tooltips above sibling buttons under
+  WebGL Liquid Glass so hovered labels do not clip behind adjacent icons.
+
+- Show the abbreviated UTC weekday beside the Valid label with compact spacing
+  in Model Viewer and include it in the forecast scrubber's time announcements.
+- Start precipitation-type composites at the model's first eligible forecast
+  hour. When selected early, advance the Model Viewer to that hour and use
+  only eligible hours for the forecast timeline and playback.
+- Restore HRRR 1 km reflectivity and precipitation-type shading with isobars
+  and 1000–500 mb thickness contours. Read instantaneous forecast records
+  when the first eligible hour is F001 and keep the trailing windows for
+  accumulated precipitation and maximum updraft helicity.
+- Extend the shared interface motion to Overview outlook controls and
+  disclosures, the Soundings sidebar, Live Tracking controls, Layers
+  settings, and Draw Forecast. Let outgoing forecast pickers finish closing
+  when switching directly between them. Respect the system's reduced-motion
+  preference and keep keyboard focus on the active controls.
+- Keep pressure centers, hPa labels, and thickness labels readable where the
+  overlays meet. A transparent layer no longer hides pressure or thickness
+  from another visible layer, and thickness labels update with the map theme.
+- Detect global pressure centers across the antimeridian and refresh cached
+  pressure geometry. Include the current grid and contour cache files in map
+  cache expiry and size limits.
+- Check both accumulation endpoints before offering GDPS and RDPS six-hour
+  precipitation-type maps at intermediate forecast hours.
+
+### Removed
+
+- Remove the retired HRW WRF-ARW, HRW WRF-NSSL, and HRW FV3 choices from the
+  Model Viewer and Soundings selectors.
+
 ## [v3.10.0] - 2026-11-25
 
 ### Added

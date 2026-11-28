@@ -1,7 +1,7 @@
 import type { TextureSource } from "@deck.gl/core";
 import type { FieldFrame, Palette } from "../types/map";
 import { parseColour } from "./canvasTokens";
-import { buildLut, cellColours, isPtypePalette, LUT_SIZE, paletteRange } from "./field/colourize";
+import { buildLut, cellColours, LUT_SIZE, paletteRange, ptypeGroupStride } from "./field/colourize";
 import type { FieldImage } from "./layers/registry";
 
 interface ColouredField { palette: Palette; image: FieldImage; pixels?: ImageData }
@@ -14,6 +14,7 @@ export interface FieldSamplingProps {
   fieldTransform: [number, number, number, number];
   fieldRange: [number, number];
   fieldWrapLongitude: number;
+  fieldPtypeStride: number;
 }
 
 // shortcut: check a 4 ms task budget every 65536 cells; retune the chunk if hardware checks show an overrun.
@@ -96,13 +97,14 @@ export function smoothFieldProps({ frame, palette }: FieldImage): FieldSamplingP
     fieldTransform: [frame.scale, frame.offset, palette.floor ?? low, palette.ceiling ?? 3.4e38],
     fieldRange: [low, high > low ? high - low : 1],
     fieldWrapLongitude: frame.bounds.east - frame.bounds.west === 360 ? 1 : 0,
+    fieldPtypeStride: ptypeGroupStride(palette) ?? 0,
   };
 }
 
 /** Prepare just this frame and sampling mode; publish no partial image after cancellation. */
 export async function prepareFieldImage(frame: FieldFrame, palette: Palette, smoothing: boolean, signal: AbortSignal): Promise<void> {
   signal.throwIfAborted();
-  const smooth = smoothing && palette.units !== "flag" && !isPtypePalette(palette);
+  const smooth = smoothing && palette.units !== "flag";
   const entry = fieldEntry(frame, palette);
   const chunks = fieldPixels(frame, smooth ? null : palette);
   while ((smooth ? grids.get(frame) : entry.pixels) === undefined) {

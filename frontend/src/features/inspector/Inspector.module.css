@@ -1,6 +1,6 @@
 .inspector { display: flex; flex: 1; flex-direction: column; width: 100%; min-height: 0; border: 0; border-radius: 0; pointer-events: auto; }
 .header { display: flex; flex: none; align-items: flex-start; gap: var(--space-3); padding: var(--space-4); }
-.locationIcon { display: grid; place-items: center; flex: none; width: var(--control-h-md); height: var(--control-h-md); border-radius: var(--radius-md); background: var(--accent-subtle); color: var(--accent-bright); }
+.locationIcon { display: grid; place-items: center; flex: none; width: var(--control-h-md); height: var(--control-h-md); border: var(--hairline) solid var(--accent-glass-border); border-radius: var(--radius-md); background: var(--accent-glass-sheen), var(--accent-subtle); color: var(--accent-bright); box-shadow: var(--accent-glass-shadow); }
 .heading { display: flex; flex: 1; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .id, .coordinates { color: var(--text-primary); font-size: var(--font-size-title); font-weight: var(--font-weight-semibold); }
 .inspector[data-kind="point"] .id, .caption { color: var(--text-secondary); font-size: var(--font-size-small); font-weight: var(--font-weight-medium); }

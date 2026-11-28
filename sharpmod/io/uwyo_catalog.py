@@ -19,7 +19,6 @@ decoder still functions.
 from __future__ import annotations
 
 import json
-import re
 import socket
 import ssl
 from datetime import datetime
@@ -139,19 +138,15 @@ def search_stations(query, limit: int | None = None) -> list[dict]:
     An exact id match is returned first and alone. Otherwise a case-insensitive
     substring match against station id and name is returned, sorted by id.
     """
-    q = str(query).strip()
-    if q == "":
-        return []
-    exact = get_station(q)
-    if exact is not None:
-        return [exact]
-    ql = q.casefold()
-    matches = [dict(r) for r in load_catalog()
-               if ql in r["id"].casefold() or ql in r["name"].casefold()]
-    matches.sort(key=lambda r: r["id"])
-    if limit is not None:
-        matches = matches[:limit]
-    return matches
+    import sharpmod_rs
+
+    rows = load_catalog()
+    indices = sharpmod_rs.uwyo_search_stations(
+        [(row["id"], row["name"]) for row in rows],
+        str(query),
+        None if limit is None else int(limit),
+    )
+    return [dict(rows[index]) for index in indices]
 
 
 # --------------------------------------------------------------------------- #
@@ -159,9 +154,6 @@ def search_stations(query, limit: int | None = None) -> list[dict]:
 # --------------------------------------------------------------------------- #
 class StationListError(Exception):
     """The live UWyo station list could not be fetched or parsed."""
-
-
-_WS_RE = re.compile(r"\s+")
 
 
 def _clean_name(raw) -> str:
@@ -172,13 +164,9 @@ def _clean_name(raw) -> str:
     and drop obviously corrupt dumps so the picker shows a clean (or blank)
     label rather than garbage.
     """
-    name = _WS_RE.sub(" ", str(raw or "")).strip()
-    if not name:
-        return ""
-    low = name.casefold()
-    if "dtype:" in low or "stationid" in low:
-        return ""
-    return name
+    import sharpmod_rs
+
+    return sharpmod_rs.uwyo_clean_station_name(str(raw) if raw else None)
 
 
 def _build_station_list_url(when_utc: datetime) -> str:

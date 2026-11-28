@@ -13,6 +13,7 @@ import { createTransport } from "../lib/backend/fixtureTransport";
 import { parseMapCatalog } from "../lib/contracts/map";
 import { parseModelCatalog } from "../lib/contracts/soundings";
 import { useMapCatalog } from "./catalogQuery";
+import { nameMapParameter } from "./mapParameters";
 import { useDrawnFields, usePanelField } from "./panelField";
 import { usePlayback } from "./usePlayback";
 import { useForecast } from "../features/forecast/useForecast";
@@ -33,6 +34,7 @@ it.each(["hrrr", "rap", "rdps", "hrdps", "rrfs-a", "refs", "refs-m1", "refs-m2",
   const model = models.models.find((entry) => entry.key === modelKey);
   if (model === undefined) throw new Error("Model fixture missing");
   const raw = parseMapCatalog(modelKey === "hrrr" ? mapCatalog : (modelMapCatalogs as Readonly<Record<string, unknown>>)[modelKey]);
+  const named = { ...raw, products: raw.products.map((product) => nameMapParameter(product, raw.fieldModel)) };
   const hidden = modelKey === "refs" ? "hgt-wind-850" : modelKey === "aigfs" ? "apcp" : modelKey === "hrdps" ? "snow-10-1"
     : raw.products.some((product) => product.key === "uh-2-5km-3h") ? "uh-2-5km-3h" : "snod";
   const firstHour = modelKey === "refs" ? 1 : 12;
@@ -49,18 +51,18 @@ it.each(["hrrr", "rap", "rdps", "hrdps", "rrfs-a", "refs", "refs-m1", "refs-m2",
   const hook = renderHook(() => ({ catalog: useMapCatalog(), forecast: useForecast() }), { wrapper });
   await waitFor(() => { expect(hook.result.current.catalog.data?.products).toHaveLength(raw.products.length); });
   expect(call).toHaveBeenLastCalledWith("get_map_catalog", { model: modelKey, runTime: model.suggestedRun, forecastHour: firstHour });
-  expect(queryClient.getQueryData(mapKeys.catalog(modelKey, model.suggestedRun, firstHour))).toEqual(raw);
+  expect(queryClient.getQueryData(mapKeys.catalog(modelKey, model.suggestedRun, firstHour))).toEqual(named);
   act(() => { useForecastStore.getState().setHour(18); });
   await waitFor(() => { expect(resolveNext).toBeDefined(); });
   expect(hook.result.current.forecast).toMatchObject({ status: "ready", context: { hour: 18, fieldsAvailable: true } });
-  expect(hook.result.current.catalog.data).toEqual(raw);
+  expect(hook.result.current.catalog.data).toEqual(named);
   expect(hook.result.current.catalog.isPlaceholderData).toBe(true);
   act(() => { resolveNext?.({ ...raw, products: raw.products.filter((product) => product.key !== hidden) }); });
   await waitFor(() => { expect(hook.result.current.catalog.data?.products).toHaveLength(raw.products.length - 1); });
   expect(call).toHaveBeenLastCalledWith("get_map_catalog", { model: modelKey, runTime: model.suggestedRun, forecastHour: 18 });
   expect(hook.result.current.catalog.data?.products.some((product) => product.key === hidden)).toBe(false);
   expect(queryClient.getQueryData(mapKeys.catalog(modelKey, model.suggestedRun, 18))).toEqual(hook.result.current.catalog.data);
-  expect(queryClient.getQueryData(mapKeys.catalog(modelKey, model.suggestedRun, firstHour))).toEqual(raw);
+  expect(queryClient.getQueryData(mapKeys.catalog(modelKey, model.suggestedRun, firstHour))).toEqual(named);
 });
 
 it.each(["hrrr", "rrfs-a", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5"])("only offers complete trailing UH intervals for %s", async (modelKey) => {
@@ -116,6 +118,76 @@ it("keeps the palette but waits for HRDPS inventory before loading the previous 
 
   act(() => { finishInventory({ ...catalog, products: catalog.products.filter((product) => product.minimumForecastHour <= 23) }); });
   await waitFor(() => { expect(getField).toHaveBeenCalledWith("tmp-2m", run, 23, model.key, expect.anything()); });
+});
+
+it("restores a precipitation-type selection in a split panel and starts a new run at F006", async () => {
+  const modelKey = "hrdps";
+  const product = "prate-ptype";
+  const modelCatalog = parseModelCatalog(models);
+  const queryClient = createQueryClient();
+  queryClient.setQueryData(QUERY_KEYS.models, modelCatalog);
+  const client = new BackendClient(createTransport("field-error"));
+  const getCatalog = vi.spyOn(client, "getMapCatalog");
+  const getField = vi.spyOn(client, "getWeatherField");
+  useForecastStore.setState({ modelKey, runTime: "2026-10-04T12:00:00Z", forecastHour: 0 });
+  useMapStore.getState().setPanelLayout(2);
+  useMapStore.getState().setActivePanel(1);
+  useMapStore.getState().setProduct(product);
+  useMapStore.getState().setLayerVisible("model-field", true);
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
+  );
+  const hook = renderHook(() => ({ forecast: useForecast(), field: usePanelField(1) }), { wrapper });
+  for (const run of ["2026-10-04T12:00:00Z", "2026-10-04T06:00:00Z"]) {
+    act(() => { useForecastStore.getState().setRun(run); });
+    await waitFor(() => {
+      expect(hook.result.current.forecast).toMatchObject({ status: "ready", context: { hour: 6, run } });
+      expect(hook.result.current.field.request).toEqual({ model: modelKey, product, forecastHour: 6, runTime: run });
+    });
+    expect(getCatalog).toHaveBeenCalledWith(modelKey, run, 6);
+    expect(getCatalog).not.toHaveBeenCalledWith(modelKey, run, 0);
+    expect(getField).toHaveBeenCalledWith(product, run, 6, modelKey, expect.anything());
+  }
+  queryClient.clear();
+});
+
+it.each([
+  { modelKey: "nssl-mpas-htpo", scheduledEnd: 48, firstHour: 0 },
+  { modelKey: "nssl-mpas-rn", scheduledEnd: 84, firstHour: 1 },
+])("follows $modelKey inventory from its first field hour $firstHour through the published limit", async ({ modelKey, scheduledEnd, firstHour }) => {
+  const source = parseModelCatalog(models);
+  const hrrr = source.models.find((model) => model.key === "hrrr");
+  if (hrrr === undefined) throw new Error("HRRR fixture missing");
+  const suggestedRun = "2026-11-24T00:00:00Z";
+  const model = {
+    ...hrrr, key: modelKey, soundingsAvailable: false, recentRuns: [suggestedRun], suggestedRun, defaultForecastHour: 1,
+    forecastHours: Array.from({ length: scheduledEnd + 1 }, (_, hour) => hour),
+    maxForecastHours: [scheduledEnd, ...hrrr.maxForecastHours.slice(1)],
+  };
+  const base = parseMapCatalog(mapCatalog);
+  const archiveEnd = scheduledEnd - 6;
+  const catalog = {
+    ...base, fieldModel: modelKey, defaultProduct: "tmp-2m",
+    products: base.products.filter((product) => product.key === "tmp-2m").map((product) => ({ ...product, minimumForecastHour: firstHour })),
+  };
+  const queryClient = createQueryClient();
+  queryClient.setQueryData(QUERY_KEYS.models, { ...source, models: [...source.models.filter((item) => item.key !== modelKey), model] });
+  const client = new BackendClient(createTransport());
+  const getCatalog = vi.spyOn(client, "getMapCatalog").mockImplementation((_model, run) => Promise.resolve(run === undefined
+    ? catalog : { ...catalog, maxForecastHours: [archiveEnd, ...catalog.maxForecastHours.slice(1)] }));
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
+  );
+  useForecastStore.setState({ modelKey, runTime: "2026-11-23T00:00:00Z", forecastHour: 0 });
+  const hook = renderHook(useForecast, { wrapper });
+  await waitFor(() => {
+    expect(hook.result.current).toMatchObject({ status: "ready", context: {
+      model: { key: modelKey }, run: suggestedRun, hour: firstHour, fieldsAvailable: true,
+      hours: Array.from({ length: archiveEnd - firstHour + 1 }, (_, index) => firstHour + index),
+    } });
+  });
+  expect(getCatalog.mock.calls).toEqual([[modelKey, undefined, undefined], [modelKey, suggestedRun, firstHour]]);
+  queryClient.clear();
 });
 
 it.each(["hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3", "sref", "href"])("falls back from hidden %s before requesting map products", async (modelKey) => {

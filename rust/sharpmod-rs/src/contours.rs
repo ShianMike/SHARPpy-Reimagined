@@ -1,5 +1,9 @@
 //! Marching squares with the existing edge-pair convention and segment order.
 
+use std::collections::BTreeMap;
+
+pub(crate) mod pressure;
+
 pub type Segment = ((f64, f64), (f64, f64));
 pub const TOO_DENSE: &str = "The contour lines of this product are too dense to draw.";
 
@@ -61,21 +65,50 @@ fn extract_strict<T>(
     {
         return Err(TOO_DENSE.into());
     }
-    let mut output = Vec::new();
-    let mut step = first;
-    while step <= last {
-        let level = step * interval;
-        let mut cases: [Vec<T>; 7] = std::array::from_fn(|_| Vec::new());
-        let mut count = output.len();
-        for row in 0..height - 1 {
-            for col in 0..width - 1 {
-                let index = row * width + col;
-                let [a, b, c, d] = [
-                    values[index],
-                    values[index + 1],
-                    values[index + width],
-                    values[index + width + 1],
-                ];
+    let levels: Vec<_> = (first as i64..=last as i64)
+        .map(|step| step as f64 * interval)
+        .collect();
+    if levels.is_empty() {
+        return Ok(Vec::new());
+    }
+    // Each sample is bracketed once. Comparing with the actual levels preserves
+    // crossings exactly where division by a fractional interval would round.
+    let bracket = |value: f64| {
+        if value.is_finite() {
+            levels.partition_point(|&level| level <= value)
+        } else {
+            usize::MAX
+        }
+    };
+    let mut rows = values.chunks_exact(width);
+    let mut upper = rows.next().expect("validated grid dimensions");
+    let mut upper_ranks: Vec<_> = upper.iter().copied().map(bracket).collect();
+    let mut lower_ranks = vec![0; width];
+    let mut by_level = BTreeMap::<usize, [Vec<T>; 7]>::new();
+    let limit = max_segments.min(100_000);
+    let mut count = 0;
+    for (row, lower) in rows.enumerate() {
+        for (rank, &value) in lower_ranks.iter_mut().zip(lower) {
+            *rank = bracket(value);
+        }
+        for col in 0..width - 1 {
+            let ranks = [
+                upper_ranks[col],
+                upper_ranks[col + 1],
+                lower_ranks[col],
+                lower_ranks[col + 1],
+            ];
+            let mut first_rank = levels.len();
+            let mut last_rank = 0;
+            for rank in ranks.into_iter().filter(|&rank| rank != usize::MAX) {
+                first_rank = first_rank.min(rank);
+                last_rank = last_rank.max(rank);
+            }
+            if first_rank >= last_rank {
+                continue;
+            }
+            let [a, b, c, d] = [upper[col], upper[col + 1], lower[col], lower[col + 1]];
+            for (offset, &level) in levels[first_rank..last_rank].iter().enumerate() {
                 let fractions = [
                     crossing(a, b, level),
                     crossing(b, d, level),
@@ -105,20 +138,22 @@ fn extract_strict<T>(
                     (x + fractions[2], y + 1.0),
                     (x, y + fractions[3]),
                 ];
+                count += pairs.len();
+                if count > limit {
+                    return Err(TOO_DENSE.into());
+                }
+                let cases = by_level.entry(first_rank + offset).or_default();
                 for &(start, end) in pairs {
-                    count += 1;
-                    if count > max_segments.min(100_000) {
-                        return Err(TOO_DENSE.into());
-                    }
                     cases[bucket].push(with_level(level, (points[start], points[end])));
                 }
             }
         }
-        for case in cases {
-            output.extend(case);
-        }
-        step += 1.0;
+        upper = lower;
+        std::mem::swap(&mut upper_ranks, &mut lower_ranks);
     }
+    // Preserve the original level, crossing case, and row-major ordering.
+    let mut output = Vec::with_capacity(count);
+    output.extend(by_level.into_values().flatten().flatten());
     Ok(output)
 }
 
@@ -333,12 +368,21 @@ impl Projection {
     pub(crate) fn point(&self, [x, y]: [f64; 2]) -> [f64; 2] {
         let longitude = self.west + (x + 0.5) * self.longitude_span / self.width;
         let latitude = self.north - (y + 0.5) * self.latitude_span / self.height;
-        // Preserve five decimal places and the legacy tie rounding.
-        [longitude, latitude].map(|coordinate| {
-            format!("{coordinate:.5}")
-                .parse()
-                .expect("formatted finite coordinate")
-        })
+        [longitude, latitude].map(round_coordinate)
+    }
+}
+
+fn round_coordinate(coordinate: f64) -> f64 {
+    const SCALE: f64 = 100_000.0;
+    let scaled = coordinate * SCALE;
+    // Multiplication can round a near-halfway value onto the tie. Keep the
+    // original decimal rounding in that case, with no string on the common path.
+    if scaled.fract().abs() == 0.5 {
+        format!("{coordinate:.5}")
+            .parse()
+            .expect("formatted finite coordinate")
+    } else {
+        scaled.round() / SCALE
     }
 }
 

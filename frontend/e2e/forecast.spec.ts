@@ -14,13 +14,13 @@ test.describe("the forecast map", () => {
     await expect(hours).toHaveAttribute("max", "18");
     await page.getByRole("button", { name: "Next frame", exact: true }).click();
     await expect(page.getByRole("button", { name: "Choose forecast hour" })).toContainText("F001");
-    await expect(page.getByLabel("Valid time")).toContainText("10-04 17Z");
+    await expect(page.getByLabel("Valid time")).toContainText("Sun 10-04 17Z UTC");
     await page.getByRole("button", { name: "Choose run" }).click();
     await page.getByRole("button", { name: "Run 10-04 12Z", exact: true }).click();
     await page.getByRole("button", { name: "Choose forecast hour" }).click();
     await page.getByRole("button", { name: "Select forecast hour 30", exact: true }).click();
     await expect(hours).toHaveAttribute("max", "48");
-    await expect(page.getByLabel("Valid time")).toContainText("10-05 18Z");
+    await expect(page.getByLabel("Valid time")).toContainText("Mon 10-05 18Z UTC");
     await page.getByRole("button", { name: "Choose run" }).click();
     await page.getByRole("button", { name: "Run 10-04 16Z", exact: true }).click();
     await expect(hours).toHaveAttribute("max", "18");
@@ -35,7 +35,7 @@ test.describe("the forecast map", () => {
     await expect(page.getByRole("button", { name: "Choose model" })).toContainText("GDPS");
     await expect(page.getByRole("button", { name: "Choose parameter" })).toBeEnabled();
     await page.getByRole("button", { name: "Choose parameter" }).click();
-    await expect(page.getByRole("dialog", { name: "Parameters", exact: true }).getByRole("button", { name: /^2 m AGL Temperature,/u })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Parameters", exact: true }).getByRole("button", { name: "2 m AGL Temperature, °F", exact: true })).toBeVisible();
     expectWarnings(consoleMessages, []);
   });
   test("the model field: product, colour scale, frame state, pointer value", async ({ page, consoleMessages }) => {

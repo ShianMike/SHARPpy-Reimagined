@@ -224,6 +224,7 @@ def test_hazard_products_follow_each_models_published_inventory(model):
                 else {"apcp", "wind-10m"} if model == "aigfs"
                 else {"pwat"} if model == "refs"
                 else uh | {"apcp", "gust", "lftx", "pwat", "wind-10m"} if model in hp.HRW_MODELS
+                else additions - {"efhl", "lftx", "uh-2-5km-3h"} if model in hp.NSSL_MPAS_MODELS
                 else uh | {"apcp", "gust", "pwat", "wind-10m"} if model.startswith("refs-")
                 else additions - {"efhl"} - uh if model == "nam"
                 else additions - {"efhl"} if model == "nam-3km-conus" else additions)

@@ -288,6 +288,7 @@ def test_models_catalog_lists_every_selectable_model(monkeypatch):
 
     now = datetime(2026, 10, 27, 6, 30, tzinfo=UTC)
     monkeypatch.setattr(params, "now", lambda: now)
+    monkeypatch.setattr("sharpmod_rs.nssl_mpas_forecast_models", lambda *_: ())
     catalog = soundings.models_catalog({})
     models = {m["key"]: m for m in catalog["models"]}
     assert set(models) == {c.key for c in model_extract.available_models()} | {"aigfs", "refs", "hrdps"}
@@ -318,6 +319,7 @@ def test_models_catalog_lists_every_selectable_model(monkeypatch):
 def test_9km_suggested_run_waits_for_its_split_files(monkeypatch, cycle_hour):
     from sharpmod.bridge import params
 
+    monkeypatch.setattr("sharpmod_rs.nssl_mpas_forecast_models", lambda *_: ())
     cycle = datetime(2026, 10, 26, cycle_hour, tzinfo=UTC)
     for delay, expected in ((timedelta(hours=9, minutes=59), cycle - timedelta(hours=6)),
                             (timedelta(hours=10), cycle)):

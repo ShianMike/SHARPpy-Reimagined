@@ -31,28 +31,43 @@ function cursor({ isDragging, isHovering }: { isDragging: boolean; isHovering: b
 
 export function createOverlay(options: OverlayOptions, handlers: OverlayHandlers): MapLibreOverlay {
   let canvasContext: CanvasContext | null = null;
+  let lastWidth = -1;
+  let lastHeight = -1;
   const interleaved = import.meta.env.MODE !== "fixture" && mapProjection(useMapStore.getState()) === "mercator";
   const overlay = new MapLibreOverlay({
     interleaved,
+    _pickable: !interleaved,
     layers: [],
     pickingRadius: options.pickingRadius,
     useDevicePixels: options.useDevicePixels,
-    onDeviceInitialized: (device) => { canvasContext = device.getDefaultCanvasContext(); },
+    onDeviceInitialized: (device) => {
+      canvasContext = device.getDefaultCanvasContext();
+      lastWidth = -1;
+      lastHeight = -1;
+    },
     onBeforeRender: () => {
       // MapLibre owns this buffer. A pixel-ratio change leaves its CSS size unchanged,
       // so luma's ResizeObserver cannot update the framebuffer and clipping rectangle.
       if (interleaved && canvasContext !== null) {
         const { width, height } = canvasContext.canvas;
-        canvasContext.setDrawingBufferSize(width, height);
+        if (width !== lastWidth || height !== lastHeight) {
+          canvasContext.setDrawingBufferSize(width, height);
+          lastWidth = width;
+          lastHeight = height;
+        }
       }
     },
     getCursor: cursor,
-    onHover: (info) => {
-      handlers.onHover(info);
-    },
-    onClick: (info) => {
-      handlers.onClick(info);
-    },
+    ...(interleaved
+      ? {}
+      : {
+          onHover: (info: PickingInfo) => {
+            handlers.onHover(info);
+          },
+          onClick: (info: PickingInfo) => {
+            handlers.onClick(info);
+          },
+        }),
     onAfterRender: () => {
       handlers.onAfterRender();
     },
@@ -60,6 +75,17 @@ export function createOverlay(options: OverlayOptions, handlers: OverlayHandlers
       handlers.onError(error);
     },
   });
+  if (interleaved && typeof overlay.pickObject === "function") {
+    const pickObject = overlay.pickObject.bind(overlay);
+    overlay.pickObject = (params) => {
+      overlay.setProps({ _pickable: true });
+      try {
+        return pickObject(params);
+      } finally {
+        overlay.setProps({ _pickable: false });
+      }
+    };
+  }
   const onRemove = overlay.onRemove.bind(overlay);
   overlay.onRemove = (map) => {
     try {
@@ -68,6 +94,8 @@ export function createOverlay(options: OverlayOptions, handlers: OverlayHandlers
       // deck.gl 9.4 finalizes layers but leaves the default canvas's DPR listener alive.
       canvasContext?.destroy();
       canvasContext = null;
+      lastWidth = -1;
+      lastHeight = -1;
     }
   };
   return overlay;

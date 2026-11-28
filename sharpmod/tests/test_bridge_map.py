@@ -135,7 +135,7 @@ def test_cold_raster_and_geometry_share_one_acquisition(offline, monkeypatch):
         resume.set()
         grid, lines = raster.result(timeout=10), geometry.result(timeout=10)
     assert calls == [("hgt-wind-500", "hrrr")]
-    assert grid["data_base64"] and lines["wind"] and lines["segments"]
+    assert grid["data_base64"] and lines["wind"] and lines["paths"]
     hrrr_field.clear_cache()
     assert fields.grid(request) == grid and contours.contours(request) == lines
     assert len(calls) == 1 and not fields._FLIGHTS
@@ -184,27 +184,35 @@ def test_model_catalogues_reuse_scales_and_only_offer_published_products(model):
 
     catalog = fields.catalog({"model": model})
     assert catalog["field_model"] == model
-    assert len(catalog["products"]) == {"hrrr": 46, "rrfs-a": 45, "nam-3km-conus": 42}.get(model, 36)
+    assert len(catalog["products"]) == {"hrrr": 49, "rrfs-a": 47, "nam-3km-conus": 44}.get(model, 39)
     assert any(item["key"] == "ltng" for item in catalog["products"]) == (model != "nam-3km-conus")
     if model == "nam-3km-conus":
         with pytest.raises(BridgeError, match="not a nam-3km-conus field product"):
             fields._request({"model": model, "product": "ltng", "run_time": EXPORT.RUN_TIME, "forecast_hour": 1})
     for product in hp.available_products(model):
-        shared_key = (
-            "apcp" if product.key.startswith("qpf-")
-            else "mlcin" if product.key == "sbcin"
-            else "refc" if product.key == "refd-1km"
-            else "snod" if product.key == "snow-1h"
-            else product.key
-        )
-        if shared_key in hp.PRODUCTS:
-            assert product.palette is hp.PRODUCTS[shared_key].palette
-        elif product.key == "lcl":
-            assert (product.palette.minimum, product.palette.maximum, product.palette.units) == (0.0, 10000.0, "m")
-            assert product.palette.stepped
-            assert len(product.palette.tick_values()) == 16
+        if product.key.endswith("-ptype"):
+            # The p-type composites carry their own four-band ramps instead of a
+            # shared palette: four 17-swatch bands plus a legend group each.
+            assert product.palette.stepped and len(product.palette.stops) == 68
+            assert product.palette.ptype_labels is not None and len(product.palette.ptype_labels) == 4
         else:
-            assert product.key == "cape-0-3km"
+            shared_key = (
+                "apcp" if product.key.startswith("qpf-")
+                else "tmp-2m" if product.key == "tmp-2m-wind"
+                else "dpt-2m" if product.key == "dpt-2m-wind"
+                else "mlcin" if product.key == "sbcin"
+                else "refc" if product.key == "refd-1km"
+                else "snod" if product.key == "snow-1h"
+                else product.key
+            )
+            if shared_key in hp.PRODUCTS:
+                assert product.palette is hp.PRODUCTS[shared_key].palette
+            elif product.key == "lcl":
+                assert (product.palette.minimum, product.palette.maximum, product.palette.units) == (0.0, 10000.0, "m")
+                assert product.palette.stepped
+                assert len(product.palette.tick_values()) == 16
+            else:
+                assert product.key == "cape-0-3km"
         for spec in product.all_fields:
             if model == "nam-3km-conus":
                 assert spec.source == hp.SOURCE_SURFACE
@@ -218,7 +226,7 @@ def test_model_catalogues_reuse_scales_and_only_offer_published_products(model):
         assert "Winter Weather" in catalog["categories"]
         assert {
             "scp", "stp", "sbcin", "lcl", "ehi-0-1km", "ehi-0-3km",
-            "qpf-1h", "qpf-6h", "qpf-12h", "qpf-24h", "apcp", "snow-1h",
+            "qpf-1h", "qpf-1h-ptype", "qpf-6h", "qpf-12h", "qpf-24h", "apcp", "snow-1h",
         } <= {item["key"] for item in catalog["products"]}
         assert {item["key"] for item in catalog["products"]}.isdisjoint(hp._REFS_UNSUPPORTED)
 
@@ -285,9 +293,20 @@ def test_refs_member_composites_use_published_surface_and_shear_fields():
         ("qpf-24h", "24-h QPF", 24),
         ("apcp", "Total QPF", 0),
         ("snow-1h", "1-h Snowfall", 1),
+        ("qpf-1h-ptype", "1-h QPF Rate, Precipitation Type, 1000-500 mb Thickness", 1),
     ):
         assert products[key].label == expected_label
         assert products[key].max_hours == expected_hours
+    # 2.54 mm over the trailing hour is a 0.1 in/h rate; the categorical flags
+    # pick the band, freezing rain first among the frozen types.
+    qpf_ptype = products["qpf-1h-ptype"].derive({
+        "apcp": np.full((1, 4), 2.54, dtype=np.float32),
+        "crain": np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32),
+        "csnow": np.array([[0.0, 1.0, 0.0, 0.0]], dtype=np.float32),
+        "cfrzr": np.array([[0.0, 0.0, 1.0, 0.0]], dtype=np.float32),
+        "cicep": np.array([[0.0, 0.0, 0.0, 1.0]], dtype=np.float32),
+    })
+    np.testing.assert_allclose(qpf_ptype[0], [0.1004, 10.1004, 20.1004, 30.1004], atol=1e-5)
     snow = products["snow-1h"].derive({"asnow": np.array([[0.0254, np.nan]], dtype=np.float32)})
     np.testing.assert_allclose(snow[0, 0], 1.0, rtol=1e-6)
     assert np.isnan(snow[0, 1])
@@ -696,8 +715,19 @@ def test_refs_sbcape_variants_share_contours_and_cache_each_statistic(offline, m
                 },
                 "https://www.spc.noaa.gov/exper/refs/data/2026/10/04/refs-spc_20261004_1800.zarr",
             )
+        if key == "qpf-1h-ptype":
+            # The REFS mean decode pairs the consensus composite with the mean
+            # sea-level pressure (hPa) and the hydrostatic thickness (dam).
+            columns = np.linspace(0.0, 1.0, hrrr_field.HRRR_SHAPE[1], dtype=np.float32)
+            return (
+                {
+                    "qpf1h_ptype": np.full(hrrr_field.HRRR_SHAPE, 10.0804, dtype=np.float32),
+                    "mslp": np.tile(980.0 + 60.0 * columns, (hrrr_field.HRRR_SHAPE[0], 1)),
+                    "thickness": np.tile(520.0 + 40.0 * columns, (hrrr_field.HRRR_SHAPE[0], 1)),
+                },
+                "https://www.spc.noaa.gov/exper/refs/data/2026/10/04/refs-spc_20261004_1800.zarr",
+            )
         fill = {
-            "qpf-1h-ptype": 10.0804,
             "qpf-3h": 0.45,
             "qpf-6h": 0.85,
             "qpf-24h": 1.75,
@@ -715,7 +745,6 @@ def test_refs_sbcape_variants_share_contours_and_cache_each_statistic(offline, m
             "wind-10m-24h": 44.0,
         }[key]
         scalar_only = {
-            "qpf-1h-ptype": "qpf1h_ptype",
             "qpf-3h": "qpf3h",
             "qpf-6h": "qpf6h",
             "qpf-24h": "qpf24h",
@@ -769,8 +798,19 @@ def test_refs_sbcape_variants_share_contours_and_cache_each_statistic(offline, m
     assert mucape_grid["product"] == "mucape"
     assert mucape_grid["value_min"] == pytest.approx(1850.0)
     assert mucape_lines["product"] == "mucape" and mucape_lines["wind"]
+    # The composite carries mean isobars plus the thickness overlay the REFS
+    # mean decode published alongside its consensus grid.
+    qpf_request = {"model": "refs", "product": "qpf-1h-ptype", "run_time": EXPORT.RUN_TIME, "forecast_hour": 1}
+    qpf_grid = fields.grid(qpf_request)
+    assert qpf_grid["product"] == "qpf-1h-ptype"
+    assert qpf_grid["value_min"] == pytest.approx(10.0804, abs=1e-3)
+    assert qpf_grid["units"] == "in"
+    qpf_lines = contours.contours(qpf_request)
+    assert qpf_lines["product"] == "qpf-1h-ptype"
+    assert qpf_lines["unit"] == "hPa" and qpf_lines["interval"] == 2.0
+    assert qpf_lines["thickness"]["unit"] == "dam"
+    assert qpf_lines["thickness"]["interval"] == 6.0
     for key, hour, expected, expected_units in (
-        ("qpf-1h-ptype", 1, 10.0804, "in"),
         ("qpf-3h", 3, 0.45, "in"),
         ("qpf-6h", 6, 0.85, "in"),
         ("qpf-24h", 30, 1.75, "in"),

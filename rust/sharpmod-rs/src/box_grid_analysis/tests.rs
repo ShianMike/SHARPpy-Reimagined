@@ -47,7 +47,7 @@ fn transect_circular_wdir_crosses_north() {
     let out = compute_transect_column(&pres, &wdir, Some(&wspd), &log_ladder, true).unwrap();
     let mid_dir = out[0].unwrap();
     assert!(
-        mid_dir < 5.0 || mid_dir > 355.0,
+        !(5.0..=355.0).contains(&mid_dir),
         "expected ~0 deg, got {mid_dir}"
     );
 }

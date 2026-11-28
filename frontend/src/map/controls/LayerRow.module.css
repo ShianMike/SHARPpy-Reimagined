@@ -1,24 +1,24 @@
 .row {
   min-width: 0;
-  border: var(--hairline) solid color-mix(in srgb, var(--border-subtle) 65%, transparent);
+  border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface-1) 68%, transparent);
+  background: var(--glass-inset-fill);
   transition: background var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
 }
 .row[data-variant="card"] { border-radius: var(--radius-md); }
 .row[data-visible="false"] {
-  border-color: color-mix(in srgb, var(--border-subtle) 45%, transparent);
-  background: color-mix(in srgb, var(--surface-0) 24%, var(--control-fill));
+  border-color: color-mix(in srgb, var(--border-subtle) 65%, transparent);
+  background: color-mix(in srgb, var(--control-fill) 45%, transparent);
 }
 .row[data-visible="false"] .layerLabel { color: var(--text-secondary); }
 .row:hover {
   border-color: color-mix(in srgb, var(--border-strong) 80%, transparent);
-  background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+  background: var(--control-selected);
 }
 .row[data-visible="false"]:hover .layerLabel { color: var(--text-primary); }
 .row[data-expanded="true"] {
-  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
-  background: color-mix(in srgb, var(--accent-subtle) 72%, var(--surface-1));
+  border-color: var(--accent-glass-border);
+  background: var(--accent-glass-sheen), var(--accent-subtle);
 }
 .row[data-variant="stack"][data-expanded="true"] {
   box-shadow: inset var(--space-0-5) 0 0 var(--accent-bright);
@@ -65,14 +65,15 @@
 .layerDisclosure[aria-expanded="true"] > svg { color: var(--accent-bright); }
 .rowHead .visibility {
   flex: none;
-  border: var(--hairline) solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface-0) 30%, var(--control-fill));
+  background: var(--control-fill);
   color: var(--text-secondary);
 }
 .rowHead .visibility[aria-checked="true"] {
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  background: color-mix(in srgb, var(--accent-subtle) 65%, transparent);
+  border-color: var(--accent-glass-border);
+  background: var(--accent-glass-sheen), var(--accent-subtle);
+  box-shadow: var(--accent-glass-shadow);
   color: var(--accent-bright);
 }
 .rowHead .visibility:hover {
@@ -87,9 +88,9 @@
   flex: none;
   min-width: calc(var(--space-5) + var(--space-0-5));
   height: calc(var(--space-5) + var(--space-0-5));
-  border: var(--hairline) solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--surface-0) 36%, var(--control-fill));
+  background: var(--control-fill);
   color: var(--text-secondary);
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-semibold);
@@ -105,17 +106,16 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-3);
-  border-top: var(--hairline) solid color-mix(in srgb, var(--border-subtle) 65%, transparent);
-  background: color-mix(in srgb, var(--surface-0) 24%, transparent);
+  border-top: var(--hairline) solid var(--border-subtle);
+  background: color-mix(in srgb, var(--control-fill) 35%, transparent);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 .orderButtons {
   display: inline-flex;
   align-items: center;
   padding: var(--space-0-5);
-  border: var(--hairline) solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+  border: var(--hairline) solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface-0) 24%, transparent);
+  background: var(--control-fill);
 }
 .orderButtons > button { min-width: var(--control-h-xs); min-height: var(--control-h-xs); border-radius: calc(var(--radius-sm) - var(--space-0-5)); }
-.orderButtons > button:disabled { opacity: 0.28; }

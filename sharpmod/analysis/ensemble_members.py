@@ -110,24 +110,16 @@ class EnsembleAcquisition:
     request_specs: tuple[Mapping[str, object], ...] = ()
 
     def __post_init__(self):
-        requested = tuple(_member(item) for item in self.requested_members)
-        loaded = tuple(_member(item) for item in self.loaded_members)
-        if len(set(requested)) != len(requested):
-            raise ValueError("requested ensemble members must be unique")
-        if len(set(loaded)) != len(loaded):
-            raise ValueError("loaded ensemble members must be unique")
-        if any(item not in requested for item in loaded):
-            raise ValueError("loaded members must belong to the original request")
+        import sharpmod_rs
+
         failures = tuple(self.failures)
-        failed_names = tuple(item.member for item in failures)
-        if len(set(failed_names)) != len(failed_names):
-            raise ValueError("each unavailable member needs one final status")
-        if any(item not in requested for item in failed_names):
-            raise ValueError("failed members must belong to the original request")
-        if set(loaded) & set(failed_names):
-            raise ValueError("a member cannot be both loaded and unavailable")
-        object.__setattr__(self, "requested_members", requested)
-        object.__setattr__(self, "loaded_members", loaded)
+        requested, loaded, _validated_failures = sharpmod_rs.ensemble_validate_ledger(
+            [_member(item) for item in self.requested_members],
+            [_member(item) for item in self.loaded_members],
+            [(item.member, item.status, item.reason) for item in failures],
+        )
+        object.__setattr__(self, "requested_members", tuple(requested))
+        object.__setattr__(self, "loaded_members", tuple(loaded))
         object.__setattr__(self, "failures", failures)
         object.__setattr__(
             self,

@@ -106,18 +106,9 @@ PLOT_FRAME_WIDTH = 1.0
 
 def _rgb(color: str) -> tuple[int, int, int]:
     """Parse a CSS-style hex color without pulling Qt into this module."""
-    value = str(color).strip()
-    if value.startswith("#"):
-        value = value[1:]
-    if len(value) == 3:
-        value = "".join(ch * 2 for ch in value)
-    if len(value) != 6:
-        raise ValueError(f"unsupported color {color!r}; expected #rrggbb")
-    try:
-        return tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
-    except ValueError as exc:
-        raise ValueError(
-            f"unsupported color {color!r}; expected #rrggbb") from exc
+    import sharpmod_rs
+
+    return sharpmod_rs.color_parse_rgb(str(color))
 
 
 def _hex(rgb: tuple[int, int, int]) -> str:
@@ -138,46 +129,20 @@ def _relative_luminance(color: str) -> float:
 
 def contrast_ratio(foreground: str, background: str) -> float:
     """Return the WCAG contrast ratio between two ``#rrggbb`` colors."""
-    first = _relative_luminance(foreground)
-    second = _relative_luminance(background)
-    lighter, darker = max(first, second), min(first, second)
-    return (lighter + 0.05) / (darker + 0.05)
+    import sharpmod_rs
+
+    return sharpmod_rs.color_contrast_ratio(str(foreground), str(background))
 
 
 @lru_cache(maxsize=512)
 def _resolve_theme_color_cached(
         color: str, bg_color: str, fg_color: str, minimum: float) -> str:
-    source = _hex(_rgb(color))
-    background = _hex(_rgb(bg_color))
-    foreground = _hex(_rgb(fg_color))
+    import sharpmod_rs
 
-    # The standard and protanopia palettes are deliberately unchanged.  Their
-    # established colors are part of the renderer's visual contract; only a
-    # light canvas needs the contrast correction introduced here.
-    if _relative_luminance(background) < 0.5:
-        return source
-    if contrast_ratio(source, background) >= minimum:
-        return source
-
-    # Neutral legacy white means "normal foreground".  On a light canvas it
-    # should therefore become the configured foreground rather than a dimmed
-    # gray approximation of white.
-    if source == WHITE and contrast_ratio(foreground, background) >= minimum:
-        return foreground
-
-    # Preserve hue by walking the smallest possible integer blend toward
-    # black.  An integer search avoids returning a rounded color just below
-    # the requested ratio and is cheap enough to cache for all repeated draws.
-    source_rgb = _rgb(source)
-    for step in range(1, 256):
-        fraction = step / 255.0
-        candidate = _hex(tuple(
-            round(channel * (1.0 - fraction)) for channel in source_rgb
-        ))
-        if contrast_ratio(candidate, background) >= minimum:
-            return candidate
-
-    return BLACK
+    sharpmod_rs.color_parse_rgb(color)
+    sharpmod_rs.color_parse_rgb(bg_color)
+    sharpmod_rs.color_parse_rgb(fg_color)
+    return sharpmod_rs.color_resolve_theme(color, bg_color, fg_color, minimum)
 
 
 def resolve_theme_color(
@@ -236,10 +201,9 @@ def semantic_palette(bg_color: str, fg_color: str) -> dict[str, str]:
     Every role meets 4.5:1 contrast on a light background.  Dark-background
     values intentionally remain byte-for-byte equivalent after normalization.
     """
-    return {
-        role: resolve_theme_color(value, bg_color, fg_color)
-        for role, value in _SEMANTIC_COLORS.items()
-    }
+    import sharpmod_rs
+
+    return sharpmod_rs.color_semantic_palette(str(bg_color), str(fg_color))
 
 # Shared index/composite-value gradient. Parameter-specific thresholds still
 # determine when a value escalates. Severe composites additionally use the
@@ -328,18 +292,9 @@ def is_missing(value) -> bool:
     Handles the renderer's ``"--"`` sentinel, ``None``, the NumPy masked
     constant, and non-finite floats, without importing NumPy.
     """
-    if value is None:
-        return True
-    if isinstance(value, str):
-        return value.strip() == MISSING_STR or value.strip() == ""
-    # NumPy masked constant: numpy.ma.masked is falsy in a bool context and
-    # compares equal to itself; detect it structurally without importing numpy.
-    if getattr(value, "__class__", None).__name__ == "MaskedConstant":
-        return True
-    try:
-        return not math.isfinite(float(value))
-    except (TypeError, ValueError):
-        return True
+    import sharpmod_rs
+
+    return sharpmod_rs.color_is_missing(value)
 
 
 def _as_float(value):
@@ -360,24 +315,15 @@ def common_gradient_color(value, yellow, red, pink, *, higher: bool = True) -> s
     inverse scales where lower or more-negative values are more significant.
     Zero is intentionally neutral white; CIN/CINH keeps its own color logic.
     """
-    v = _as_float(value)
-    if v is None or v == 0.0:
-        return FG_COLOR
-    if higher:
-        if v >= pink:
-            return GRADIENT_PINK
-        if v >= red:
-            return GRADIENT_RED
-        if v >= yellow:
-            return GRADIENT_YELLOW
-        return FG_COLOR
-    if v <= pink:
-        return GRADIENT_PINK
-    if v <= red:
-        return GRADIENT_RED
-    if v <= yellow:
-        return GRADIENT_YELLOW
-    return FG_COLOR
+    import sharpmod_rs
+
+    return sharpmod_rs.color_common_gradient(
+        value,
+        float(yellow),
+        float(red),
+        float(pink),
+        higher=bool(higher),
+    )
 
 
 def _low_severe_composite_color(value):
@@ -756,20 +702,18 @@ def tier_color(param: str, value, **context) -> str:
     Requirement 22.5: the color is derived from the current value on every
     call, never reused from a stale default.
     """
-    key = param.strip().lower()
-    try:
-        fn = _TIER_DISPATCH[key]
-    except KeyError:
-        raise KeyError(
-            f"unknown tier parameter {param!r}; "
-            f"expected one of {sorted(_TIER_DISPATCH)}"
-        )
-    resolved = fn(value, **context)
+    import sharpmod_rs
+
     bg_color = context.get("bg_color")
-    if bg_color is not None:
-        resolved = resolve_theme_color(
-            resolved, bg_color, context.get("fg_color", FG_COLOR))
-    return resolved
+    fg_color = context.get("fg_color")
+    return sharpmod_rs.color_tier_for_param(
+        param,
+        value,
+        cape=context.get("cape"),
+        has_positive_cape=bool(context.get("has_positive_cape", True)),
+        bg_color=str(bg_color) if bg_color is not None else None,
+        fg_color=str(fg_color) if fg_color is not None else None,
+    )
 
 
 # ---------------------------------------------------------------------------

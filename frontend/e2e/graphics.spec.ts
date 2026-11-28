@@ -28,6 +28,8 @@ test("the Low profile draws no backdrop filter on any element", async ({ page, c
   expect(await elementsWithBackdropFilter(page)).toEqual([]);
   const glass = await toolbarGlass(page);
   expect(glass.filter).toBe("none");
+  expect(glass.liquidGlass).toBe("css");
+  await expect(page.getByTestId("liquid-glass-base")).toHaveCount(0);
   await nextFrames(page);
   await saveScreenshot(page, "browser-low-profile.png");
   expectWarnings(consoleMessages, []);
@@ -42,8 +44,9 @@ for (const override of ["auto", "high"] as const) {
     await waitForMapDrawn(page);
     expect(await page.evaluate(() => matchMedia("(prefers-reduced-transparency: reduce)").matches)).toBe(true);
     const glass = await toolbarGlass(page);
-    expect(glass).toEqual({ filter: "none", red: 29, green: 31, blue: 33, alpha: 1 });
+    expect(glass).toEqual({ filter: "none", red: 29, green: 31, blue: 33, alpha: 1, liquidGlass: "css" });
     expect(await elementsWithBackdropFilter(page)).toEqual([]);
+    await expect(page.getByTestId("liquid-glass-base")).toHaveCount(0);
     if (override === "high") {
       expect(await page.evaluate(() => document.documentElement.dataset.graphicsProfile)).toBe("high");
       await nextFrames(page);

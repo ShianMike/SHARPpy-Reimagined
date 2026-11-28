@@ -38,7 +38,7 @@ test("the forecast workspace has linked controls and only the supported destinat
   expect(mapToolsBox.y).toBeGreaterThan(navigationBox.y + navigationBox.height);
   const scale = page.getByRole("complementary", { name: "Parameter scale" });
   await expect(scale).toBeVisible();
-  expect((await boxOf(scale)).width).toBeCloseTo(48 * 0.9, 1);
+  expect((await boxOf(scale)).width).toBeCloseTo(36 * 0.9, 1);
   await expect(scale.getByRole("listitem")).toHaveText(["73", "56", "40", "24", "8"]);
   await expect(scale.getByRole("slider", { name: "Explore parameter scale" })).toBeVisible();
   const forecast = page.getByRole("group", { name: "Forecast", exact: true });

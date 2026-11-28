@@ -23,6 +23,7 @@ pub const PRODUCTS: &[&str] = &[
     "wind-10m",
     "apcp",
     "prate",
+    "prate-ptype",
     "prate-frzr",
     "prate-sleet",
     "prate-snow",
@@ -53,6 +54,7 @@ pub const HRDPS_PRODUCTS: &[&str] = &[
     "shear-sfc-500",
     "srh-0-3km",
     "ehi-0-3km",
+    "mslp",
 ];
 
 #[derive(Clone, Copy)]
@@ -114,7 +116,7 @@ impl Record {
 
 pub fn record(name: &str) -> Result<Record, Error> {
     use Level::{AboveGround as Agl, Isobaric, MeanSea, Surface};
-    use Period::{Instant, RunTotal, ThreeHours};
+    use Period::{Instant, RunTotal, SixHours, ThreeHours};
     let (variable, category, number, level, period) = match name {
         "tmp2m" => ("AirTemp", 0, 0, Agl(2), Instant),
         "dpt2m" => ("DewPoint", 0, 6, Agl(2), Instant),
@@ -125,6 +127,16 @@ pub fn record(name: &str) -> Result<Record, Error> {
         "gust" => ("WindGust", 2, 22, Agl(10), Instant),
         "apcp" => ("Precip-Accum", 1, 8, Surface, RunTotal),
         "prate" => ("PrecipRate", 1, 7, Surface, Instant),
+        // MSC's rolling 6-hour per-type accumulations feed the P-Type composites.
+        "rain6h" => ("Rain-Accum6h", 1, 65, Surface, SixHours),
+        "snow6h" => ("Snow-Accum6h", 1, 66, Surface, SixHours),
+        "frzr6h" => ("FreezingRain-Accum6h", 1, 67, Surface, SixHours),
+        "sleet6h" => ("IcePellets-Accum6h", 1, 68, Surface, SixHours),
+        // Non-6h forecast hours pair consecutive run-total files six hours apart.
+        "rain_acc" => ("Rain-Accum", 1, 65, Surface, RunTotal),
+        "snow_acc" => ("Snow-Accum", 1, 66, Surface, RunTotal),
+        "frzr_acc" => ("FreezingRain-Accum", 1, 67, Surface, RunTotal),
+        "sleet_acc" => ("IcePellets-Accum", 1, 68, Surface, RunTotal),
         "gdps_frzr" => ("FreezingRain-Accum3h", 1, 67, Surface, ThreeHours),
         "gdps_sleet" => ("IcePellets-Accum3h", 1, 68, Surface, ThreeHours),
         "gdps_snow" => ("Snow-Accum3h", 1, 66, Surface, ThreeHours),
@@ -140,7 +152,7 @@ pub fn record(name: &str) -> Result<Record, Error> {
             let pressure = value
                 .parse()
                 .ok()
-                .filter(|level| [200, 300, 500, 700, 850].contains(level));
+                .filter(|level| [200, 300, 500, 700, 850, 1000].contains(level));
             match (prefix, pressure) {
                 ("tmp", Some(pressure)) => ("AirTemp", 0, 0, Isobaric(pressure), Instant),
                 ("hgt", Some(pressure)) => {
@@ -161,6 +173,19 @@ pub fn record(name: &str) -> Result<Record, Error> {
     })
 }
 
+/// Run-total counterpart used to difference trailing 6-hour accumulations on
+/// intermediate GDPS/RDPS forecast hours where `*-Accum6h` is not published.
+pub fn run_total_counterpart(name: &str) -> Option<Record> {
+    let key = match name {
+        "rain6h" => "rain_acc",
+        "snow6h" => "snow_acc",
+        "frzr6h" => "frzr_acc",
+        "sleet6h" => "sleet_acc",
+        _ => return None,
+    };
+    Some(record(key).expect("validated run-total record mapping"))
+}
+
 pub fn rdps_record(name: &str) -> Result<Record, Error> {
     let mut result = record(name)?;
     match name {
@@ -174,7 +199,7 @@ pub fn rdps_record(name: &str) -> Result<Record, Error> {
 }
 
 pub fn hrdps_record(name: &str) -> Result<Record, Error> {
-    use Level::{AboveGround as Agl, Isobaric, Surface};
+    use Level::{AboveGround as Agl, Isobaric, MeanSea, Surface};
     use Period::{Instant, RunTotal, SixHours, TwelveHours, TwentyFourHours};
     let (variable, category, number, level, period) = match name {
         "tmp2m" => ("TMP", 0, 0, Agl(2), Instant),
@@ -187,6 +212,7 @@ pub fn hrdps_record(name: &str) -> Result<Record, Error> {
         "prate" => ("PRATE", 1, 7, Surface, Instant),
         "ptype" => ("PTYPE", 1, 19, Surface, Instant),
         "apcp" => ("APCP", 1, 8, Surface, RunTotal),
+        "mslp" => ("PRMSL", 3, 1, MeanSea, Instant),
         "qpf6h" => ("APCP-Accum6h", 1, 8, Surface, SixHours),
         "qpf12h" => ("APCP-Accum12h", 1, 8, Surface, TwelveHours),
         "qpf24h" => ("APCP-Accum24h", 1, 8, Surface, TwentyFourHours),
@@ -201,7 +227,7 @@ pub fn hrdps_record(name: &str) -> Result<Record, Error> {
             let pressure = value
                 .parse()
                 .ok()
-                .filter(|level| [500, 700, 850].contains(level));
+                .filter(|level| [500, 700, 850, 1000].contains(level));
             match (prefix, pressure) {
                 ("tmp", Some(pressure)) => ("TMP", 0, 0, Isobaric(pressure), Instant),
                 ("hgt", Some(pressure)) => ("HGT", 3, 5, Isobaric(pressure), Instant),
@@ -227,6 +253,7 @@ pub enum Model {
     Hrdps,
 }
 
+#[derive(Clone, Copy)]
 pub struct Frame {
     pub model: Model,
     pub date: i32,
@@ -401,10 +428,62 @@ mod tests {
         assert!(frame.file_url(hrdps_record("srh03").unwrap()).ends_with(
             "/model_hrdps/continental/2.5km/06/024/20261123T06Z_MSC_HRDPS_HLCY_Sfc_RLatLon0.0225_PT024H.grib2"
         ));
-        assert_eq!(HRDPS_PRODUCTS.len(), 20);
+        assert!(frame.file_url(hrdps_record("mslp").unwrap()).ends_with(
+            "/model_hrdps/continental/2.5km/06/024/20261123T06Z_MSC_HRDPS_PRMSL_MSL_RLatLon0.0225_PT024H.grib2"
+        ));
+        assert!(frame.file_url(hrdps_record("hgt1000").unwrap()).ends_with(
+            "/model_hrdps/continental/2.5km/06/024/20261123T06Z_MSC_HRDPS_HGT_ISBL_1000_RLatLon0.0225_PT024H.grib2"
+        ));
+        assert_eq!(HRDPS_PRODUCTS.len(), 21);
         assert!(Frame::for_model(Model::Hrdps, run, 0).is_ok());
         assert!(Frame::for_model(Model::Hrdps, run, 48).is_ok());
         assert!(Frame::for_model(Model::Hrdps, run, 49).is_err());
         assert!(Frame::for_model(Model::Hrdps, run + time::Duration::hours(3), 12).is_err());
+    }
+
+    #[test]
+    fn six_hour_type_accumulations_and_the_1000_mb_height_address_their_records() {
+        let run = OffsetDateTime::parse("2026-11-08T00:00:00Z", &Rfc3339).unwrap();
+        let frame = Frame::new(run, 24).unwrap();
+        for (name, stem) in [
+            ("rain6h", "Rain-Accum6h"),
+            ("snow6h", "Snow-Accum6h"),
+            ("frzr6h", "FreezingRain-Accum6h"),
+            ("sleet6h", "IcePellets-Accum6h"),
+        ] {
+            let record = record(name).unwrap();
+            assert!(matches!(record.period, Period::SixHours), "{name}");
+            assert!(frame.file_url(record).ends_with(&format!(
+                "/20261108/WXO-DD/model_gdps/15km/00/024/20261108T00Z_MSC_GDPS_{stem}_Sfc_LatLon0.15_PT024H.grib2"
+            )));
+            // RDPS publishes the same rolling 6-hour accumulations.
+            let regional = Frame::for_model(Model::Rdps, run, 24).unwrap();
+            assert!(regional
+                .file_url(rdps_record(name).unwrap())
+                .ends_with(&format!(
+                    "/20261108/WXO-DD/model_rdps/10km/00/024/20261108T00Z_MSC_RDPS_{stem}_Sfc_RLatLon0.09_PT024H.grib2"
+                )));
+        }
+        let sleet = record("sleet6h").unwrap();
+        assert_eq!((sleet.category, sleet.number), (1, 68));
+        assert!(run_total_counterpart("tmp2m").is_none());
+        let gdps_nine = Frame::new(run, 9).unwrap();
+        let rain_acc = run_total_counterpart("rain6h").unwrap();
+        assert!(matches!(rain_acc.period, Period::RunTotal));
+        assert!(gdps_nine.file_url(rain_acc).ends_with(
+            "/20261108/WXO-DD/model_gdps/15km/00/009/20261108T00Z_MSC_GDPS_Rain-Accum_Sfc_LatLon0.15_PT009H.grib2"
+        ));
+        let rdps_seven = Frame::for_model(Model::Rdps, run, 7).unwrap();
+        assert!(rdps_seven.file_url(rain_acc).ends_with(
+            "/20261108/WXO-DD/model_rdps/10km/00/007/20261108T00Z_MSC_RDPS_Rain-Accum_Sfc_RLatLon0.09_PT007H.grib2"
+        ));
+        let thickness_base = record("hgt1000").unwrap();
+        assert!(frame
+            .file_url(thickness_base)
+            .ends_with("/20261108/WXO-DD/model_gdps/15km/00/024/20261108T00Z_MSC_GDPS_GeopotentialHeight_IsbL-1000_LatLon0.15_PT024H.grib2"));
+        assert!(matches!(
+            record("hgt1000").unwrap().level,
+            Level::Isobaric(1000)
+        ));
     }
 }

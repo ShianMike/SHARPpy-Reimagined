@@ -33,6 +33,8 @@ class ModelHourKey:
     def create(
         cls, model, run_time, fxx, member=None, spatial=None
     ) -> "ModelHourKey":
+        import sharpmod_rs
+
         run_dt = run_time
         if not isinstance(run_dt, datetime):
             raise TypeError("run_time must be a datetime")
@@ -40,14 +42,19 @@ class ModelHourKey:
             run_dt = run_dt.replace(tzinfo=timezone.utc)
         else:
             run_dt = run_dt.astimezone(timezone.utc)
-        member_value = str(member).strip() if member is not None else ""
-        spatial_value = str(spatial).strip() if spatial is not None else ""
+        norm_model, norm_member, norm_spatial = (
+            sharpmod_rs.hour_cache_canonical_key_parts(
+                str(model),
+                None if member is None else str(member),
+                None if spatial is None else str(spatial),
+            )
+        )
         return cls(
-            model=str(model).strip().lower(),
+            model=norm_model,
             run_time=run_dt,
             fxx=int(fxx),
-            member=member_value or None,
-            spatial=spatial_value or None,
+            member=norm_member,
+            spatial=norm_spatial,
         )
 
 
@@ -434,17 +441,11 @@ class ModelHourCache:
 
     @staticmethod
     def _directory_prefix(key: ModelHourKey) -> str:
-        model = "".join(
-            character if character.isalnum() else "_" for character in key.model
-        )
-        spatial = ""
-        if key.spatial:
-            spatial_value = "".join(
-                character if character.isalnum() else "_"
-                for character in key.spatial
-            )
-            spatial = f"p{spatial_value}_"
-        return (
-            f"sharpmod_hour_{model}_{key.run_time:%Y%m%d%H}_"
-            f"f{key.fxx:03d}_{spatial}"
+        import sharpmod_rs
+
+        return sharpmod_rs.hour_cache_directory_prefix(
+            key.model,
+            f"{key.run_time:%Y%m%d%H}",
+            int(key.fxx),
+            key.spatial,
         )

@@ -20,7 +20,7 @@
   z-index: -1;
   pointer-events: none;
   border-radius: var(--selection-radius, var(--radius-sm));
-  background: var(--selection-fill, var(--accent-subtle));
+  background: var(--selection-fill, var(--accent-glass-sheen), var(--accent-subtle));
   box-shadow: var(--selection-shadow, none);
   transition: translate var(--motion-base) var(--ease-travel), opacity var(--motion-fast) var(--ease-standard);
 }

@@ -1,4 +1,4 @@
-//! Connected display paths for mean sea-level pressure contours.
+//! Connected display paths for pressure, thickness and height contours.
 
 use std::collections::{HashMap, HashSet};
 
@@ -48,6 +48,19 @@ struct Trace {
     ring: bool,
 }
 
+struct Curve {
+    controls: [Point; 3],
+    steps: usize,
+}
+
+impl Curve {
+    fn point(&self, t: f64) -> Point {
+        let [start, corner, end] = self.controls;
+        let u = 1.0 - t;
+        [0, 1].map(|axis| u * u * start[axis] + 2.0 * u * t * corner[axis] + t * t * end[axis])
+    }
+}
+
 /// Connect and round display contours in their original sample-grid coordinates.
 ///
 /// Input is the validated output of the display contour extractor (at most
@@ -55,7 +68,7 @@ struct Trace {
 /// per input segment, including repeated closing vertices. A corner remains
 /// intact when it cannot be rounded within this budget or over finite samples.
 /// Heights, widths, coordinates and levels stay in their original units.
-pub(crate) fn smooth_isobars(
+pub(crate) fn smooth_paths(
     segments: &[(f64, Segment)],
     values: &[f64],
     height: usize,
@@ -134,52 +147,64 @@ pub(crate) fn smooth_isobars(
         }
     }
 
-    // A trace of E edges uses E+1 vertices before simplification. Every trace
-    // has at least one edge, so all traces fit even if every corner stays intact.
-    let mut spare =
-        2 * segments.len() - traces.iter().map(|trace| trace.points.len()).sum::<usize>();
+    let mut requested = 0;
+    let curves: Vec<Vec<_>> = traces
+        .iter()
+        .map(|Trace { points, ring, .. }| {
+            let last = points.len() - 1;
+            (usize::from(!ring)..last)
+                .filter_map(|index| {
+                    let previous = if index == 0 { last - 1 } else { index - 1 };
+                    let curve = round_corner(
+                        points[previous],
+                        points[index],
+                        points[index + 1],
+                        values,
+                        height,
+                        width,
+                    )?;
+                    requested += curve.steps;
+                    Some((index, curve))
+                })
+                .collect()
+        })
+        .collect();
+    // A trace of E edges uses at most E+1 vertices. Keep every original path
+    // within the existing wire budget and share the spare points among bends.
+    let base_points = traces.iter().map(|trace| trace.points.len()).sum::<usize>();
+    let extras = (2 * segments.len() - base_points).min(requested) as u64;
+    let requested = requested as u64;
+    let mut balance = requested / 2;
     traces
         .into_iter()
-        .map(|trace| {
+        .zip(curves)
+        .map(|(trace, curves)| {
             let Trace {
                 level,
                 points,
                 ring,
             } = trace;
-            if points.len() < 3 || spare == 0 {
+            if curves.is_empty() || extras == 0 {
                 return (level, points);
             }
             let mut rounded = Vec::with_capacity(points.len());
-            rounded.push(points[0]);
-            for window in points.windows(3) {
-                let (a, corner, b) = (window[0], window[1], window[2]);
-                if spare > 0 {
-                    if let Some((before, after)) = round_corner(a, corner, b, values, height, width)
-                    {
-                        rounded.extend([before, after]);
-                        spare -= 1;
-                        continue;
-                    }
+            let mut start = 0;
+            for (index, curve) in curves {
+                balance += curve.steps as u64 * extras;
+                let steps = (balance / requested) as usize;
+                balance %= requested;
+                rounded.extend_from_slice(&points[start..index]);
+                if steps == 0 {
+                    rounded.push(points[index]);
+                } else {
+                    rounded.extend((0..=steps).map(|step| curve.point(step as f64 / steps as f64)));
                 }
-                rounded.push(corner);
+                start = index + 1;
             }
-            let last = points[points.len() - 1];
-            if ring && spare > 0 {
-                if let Some((before, after)) = round_corner(
-                    points[points.len() - 2],
-                    last,
-                    points[1],
-                    values,
-                    height,
-                    width,
-                ) {
-                    rounded[0] = after;
-                    rounded.extend([before, after]);
-                    spare -= 1;
-                    return (level, rounded);
-                }
+            rounded.extend_from_slice(&points[start..points.len() - usize::from(ring)]);
+            if ring {
+                rounded.push(rounded[0]);
             }
-            rounded.push(last);
             (level, rounded)
         })
         .collect()
@@ -212,7 +237,7 @@ fn round_corner(
     values: &[f64],
     height: usize,
     width: usize,
-) -> Option<(Point, Point)> {
+) -> Option<Curve> {
     let (dx, dy) = (a[0] - corner[0], a[1] - corner[1]);
     let (ex, ey) = (b[0] - corner[0], b[1] - corner[1]);
     let (incoming, outgoing) = (dx.hypot(dy), ex.hypot(ey));
@@ -221,7 +246,15 @@ fn round_corner(
     }
     // Use equal cuts to bisect the bend. Even along an enlarged extraction
     // cell's edge, rounding stays within half an original sample of the corner.
-    let cut = (0.25 * incoming.min(outgoing)).min(0.5);
+    let cut = (0.45 * incoming.min(outgoing)).min(0.5);
+    // The largest deviation of the quadratic from the bevel is at its midpoint.
+    // Leave near-straight joins alone and spend vertices on the visible bends.
+    let deviation =
+        cut * (dx / incoming + ex / outgoing).hypot(dy / incoming + ey / outgoing) / 4.0;
+    let steps = (deviation / 0.0125).sqrt().ceil() as usize;
+    if steps <= 1 {
+        return None;
+    }
     let before = [
         corner[0] + dx * (cut / incoming),
         corner[1] + dy * (cut / incoming),
@@ -246,7 +279,10 @@ fn round_corner(
                 .iter()
                 .all(|value| value.is_finite())
         })
-        .then_some((before, after))
+        .then_some(Curve {
+            controls: [before, corner, after],
+            steps,
+        })
 }
 
 #[cfg(test)]

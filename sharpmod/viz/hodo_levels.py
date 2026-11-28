@@ -17,8 +17,9 @@ _MARKER_GAP_PX = 2.0
 
 
 def _label_for_height(height_m: float) -> str:
-    height_km = float(height_m) / 1000.0
-    return f"{height_km:.1f}".rstrip("0").rstrip(".")
+    import sharpmod_rs
+
+    return sharpmod_rs.hodo_label_for_height(float(height_m))
 
 
 def _marker_font_pixel_size(label: str) -> int:
@@ -68,24 +69,15 @@ def height_level_points(
     if height.size < 2:
         return ()
 
-    order = np.argsort(height, kind="stable")
-    height = height[order]
-    u_wind = u_wind[order]
-    v_wind = v_wind[order]
-    unique_height, unique_indices = np.unique(height, return_index=True)
-    height = unique_height
-    u_wind = u_wind[unique_indices]
-    v_wind = v_wind[unique_indices]
-    if height.size < 2:
-        return ()
+    import sharpmod_rs
 
     points = []
-    for level in levels:
-        level = float(level)
-        if not math.isfinite(level) or level < height[0] or level > height[-1]:
-            continue
-        u_value = float(np.interp(level, height, u_wind))
-        v_value = float(np.interp(level, height, v_wind))
+    for label, level, u_value, v_value in sharpmod_rs.hodo_prepare_height_wind_samples(
+        height.tolist(),
+        u_wind.tolist(),
+        v_wind.tolist(),
+        [float(level) for level in levels],
+    ):
         try:
             x, y = transform(u_value, v_value)
             x = float(np.asarray(x).reshape(-1)[0])
@@ -93,7 +85,7 @@ def height_level_points(
         except (TypeError, ValueError, IndexError):
             continue
         if math.isfinite(x) and math.isfinite(y):
-            points.append((_label_for_height(level), level, x, y))
+            points.append((label, level, x, y))
     return tuple(points)
 
 
@@ -261,54 +253,23 @@ def layout_height_level_markers(
             normalized_exclusions.append(candidate)
     normalized_exclusions = tuple(normalized_exclusions)
 
-    minimum_separation = radius * 2.0 + _MARKER_GAP_PX
-    placed: list[tuple[float, float]] = []
-    layout = []
+    valid_points = []
     for label, height_m, source_x, source_y in points:
         try:
             source_x = float(source_x)
             source_y = float(source_y)
         except (TypeError, ValueError):
             continue
-        if (
-            not math.isfinite(source_x)
-            or not math.isfinite(source_y)
-            or not _inside_marker_bounds(
-                source_x, source_y, normalized_bounds, radius)
-        ):
-            continue
+        valid_points.append((str(label), float(height_m), source_x, source_y))
 
-        center = None
-        for candidate_x, candidate_y in _candidate_centers(
-                source_x, source_y, normalized_exclusions,
-                minimum_separation, radius):
-            if not _inside_marker_bounds(
-                    candidate_x, candidate_y, normalized_bounds, radius):
-                continue
-            if any(_overlaps_exclusion(
-                    candidate_x, candidate_y, exclusion, radius)
-                    for exclusion in normalized_exclusions):
-                continue
-            if any(math.hypot(
-                    candidate_x - placed_x, candidate_y - placed_y)
-                    < minimum_separation
-                    for placed_x, placed_y in placed):
-                continue
-            center = candidate_x, candidate_y
-            break
+    import sharpmod_rs
 
-        if center is None:
-            continue
-        placed.append(center)
-        layout.append((
-            str(label),
-            float(height_m),
-            source_x,
-            source_y,
-            center[0],
-            center[1],
-        ))
-    return tuple(layout)
+    return tuple(sharpmod_rs.hodo_layout_height_level_markers(
+        valid_points,
+        normalized_bounds,
+        list(normalized_exclusions),
+        radius,
+    ))
 
 
 def _height_level_exclusions(widget: Any, qtcore: Any) -> tuple[Any, ...]:

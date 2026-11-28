@@ -51,10 +51,19 @@ def test_the_ticks_name_both_ends_of_the_scale(product):
 
     Temperature ended its ticks at 110 F on a bar that runs to 120, so the last
     number sat short of the end and there was nothing to say where the scale
-    stopped.
+    stopped. A multi-band ptype palette is the exception: it ticks the shared
+    band edges, so its ends name the first band rather than the composite.
     """
     palette = product.palette
     ticks = palette.tick_values()
+
+    if palette.ptype_labels is not None:
+        group_size = len(palette.stops) // len(palette.ptype_labels)
+        group_min = palette.stops[0][0]
+        group_max = palette.stops[group_size - 1][0]
+        assert group_min <= ticks[0], product.key
+        assert ticks[-1] == group_max, product.key
+        return
 
     assert ticks[0] == palette.minimum, product.key
     assert ticks[-1] == palette.maximum, product.key

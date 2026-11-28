@@ -41,7 +41,7 @@ unknown keys too, so drift fails a test instead of passing silently.
 | `get_satellite_frame` | command, `commands/map.rs` | `validTime`, `channel?` (`visible`, `infrared`) | an `SHRF` `satellite` frame holding the rendered PNG, with the scan's provenance | `INVALID_ARGUMENT`, `OVERLAY_FETCH_FAILED`, the bridge codes, `INTERNAL` | `allow-get-satellite-frame` |
 | `get_storm_reports` | command, `commands/map.rs` | `validTime`, `windowS?` (21600), `hazardFilter?` (`all`, `tornado`, `hail`, `wind`, `significant`) | `StormReports` (typed point records with the provider's marker spec) | `INVALID_ARGUMENT`, `OVERLAY_FETCH_FAILED`, the bridge codes, `INTERNAL` | `allow-get-storm-reports` |
 | `get_report_options` | command, `commands/map.rs` | none | `ReportOptions` (the provider's window and filter labels; cached for the session) | the bridge codes, `INTERNAL` | `allow-get-report-options` |
-| `get_field_contours` | command, `commands/map.rs` | `product`, `runTime`, `forecastHour` (0 to 84), optional `model` (HRRR by default) | `ContourLines` (lon/lat segments at each multiple of the product's interval) | `INVALID_ARGUMENT` (a product with no contour lines included), `FIELD_UNAVAILABLE`, `FIELD_FETCH_FAILED` (which is not retryable when a level set is too dense to draw), the bridge codes, `INTERNAL` | `allow-get-field-contours` |
+| `get_field_contours` | command, `commands/map.rs` | `product`, `runTime`, `forecastHour` (0 to 84), optional `model` (HRRR by default) | `ContourLines` (joined lon/lat paths or segments at the product's published interval) | `INVALID_ARGUMENT` (a product with no contour lines included), `FIELD_UNAVAILABLE`, `FIELD_FETCH_FAILED` (which is not retryable when a level set is too dense to draw), the bridge codes, `INTERNAL` | `allow-get-field-contours` |
 | `get_surface_plots` | command, `commands/map.rs` | `latitude`, `longitude`, `validTime` | `SurfacePlots` (typed point records with the display slots and the wind-staff mark spec) | `INVALID_ARGUMENT`, `OVERLAY_FETCH_FAILED`, the bridge codes, `INTERNAL` | `allow-get-surface-plots` |
 | `get_place_labels` | command, `commands/map.rs` | none | `PlaceLabels` (cached for the session) | the bridge codes, `INTERNAL` | `allow-get-place-labels` |
 | `get_station_availability` | command, `commands/map.rs` | `observationTime` | `AvailabilityReport` | `INVALID_ARGUMENT`, `STATION_LIST_UNAVAILABLE`, the bridge codes, `INTERNAL` | `allow-get-station-availability` |
@@ -350,6 +350,8 @@ interface ContourLines {
   product: string; runTime: string; forecastHour: number;
   unit: string; interval: number;         // the level spacing, in `unit`
   segments: [readonly [number, number], readonly [number, number]][];  // two endpoints each
+  paths?: (readonly [number, number])[][];   // joined lines, when present
+  labels?: { position: readonly [number, number]; value: number }[];
   wind: { width: number; height: number; bounds: Bounds; data: Uint16Array } | null;
 }
 interface StaffSpec {                     // the wind mark, as the paint path splits it

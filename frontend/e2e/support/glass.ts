@@ -7,13 +7,14 @@ export interface Glass {
   green: number;
   blue: number;
   alpha: number;
+  liquidGlass: string;
 }
 
 export async function toolbarGlass(page: Page): Promise<Glass> {
   return page.getByRole("banner", { name: "SHARPpy Reimagined" }).locator('[data-material="glass"]').first().evaluate((element) => {
     const style = getComputedStyle(element);
     const [red = 0, green = 0, blue = 0, alpha = 1] = (style.backgroundColor.match(/[\d.]+/gu) ?? []).map(Number);
-    return { filter: style.backdropFilter, red, green, blue, alpha };
+    return { filter: style.backdropFilter, red, green, blue, alpha, liquidGlass: element.dataset.liquidGlass ?? "css" };
   });
 }
 

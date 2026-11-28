@@ -6,6 +6,7 @@ import {
   GITHUB_STAR_BROWSER_SNOOZE_MS,
   GITHUB_STAR_NOT_NOW_MS,
 } from "../../stores/githubStarPreferences";
+import { useAppStore } from "../../stores/appStore";
 import { useLogStore } from "../../stores/logStore";
 import { useUiStore } from "../../stores/uiStore";
 import { useUpdateStore } from "../../stores/updateStore";
@@ -29,6 +30,7 @@ function interact(count: number, eventType: "pointerdown" | "keydown" = "pointer
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-11-24T12:00:00Z"));
+  useAppStore.setState({ ...useAppStore.getInitialState(), activeWorkspace: "map" }, true);
   useUiStore.setState({ whatsNewOpen: false, githubStar: DEFAULT_GITHUB_STAR_PREFERENCE });
   useUpdateStore.setState(useUpdateStore.getInitialState(), true);
   useLogStore.getState().clear();
@@ -39,6 +41,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  useAppStore.setState(useAppStore.getInitialState(), true);
 });
 
 it("waits for enough cooled-down interactions plus 30s inactivity and resets on activity", () => {
@@ -91,6 +94,22 @@ it("suppresses the prompt while Release Notes or update review is open", () => {
   render(<GitHubStarNotice />);
   interact(REQUIRED_INTERACTIONS);
   act(() => { vi.advanceTimersByTime(INACTIVITY_DELAY_MS + 1_000); });
+  expect(screen.queryByTestId("github-star-notice")).toBeNull();
+});
+
+it("suppresses the prompt while on the Overview workspace and hides it when returning there", () => {
+  act(() => { useAppStore.getState().setActiveWorkspace("overview"); });
+  render(<GitHubStarNotice />);
+  interact(REQUIRED_INTERACTIONS);
+  act(() => { vi.advanceTimersByTime(INACTIVITY_DELAY_MS + 1_000); });
+  expect(screen.queryByTestId("github-star-notice")).toBeNull();
+
+  act(() => { useAppStore.getState().setActiveWorkspace("map"); });
+  interact(REQUIRED_INTERACTIONS);
+  act(() => { vi.advanceTimersByTime(INACTIVITY_DELAY_MS); });
+  expect(screen.getByTestId("github-star-notice")).toBeTruthy();
+
+  act(() => { useAppStore.getState().setActiveWorkspace("overview"); });
   expect(screen.queryByTestId("github-star-notice")).toBeNull();
 });
 

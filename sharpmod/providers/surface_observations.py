@@ -8,7 +8,6 @@ never converts a missing wind or dewpoint into zero.
 
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
@@ -118,13 +117,10 @@ class SurfaceObservation:
 
     @property
     def wind_uv_kt(self) -> tuple[float | None, float | None]:
-        if self.wind_state == "calm":
-            return 0.0, 0.0
-        if self.wind_direction_deg is None or self.wind_speed_kt is None:
-            return None, None
-        angle = math.radians(self.wind_direction_deg)
-        return -self.wind_speed_kt * math.sin(angle), -self.wind_speed_kt * math.cos(
-            angle
+        import sharpmod_rs
+
+        return sharpmod_rs.surface_wind_uv_kt(
+            self.wind_speed_kt, self.wind_direction_deg
         )
 
     @property
@@ -137,13 +133,11 @@ class SurfaceObservation:
         rather than drawn as either a calm circle or a directional barb.
         """
 
-        if self.wind_speed_kt is None:
-            return "missing"
-        if abs(float(self.wind_speed_kt)) < 0.5:
-            return "calm"
-        if self.wind_direction_deg is None:
-            return "direction-missing"
-        return "available"
+        import sharpmod_rs
+
+        return sharpmod_rs.surface_wind_state(
+            self.wind_speed_kt, self.wind_direction_deg
+        )
 
     def offset_seconds(self, requested_time) -> float:
         return (self.observed_at - _utc(requested_time)).total_seconds()
@@ -372,25 +366,17 @@ def declutter_observations(
 ) -> tuple[SurfaceObservation, ...]:
     """Greedily retain nearby station plots in screen-space grid cells."""
 
-    lon0, lon1, lat0, lat1 = (float(item) for item in bounds)
-    width, height = (max(1, int(item)) for item in pixel_size)
-    cell = max(10, int(minimum_spacing_px))
-    occupied = []
-    kept = []
-    for observation in observations:
-        lon = observation.station.longitude
-        lat = observation.station.latitude
-        if not (lon0 <= lon <= lon1 and lat0 <= lat <= lat1):
-            continue
-        x = (lon - lon0) / max(1e-9, lon1 - lon0) * width
-        y = (lat1 - lat) / max(1e-9, lat1 - lat0) * height
-        if any(math.hypot(x - old_x, y - old_y) < cell for old_x, old_y in occupied):
-            continue
-        occupied.append((x, y))
-        kept.append(observation)
-        if len(kept) >= max(1, int(max_stations)):
-            break
-    return tuple(kept)
+    import sharpmod_rs
+
+    items = tuple(observations)
+    kept, _occupied = sharpmod_rs.surface_declutter_indices(
+        tuple((item.station.longitude, item.station.latitude) for item in items),
+        tuple(float(item) for item in bounds),
+        tuple(max(1, int(item)) for item in pixel_size),
+        int(minimum_spacing_px),
+        int(max_stations),
+    )
+    return tuple(items[index] for index in kept)
 
 
 def surface_overlay_layer(
@@ -402,6 +388,8 @@ def surface_overlay_layer(
     max_stations: int = 24,
 ):
     """Build decluttered station plots for the existing vector-overlay map."""
+
+    import sharpmod_rs
 
     limit = max(1, int(max_stations))
     status_candidates = []
@@ -418,103 +406,69 @@ def surface_overlay_layer(
     # claims to communicate availability while never drawing its exceptions.
     status_reserve = min(4, len(status_candidates), max(0, limit - 1))
     observation_limit = max(1, limit - status_reserve)
-    shown = declutter_observations(
-        dataset.observations,
-        bounds,
-        pixel_size=pixel_size,
-        minimum_spacing_px=minimum_spacing_px,
-        max_stations=observation_limit,
-    )
-    lon0, lon1, lat0, lat1 = (float(item) for item in bounds)
+    view = tuple(float(item) for item in bounds)
+    screen_size = tuple(max(1, int(item)) for item in pixel_size)
     # The polygon is only the hit/dot footprint; wind staff and labels are drawn
     # in screen pixels by the map so they stay readable through navigation.
-    radius_lon = max(0.018, abs(lon1 - lon0) * 3.5 / max(200.0, pixel_size[0]))
-    radius_lat = max(0.018, abs(lat1 - lat0) * 3.5 / max(150.0, pixel_size[1]))
+    radius_lon, radius_lat = sharpmod_rs.surface_ring_radii(
+        view, (float(pixel_size[0]), float(pixel_size[1]))
+    )
 
     def ring(station):
-        points = []
-        for index in range(13):
-            angle = math.tau * index / 12.0
-            points.append(
-                (
-                    station.longitude + radius_lon * math.cos(angle),
-                    station.latitude + radius_lat * math.sin(angle),
-                )
+        return tuple(
+            sharpmod_rs.surface_station_ring(
+                station.longitude, station.latitude, radius_lon, radius_lat
             )
-        return tuple(points)
-
-    width, height = (max(1, int(item)) for item in pixel_size)
-
-    def screen_point(station):
-        if not (
-            lon0 <= station.longitude <= lon1 and lat0 <= station.latitude <= lat1
-        ):
-            return None
-        return (
-            (station.longitude - lon0) / max(1e-9, lon1 - lon0) * width,
-            (lat1 - station.latitude) / max(1e-9, lat1 - lat0) * height,
         )
 
-    occupied = [
-        point
-        for point in (screen_point(item.station) for item in shown)
-        if point is not None
-    ]
-    shown_status = []
-    spacing = max(10, int(minimum_spacing_px))
-    for station, state in status_candidates:
-        point = screen_point(station)
-        if point is None:
-            continue
-        if any(math.hypot(point[0] - x, point[1] - y) < spacing for x, y in occupied):
-            continue
-        occupied.append(point)
-        shown_status.append((station, state))
-        if len(shown) + len(shown_status) >= limit:
-            break
+    # One occupied screen grid serves both passes: the plotted observations
+    # claim their pixels first, and the status pass keeps what remains of the
+    # shared station limit.
+    kept_indices, occupied = sharpmod_rs.surface_declutter_indices(
+        tuple(
+            (item.station.longitude, item.station.latitude)
+            for item in dataset.observations
+        ),
+        view,
+        screen_size,
+        int(minimum_spacing_px),
+        observation_limit,
+    )
+    shown = tuple(dataset.observations[index] for index in kept_indices)
+    status_indices, _occupied = sharpmod_rs.surface_declutter_indices(
+        tuple(
+            (station.longitude, station.latitude)
+            for station, _state in status_candidates
+        ),
+        view,
+        screen_size,
+        int(minimum_spacing_px),
+        limit - len(shown),
+        occupied_px=occupied,
+    )
+    shown_status = tuple(status_candidates[index] for index in status_indices)
 
     shapes = []
     for observation in shown:
         station = observation.station
         points = ring(station)
         u, v = observation.wind_uv_kt
-        offset = observation.offset_seconds(dataset.requested_time) / 60.0
-        temperature = (
-            f"{observation.temperature_c:.1f} °C"
-            if observation.temperature_c is not None
-            else "missing"
-        )
-        dewpoint = (
-            f"{observation.dewpoint_c:.1f} °C"
-            if observation.dewpoint_c is not None
-            else "missing"
-        )
-        if observation.wind_state == "calm":
-            wind = "calm (0 kt)"
-        elif observation.wind_state == "direction-missing":
-            wind = f"{observation.wind_speed_kt:.0f} kt; direction missing"
-        elif observation.wind_state == "available":
-            wind = (
-                f"{observation.wind_direction_deg:.0f}° at "
-                f"{observation.wind_speed_kt:.0f} kt"
-            )
-        else:
-            wind = "missing (not calm)"
+        stale = observation.is_stale(dataset.requested_time)
         # The gust was being fetched and then dropped: it reached neither the plot
         # nor this description, so the one reading that distinguishes a benign
         # surface wind from an outflow-driven one was unreachable in the GUI.
-        if observation.wind_gust_kt is not None:
-            wind += f", gusting {observation.wind_gust_kt:.0f} kt"
-        stale = observation.is_stale(dataset.requested_time)
-        description = (
-            f"{station.station_id} — {station.name}\n"
-            f"Observed {observation.observed_at:%Y-%m-%d %H:%M:%SZ} "
-            f"({offset:+.0f} min from requested)\n"
-            f"Temperature {temperature}; dewpoint {dewpoint}; wind {wind}\n"
-            "Source: NOAA/NWS API station observation"
+        description = sharpmod_rs.surface_format_observation_text(
+            station.station_id,
+            station.name,
+            f"{observation.observed_at:%Y-%m-%d %H:%M:%SZ}",
+            observation.offset_seconds(dataset.requested_time) / 60.0,
+            observation.temperature_c,
+            observation.dewpoint_c,
+            observation.wind_direction_deg,
+            observation.wind_speed_kt,
+            observation.wind_gust_kt,
+            stale,
         )
-        if stale:
-            description += "\nStale/mismatched: more than 30 minutes from requested time"
         shapes.append(
             OverlayShape(
                 rings=(points,),
@@ -585,22 +539,17 @@ def surface_overlay_layer(
                 marker_category=state,
             )
         )
-    subtitle = (
-        f"{len(shown)} displayed / {len(dataset.observations)} time-matched / "
-        f"{dataset.discovered_station_count} nearby stations · "
-        f"{dataset.queried_station_count} queried · requested "
-        f"{dataset.requested_time:%Y-%m-%d %H:%MZ}"
+    subtitle = sharpmod_rs.surface_format_subtitle(
+        len(shown),
+        len(dataset.observations),
+        int(dataset.discovered_station_count),
+        dataset.queried_station_count,
+        f"{dataset.requested_time:%Y-%m-%d %H:%MZ}",
+        dataset.stale_count,
+        len(set(dataset.unmatched_station_ids) - failed_ids),
+        len(dataset.failed_station_ids),
+        dataset.unqueried_station_count,
     )
-    if dataset.stale_count:
-        subtitle += f" · {dataset.stale_count} stale/mismatched"
-    if dataset.unmatched_station_ids:
-        no_match_count = len(set(dataset.unmatched_station_ids) - failed_ids)
-        if no_match_count:
-            subtitle += f" · {no_match_count} no observation"
-    if dataset.failed_station_ids:
-        subtitle += f" · {len(dataset.failed_station_ids)} query failed"
-    if dataset.unqueried_station_count:
-        subtitle += f" · {dataset.unqueried_station_count} not queried"
     return build_layer(
         SURFACE_OVERLAY_KEY,
         "Surface observations",
@@ -657,65 +606,51 @@ def read_surface_observations(path) -> SurfaceObservationSet:
 
 
 def export_surface_csv(path, dataset: SurfaceObservationSet) -> Path:
+    import sharpmod_rs
+
     destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, name = tempfile.mkstemp(
-        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
-    )
-    temporary = Path(name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
-            writer = csv.writer(stream)
-            writer.writerow(
-                (
-                    "station_id",
-                    "station_name",
-                    "latitude_deg",
-                    "longitude_deg",
-                    "elevation_m",
-                    "requested_time_utc",
-                    "observed_time_utc",
-                    "offset_minutes",
-                    "temperature_c",
-                    "dewpoint_c",
-                    "wind_direction_deg",
-                    "wind_speed_kt",
-                    "wind_gust_kt",
-                    "stale_or_mismatched",
-                    "source_url",
-                )
-            )
-            for observation in dataset.observations:
-                station = observation.station
-                writer.writerow(
-                    (
-                        station.station_id,
-                        station.name,
-                        station.latitude,
-                        station.longitude,
-                        station.elevation_m,
-                        _iso(dataset.requested_time),
-                        _iso(observation.observed_at),
-                        observation.offset_seconds(dataset.requested_time) / 60.0,
-                        observation.temperature_c,
-                        observation.dewpoint_c,
-                        observation.wind_direction_deg,
-                        observation.wind_speed_kt,
-                        observation.wind_gust_kt,
-                        observation.is_stale(dataset.requested_time),
-                        observation.source_url,
-                    )
-                )
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, destination)
-    except BaseException:
-        try:
-            os.close(descriptor)
-        except OSError:
-            pass
-        temporary.unlink(missing_ok=True)
-        raise
+    # Python's csv.writer renders None as an empty field and every other
+    # non-string through str(), so the rows cross pre-formatted as strings.
+    rows = [
+        [
+            "station_id",
+            "station_name",
+            "latitude_deg",
+            "longitude_deg",
+            "elevation_m",
+            "requested_time_utc",
+            "observed_time_utc",
+            "offset_minutes",
+            "temperature_c",
+            "dewpoint_c",
+            "wind_direction_deg",
+            "wind_speed_kt",
+            "wind_gust_kt",
+            "stale_or_mismatched",
+            "source_url",
+        ]
+    ]
+    for observation in dataset.observations:
+        station = observation.station
+        cells = (
+            station.station_id,
+            station.name,
+            station.latitude,
+            station.longitude,
+            station.elevation_m,
+            _iso(dataset.requested_time),
+            _iso(observation.observed_at),
+            observation.offset_seconds(dataset.requested_time) / 60.0,
+            observation.temperature_c,
+            observation.dewpoint_c,
+            observation.wind_direction_deg,
+            observation.wind_speed_kt,
+            observation.wind_gust_kt,
+            observation.is_stale(dataset.requested_time),
+            observation.source_url,
+        )
+        rows.append(["" if value is None else str(value) for value in cells])
+    sharpmod_rs.surface_write_csv(str(destination), rows)
     return destination
 
 

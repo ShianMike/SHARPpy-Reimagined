@@ -3,7 +3,7 @@
 // hover store and live catalogue; dragging the map clears the hover. React
 // escapes every string, so UWyo free text cannot inject markup.
 
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useRef, type CSSProperties, type ReactNode } from "react";
 import { Surface } from "../../ui/Surface";
 import { cx } from "../../lib/cx";
 import { useStationCatalog } from "../../stations/stationQueries";
@@ -18,6 +18,7 @@ import type { StationAvailability } from "../../types/contracts";
 import { useMapStore } from "../../stores/mapStore";
 import { useStationAvailability } from "../mapQueries";
 import { compactUtc } from "../../features/sounding/soundingTime";
+import { useTooltipSize } from "./FieldTooltip";
 import { useHoverStore } from "./hoverStore";
 import styles from "./StationTooltip.module.css";
 
@@ -35,17 +36,7 @@ export function StationTooltip(): ReactNode {
       ? undefined
       : stationIndex(catalog.data.stations).get(hovered.stationId);
 
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (element === null || hovered === null) {
-      return;
-    }
-    const box = element.getBoundingClientRect();
-    element.style.setProperty("--tooltip-x", `${String(hovered.x)}px`);
-    element.style.setProperty("--tooltip-y", `${String(hovered.y)}px`);
-    element.style.setProperty("--tooltip-w", `${String(box.width)}px`);
-    element.style.setProperty("--tooltip-h", `${String(box.height)}px`);
-  });
+  useTooltipSize(ref, hovered?.stationId ?? null);
 
   if (hovered === null || station === undefined) {
     return null;
@@ -60,7 +51,8 @@ export function StationTooltip(): ReactNode {
     if (report.isError) availability += " (refresh failed)";
   }
   return (
-    <Surface ref={ref} elevation="popover" role="tooltip" className={styles.tooltip} data-testid="station-tooltip">
+    <Surface ref={ref} elevation="popover" role="tooltip" className={styles.tooltip} data-testid="station-tooltip"
+      style={{ "--tooltip-x": `${String(hovered.x)}px`, "--tooltip-y": `${String(hovered.y)}px` } as CSSProperties}>
       <p className={cx(styles.id, "tabular")}>{station.id}</p>
       <p className={styles.name}>{displayName(station.name)}</p>
       <p className={cx(styles.meta, "tabular")}>{formatCoordinates(station)}</p>

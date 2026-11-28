@@ -64,12 +64,12 @@ export function GraphicsSettings(): ReactNode {
           <tr><th scope="row">Smooth edges</th><td>Off</td><td>Off</td><td>On</td></tr>
           <tr><th scope="row">Station labels</th><td>Fewer</td><td>More</td><td>Most</td></tr>
           <tr><th scope="row">Cache & prefetch</th><td>Less</td><td>Moderate</td><td>More</td></tr>
-          <tr><th scope="row">Glass blur</th><td>Off</td><td>Light</td><td>Stronger</td></tr>
+          <tr><th scope="row">Liquid glass</th><td>Off</td><td>Light</td><td>Full</td></tr>
         </tbody>
       </table>
       <p>Higher profiles use more graphics power and memory.</p>
       <p>Four maps: Balanced reduces density above 1× by up to 25%.</p>
-      <p>Reduced transparency or unsupported blur keeps panels opaque.</p>
+      <p>Reduced transparency or unsupported graphics keeps panels opaque.</p>
     </div>
   </>;
 }

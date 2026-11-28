@@ -187,23 +187,9 @@ def prepare_profile_parcels(
 
 def prepare_sfc_index(sfc, profile_length):
     """Validate and return one integer surface index."""
-    if isinstance(sfc, (bool, np.bool_)):
-        raise ValueError("sfc must be an integer profile index")
-    try:
-        index = int(sfc)
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError("sfc must be an integer profile index") from exc
-    try:
-        exact = float(sfc) == float(index)
-    except (TypeError, ValueError, OverflowError):
-        exact = False
-    if not exact:
-        raise ValueError("sfc must be an integer profile index")
-    if profile_length and not 0 <= index < profile_length:
-        raise ValueError("sfc is outside the profile")
-    if not profile_length and index != 0:
-        raise ValueError("sfc is outside the profile")
-    return index
+    import sharpmod_rs
+
+    return sharpmod_rs.backend_validate_sfc_index(sfc, int(profile_length))
 
 
 def missing_mask(array, missing):

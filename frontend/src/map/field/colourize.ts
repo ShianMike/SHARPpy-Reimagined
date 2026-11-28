@@ -13,25 +13,59 @@ export const LUT_SIZE = 1024;
 const CELL_VALUES = 65536;
 
 const PTYPE_STOPS_PER_GROUP = 17;
-const PTYPE_GROUPS = [
-  { label: "Rain", offset: 0 },
-  { label: "Snow", offset: 10 },
-  { label: "Freezing rain", offset: 20 },
-  { label: "Mix", offset: 30 },
-] as const;
+const PTYPE_GROUP_COUNT = 4;
+// Sharp's default type names; a palette's own ptypeLabels replace them.
+const PTYPE_GROUP_LABELS = ["Rain", "Snow", "Freezing rain", "Mix"] as const;
+
+/**
+ * The encoded group offsets of a ptype ramp: four identical 17-stop bands
+ * spaced 10 units apart for precipitation rates (0.01–0.5) or 100 units apart
+ * for reflectivity (dBZ, such as 5–50 dBZ).
+ */
+function ptypeGroupOffsets(palette: Palette): readonly [number, number, number, number] | null {
+  if (!palette.stepped) return null;
+  const stops = palette.stops;
+  if (stops.length !== PTYPE_GROUP_COUNT * PTYPE_STOPS_PER_GROUP) return null;
+  const first0 = stops[0]?.[0];
+  const first1 = stops[PTYPE_STOPS_PER_GROUP]?.[0];
+  const top0 = stops[PTYPE_STOPS_PER_GROUP - 1]?.[0];
+  if (first0 === undefined || first1 === undefined || top0 === undefined) return null;
+  const stride = Number((first1 - first0).toFixed(2));
+  if ((stride !== 10 && stride !== 100) || !(first0 > 0) || !(top0 < stride)) return null;
+  for (let group = 1; group < PTYPE_GROUP_COUNT; group += 1) {
+    for (let band = 0; band < PTYPE_STOPS_PER_GROUP; band += 1) {
+      const base = stops[band]?.[0];
+      const shifted = stops[group * PTYPE_STOPS_PER_GROUP + band]?.[0];
+      if (base === undefined || shifted === undefined || Number((shifted - base).toFixed(2)) !== group * stride) {
+        return null;
+      }
+    }
+  }
+  return [0, stride, stride * 2, stride * 3];
+}
+
+/**
+ * The stride between a ptype ramp's groups: the precip rates pack their four
+ * groups 10 units apart, while HRRR reflectivity packs dBZ per group 100 apart.
+ * Null when the palette is not a ptype ramp.
+ */
+export function ptypeGroupStride(palette: Palette): 10 | 100 | null {
+  const offsets = ptypeGroupOffsets(palette);
+  if (offsets === null) return null;
+  return offsets[1] === 100 ? 100 : 10;
+}
 
 export function isPtypePalette(palette: Palette): boolean {
-  // The original catalogs have no type labels. Each encoded ramp starts at its offset plus 0.01.
-  return palette.stepped && palette.stops.length === PTYPE_GROUPS.length * PTYPE_STOPS_PER_GROUP
-    && PTYPE_GROUPS.every(({ offset }, index) => palette.stops[index * PTYPE_STOPS_PER_GROUP]?.[0] === offset + 0.01);
+  return ptypeGroupStride(palette) !== null;
 }
 
 export function ptypePaletteGroups(palette: Palette): { label: string; stops: Palette["stops"] }[] | null {
-  if (!isPtypePalette(palette)) return null;
-  return PTYPE_GROUPS.map(({ label, offset }, index) => {
+  const offsets = ptypeGroupOffsets(palette);
+  if (offsets === null || ptypeGroupStride(palette) === null) return null;
+  return offsets.map((offset, index) => {
     const start = index * PTYPE_STOPS_PER_GROUP;
     return {
-      label: palette.ptypeLabels?.[index] ?? label,
+      label: palette.ptypeLabels?.[index] ?? PTYPE_GROUP_LABELS[index] ?? "",
       stops: palette.stops.slice(start, start + PTYPE_STOPS_PER_GROUP)
         .map(([value, colour]) => [Number((value - offset).toFixed(2)), colour] as const),
     };
@@ -46,10 +80,15 @@ export function ptypePaletteTicks(ticks: Palette["ticks"], stops: Palette["stops
 }
 
 export function decodePtypeValue(value: number, palette: Palette): { amount: number; ptypeLabel: string | null } {
-  if (!isPtypePalette(palette)) return { amount: value, ptypeLabel: null };
-  const index = Math.min(PTYPE_GROUPS.length - 1, Math.max(0, Math.floor(value / 10)));
-  const group = PTYPE_GROUPS[index] ?? PTYPE_GROUPS[0];
-  return { amount: Math.max(0, Number((value - group.offset).toFixed(2))), ptypeLabel: palette.ptypeLabels?.[index] ?? group.label };
+  const stride = ptypeGroupStride(palette);
+  const offsets = ptypeGroupOffsets(palette);
+  if (stride === null || offsets === null) return { amount: value, ptypeLabel: null };
+  const index = Math.min(PTYPE_GROUP_COUNT - 1, Math.max(0, Math.floor(value / stride)));
+  const offset = offsets[index] ?? 0;
+  return {
+    amount: Math.max(0, Number((value - offset).toFixed(2))),
+    ptypeLabel: palette.ptypeLabels?.[index] ?? PTYPE_GROUP_LABELS[index] ?? null,
+  };
 }
 
 function hexChannels(hex: string): [number, number, number] {

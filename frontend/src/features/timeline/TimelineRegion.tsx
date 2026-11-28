@@ -39,6 +39,7 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
   const index = Math.max(0, hours.indexOf(context?.hour ?? 0));
   const last = Math.max(0, hours.length - 1);
   const selectionHint = context === null ? "Waiting for forecast" : `${context.model.label} · ${compactUtc(context.run)} run · ${String(hours.length)} frames`;
+  const validTime = context === null ? "—" : `${compactUtc(context.validTime, { includeWeekday: true })} UTC`;
   const validHint = loading ? "Loading frame…" : "Valid time in UTC";
   const choose = (hour: number): void => { useForecastStore.getState().setPlaying(false); useForecastStore.getState().setHour(hour); };
   const step = (direction: 1 | -1): void => {
@@ -57,14 +58,14 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
     </strong>
     <div className={cx(styles.scrubber, hints.target)}>
       <input id={FORECAST_RANGE_ID} type="range" aria-label="Forecast hour" min={0} max={last} step={1} value={index} disabled={hours.length < 2}
-        aria-valuetext={context === null ? "Forecast unavailable" : `${forecastLabel(context.hour)} · valid ${compactUtc(context.validTime)} UTC`}
+        aria-valuetext={context === null ? "Forecast unavailable" : `${forecastLabel(context.hour)} · valid ${validTime}`}
         style={{ "--played": `${String(last === 0 ? 0 : index / last * 100)}%` } as CSSProperties}
         onChange={(event) => { const hour = hours[Number(event.currentTarget.value)]; if (hour !== undefined) choose(hour); }} />
       {context !== null ? <span className={styles.endHour}>{forecastLabel(hours[last] ?? 0)}</span> : <span className={styles.waiting}>{forecast.status === "error" ? "Forecast unavailable" : forecast.status === "empty" ? "No forecast models" : "Loading forecast…"}</span>}
-      <span className={hints.hint} data-side="top" aria-hidden="true">{context === null ? "Forecast unavailable" : `${forecastLabel(context.hour)} · Valid ${compactUtc(context.validTime)} UTC`}</span>
+      <span className={hints.hint} data-side="top" aria-hidden="true">{context === null ? "Forecast unavailable" : `${forecastLabel(context.hour)} · Valid ${validTime}`}</span>
     </div>
-    <output className={cx(styles.valid, hints.target)} tabIndex={0} aria-label="Valid time" aria-description={validHint} aria-busy={loading}>
-      <span>{loading ? "Loading" : "Valid"}</span><strong>{context === null ? "—" : `${compactUtc(context.validTime)} UTC`}</strong>
+    <output className={cx(styles.valid, styles.forecastValid, hints.target)} tabIndex={0} aria-label="Valid time" aria-description={validHint} aria-busy={loading}>
+      <span>{loading ? "Loading" : "Valid"}</span><strong>{validTime}</strong>
       <span className={hints.hint} data-side="top" aria-hidden="true">{validHint}</span>
     </output>
     <div className={styles.options}>

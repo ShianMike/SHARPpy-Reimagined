@@ -14,7 +14,7 @@ import tokensCss from "../styles/tokens.css?raw";
 import { cssTokenReader } from "../test/cssTokens";
 import type { FieldFrame, Palette } from "../types/map";
 import { readCanvasTokens } from "./canvasTokens";
-import { buildLut, colourize, LUT_SIZE } from "./field/colourize";
+import { buildLut, colourize, LUT_SIZE, ptypeGroupStride } from "./field/colourize";
 import { LAYER_REGISTRY } from "./layers/descriptors";
 import { buildDeckLayers, defaultLayerStates, NO_SCENE_DATA, type FieldImage, type LayerBuildContext } from "./layers/registry";
 import { useFieldImage } from "./panelScene";
@@ -34,7 +34,7 @@ const context: LayerBuildContext = {
 function scene(field: FieldImage | null, smoothing: boolean, previousField: FieldImage | null = null): BitmapLayer {
   const states = defaultLayerStates();
   states["model-field"] = { visible: true, opacity: 0.5, smoothing };
-  const id = smoothing && field?.palette.units !== "flag" ? "model-field-smooth" : "model-field";
+  const id = smoothing && field !== null && field.palette.units !== "flag" ? "model-field-smooth" : "model-field";
   const layer = buildDeckLayers(LAYER_REGISTRY, states, { ...context, field, previousField, fieldMix: previousField === null ? 1 : 0.5 })
     .find((item): item is BitmapLayer => item instanceof BitmapLayer && item.id === id);
   if (layer === undefined) throw new Error("Missing model-field layer");
@@ -102,7 +102,11 @@ it("keeps lazy and prepared scene bytes exact for every committed palette, conti
           const firstLayer = scene(hook.result.current, smoothing);
           const firstImage = firstLayer.props.image as ImageData;
           checkImage(firstImage, frame, palette, smoothing);
-          if (smoothing && palette.units !== "flag") checkPalette(firstLayer, palette);
+          if (smoothing && palette.units !== "flag") {
+            checkPalette(firstLayer, palette);
+            expect((firstLayer.props as typeof firstLayer.props & { fieldPtypeStride: number }).fieldPtypeStride)
+              .toBe(ptypeGroupStride(palette) ?? 0);
+          }
           const ready = counter.allocations;
           hook.rerender();
           expect(scene(hook.result.current, smoothing).props.image).toBe(firstImage);

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cx } from "../../lib/cx";
 import { Notice } from "../../components/Notice";
 import { Action } from "../../ui/Controls";
+import { Surface } from "../../ui/Surface";
 import { useGraphicsStore } from "../../stores/graphicsStore";
 import { useAppStore } from "../../stores/appStore";
 import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
@@ -74,24 +75,26 @@ function PanelChip({ panel, layout, field }: { panel: number; layout: PanelLayou
   return (
     <>
       <div className={styles.heading} data-motion="fade" role="group" aria-label={`Panel ${String(panel + 1)} controls`}>
-        <button
-          type="button"
-          className={styles.chip}
-          aria-pressed={active}
-          aria-label={`Panel ${String(panel + 1)}: ${name}. Choose parameter.`}
-          aria-haspopup="dialog"
-          aria-expanded={anchor !== null}
-          disabled={field.catalog.data === undefined || context?.fieldsAvailable !== true}
-          data-testid={`panel-chip-${String(panel + 1)}`}
-          onClick={(event) => {
-            useMapStore.getState().setActivePanel(panel);
-            setAnchor(anchor === null ? event.currentTarget : null);
-          }}
-        >
-          {body}
-        </button>
+        <Surface elevation="chrome" className={styles.chipSurface}>
+          <button
+            type="button"
+            className={styles.chip}
+            aria-pressed={active}
+            aria-label={`Panel ${String(panel + 1)}: ${name}. Choose parameter.`}
+            aria-haspopup="dialog"
+            aria-expanded={anchor !== null}
+            disabled={field.catalog.data === undefined || context?.fieldsAvailable !== true}
+            data-testid={`panel-chip-${String(panel + 1)}`}
+            onClick={(event) => {
+              useMapStore.getState().setActivePanel(panel);
+              setAnchor(anchor === null ? event.currentTarget : null);
+            }}
+          >
+            {body}
+          </button>
+        </Surface>
         {field.product !== null && context?.fieldsAvailable === true
-          ? <ModelLayerButton panel={panel} field={field} className={styles.layerToggle} hintSide="right" />
+          ? <Surface elevation="chrome" className={styles.toggleSurface}><ModelLayerButton panel={panel} field={field} className={styles.layerToggle} hintSide="right" /></Surface>
           : null}
       </div>
       <Popover id={`panel-${String(panel)}-parameters`} open={anchor !== null} movable unframed anchor={anchor} onClose={() => { setAnchor(null); }} role="dialog" label="Parameters" initialFocus="first" align="start" width="content" className={pickerStyles.parameterPicker}>
@@ -118,9 +121,9 @@ function LivePanelChip({ panel, layout }: { panel: number; layout: PanelLayout }
   const product = products?.find((item) => item.key === radar.product) ?? products?.[0];
   const title = layers.radar.visible ? product?.label ?? "Radar" : layers.satellite.visible ? `GOES ${options.satelliteChannel}` : "Live layers";
   if (layout === 1) return null;
-  return <div className={styles.heading}><button type="button" className={styles.chip} aria-pressed={active} aria-label={`Panel ${String(panel + 1)}: ${title}. Select panel.`} data-testid={`panel-chip-${String(panel + 1)}`} onClick={() => {
+  return <div className={styles.heading} data-motion="fade"><Surface elevation="chrome" className={styles.chipSurface}><button type="button" className={styles.chip} aria-pressed={active} aria-label={`Panel ${String(panel + 1)}: ${title}. Select panel.`} data-testid={`panel-chip-${String(panel + 1)}`} onClick={() => {
     useMapStore.getState().setActivePanel(panel);
-  }}><span className={styles.product}>{String(panel + 1)} • {title}</span></button></div>;
+  }}><span className={styles.product}>{String(panel + 1)} • {title}</span></button></Surface></div>;
 }
 
 export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode {

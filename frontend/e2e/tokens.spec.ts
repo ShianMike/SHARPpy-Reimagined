@@ -82,8 +82,14 @@ for (const override of ["high", "balanced", "low"] as const) {
     expect(await effectiveProfile(page)).toEqual({ mode: "full", profile: override, reasons: ["Chosen in Settings"] });
     const glass = await toolbarGlass(page);
     if (override === "low") {
+      expect(glass.liquidGlass).toBe("css");
       expect(glass.filter).toBe("none");
       expect(glass.alpha).toBeGreaterThan(0.9);
+      await expect(page.getByTestId("liquid-glass-base")).toHaveCount(0);
+    } else if (glass.liquidGlass === "webgl") {
+      await expect(page.getByTestId("liquid-glass-base")).toBeVisible();
+      expect(glass.filter).toBe("none");
+      expect(glass.alpha).toBe(0);
     } else {
       expect(glass.filter).toMatch(/blur\([1-9][\d.]*px\)/u);
       expect(glass.alpha).toBeGreaterThan(0);

@@ -41,8 +41,6 @@ modern SHARPpy Reimagined ``Profile``.
 
 from __future__ import annotations
 
-import math
-import re
 import socket
 import ssl
 from dataclasses import dataclass
@@ -262,41 +260,27 @@ class UWyo_Decoder:
         StationMeta
             The single resolved station's id, name, lat, lon and elevation.
         """
-        if query is None:
+        import sharpmod_rs
+
+        sids = list(self._stations)
+        index, status, candidates = sharpmod_rs.uwyo_resolve_station_index(
+            [(sid, self._stations[sid][0]) for sid in sids],
+            None if query is None else str(query),
+        )
+        if status == "ok":
+            return self._meta_for(sids[index])
+        if status == "empty":
             raise StationLookupError("station query is empty")
-        q = str(query).strip()
-        if q == "":
-            raise StationLookupError("station query is empty")
-
-        # 1. Exact station-id match takes precedence and is unambiguous.
-        if q in self._stations:
-            return self._meta_for(q)
-
-        ql = q.casefold()
-
-        # 2. Exact (case-insensitive) name match.
-        exact_name = [sid for sid, (name, *_rest) in self._stations.items()
-                      if name.casefold() == ql]
-        if len(exact_name) == 1:
-            return self._meta_for(exact_name[0])
-        if len(exact_name) > 1:
+        if status == "multiple_name":
             raise StationLookupError(
                 f"station query {query!r} matches multiple stations: "
-                f"{', '.join(sorted(exact_name))}")
-
-        # 3. Substring match against ids and names.
-        matches = [
-            sid for sid, (name, *_rest) in self._stations.items()
-            if ql in sid.casefold() or ql in name.casefold()
-        ]
-        if len(matches) == 1:
-            return self._meta_for(matches[0])
-        if len(matches) == 0:
+                f"{', '.join(candidates)}")
+        if status == "not_found":
             raise StationLookupError(
                 f"station query {query!r} matched no UWyo station")
         raise StationLookupError(
             f"station query {query!r} matched multiple UWyo stations: "
-            f"{', '.join(sorted(matches))}")
+            f"{', '.join(candidates)}")
 
     @staticmethod
     def list_stations() -> list[dict]:
@@ -501,43 +485,17 @@ class UWyo_Decoder:
         preserved. Levels with non-finite or non-decreasing pressure are
         dropped, yielding a clean monotonic profile.
         """
-        parr = np.asarray(pres, dtype=float)
-        n = parr.size
-        keep: list[int] = []
-        last_p = None
-        for i in range(n):
-            p = parr[i]
-            if not np.isfinite(p):
-                continue
-            if last_p is None or (last_p - p) >= min_dp:
-                keep.append(i)
-                last_p = p
-        # Ensure the topmost valid level (lowest pressure) is present.
-        last_finite = None
-        for j in range(n - 1, -1, -1):
-            if np.isfinite(parr[j]):
-                last_finite = j
-                break
-        if last_finite is not None and (not keep or keep[-1] != last_finite):
-            # Only append if it keeps pressure strictly decreasing.
-            if last_p is None or parr[last_finite] < last_p:
-                keep.append(last_finite)
-        return keep
+        import sharpmod_rs
+
+        return sharpmod_rs.uwyo_pressure_spaced_indices(
+            np.asarray(pres, dtype=float), float(min_dp))
 
     @staticmethod
     def _subsample_indices(indices: list, max_count: int) -> list:
         """Uniformly reduce ``indices`` to ``max_count`` (endpoints kept)."""
-        n = len(indices)
-        if n <= max_count or max_count < 2:
-            return indices
-        picks = np.linspace(0, n - 1, max_count)
-        chosen = sorted({int(round(x)) for x in picks})
-        # Guarantee both endpoints survive the rounding/dedup.
-        if chosen[0] != 0:
-            chosen.insert(0, 0)
-        if chosen[-1] != n - 1:
-            chosen.append(n - 1)
-        return [indices[k] for k in chosen]
+        import sharpmod_rs
+
+        return sharpmod_rs.uwyo_subsample_indices(indices, int(max_count))
 
     @staticmethod
     def _parse_metadata(lines):
@@ -549,83 +507,20 @@ class UWyo_Decoder:
         Observations at HHZ DD Mon YYYY</H2>`` plus a ``Station latitude:``
         line). Any field that cannot be parsed is returned as ``None`` / NaN.
         """
-        valid = None
-        loc = ""
-        lat = float("nan")
-        lon = float("nan")
+        import sharpmod_rs
 
-        for line in lines:
-            s = line.strip()
-            low = s.lower()
-
-            # Modern <H1> title with an embedded "HH UTC DD Mon YYYY" timestamp.
-            if valid is None and s.startswith("<H1>") and " UTC " in s:
-                try:
-                    frag = s[4:].split("</H1>")[0]
-                    when = frag.split(" at ", 1)[1].strip()
-                    valid = datetime.strptime(when, "%H UTC %d %b %Y")
-                except (ValueError, IndexError):
-                    pass
-                continue
-
-            # Legacy / fixture <H2> title: "LOC   Observations at HHZ DD Mon".
-            if s.startswith("<H2>") and s.endswith("</H2>"):
-                if not loc:
-                    loc = s[4:].split("Observations")[0].strip()
-                if valid is None:
-                    try:
-                        valid = datetime.strptime(
-                            s[-20:-5], "%HZ %d %b %Y")
-                    except ValueError:
-                        pass
-                continue
-
-            # Modern station-name subtitle.
-            if not loc and s.startswith("<H3>") and s.endswith("</H3>"):
-                name = s[4:-5].strip()
-                if "station information" not in name.lower():
-                    loc = name
-                continue
-
-            # Modern "<I>Latitude: X Longitude: Y</I>" line (may be prefixed by
-            # markup such as "<BR/>"), so extract the numbers with a regex.
-            if ("latitude" in low and "longitude" in low
-                    and math.isnan(lat)):
-                m = re.search(
-                    r"latitude:\s*(-?\d+(?:\.\d+)?)\s*"
-                    r"longitude:\s*(-?\d+(?:\.\d+)?)", low)
-                if m:
-                    try:
-                        lat = float(m.group(1))
-                        lon = float(m.group(2))
-                    except ValueError:
-                        pass
-                continue
-
-            # Legacy "Station latitude:" line.
-            if "station latitude" in low and math.isnan(lat):
-                try:
-                    lat = float(s.split(":")[-1].strip())
-                except ValueError:
-                    pass
-                continue
-
+        valid_iso, loc, lat, lon = sharpmod_rs.uwyo_parse_metadata(
+            [str(line) for line in lines])
+        valid = (datetime.fromisoformat(valid_iso)
+                 if valid_iso is not None else None)
         return valid, loc, lat, lon
 
     @staticmethod
     def _looks_unavailable(text: str) -> bool:
         """Heuristically detect a UWyo 'no data for this station/time' page."""
-        low = text.casefold()
-        markers = (
-            "can't get",
-            "cannot get",
-            "no data",
-            "sorry",
-            "unable to",
-            "not available",
-            "invalid",
-        )
-        return any(m in low for m in markers)
+        import sharpmod_rs
+
+        return sharpmod_rs.uwyo_looks_unavailable(text)
 
     # -- intermediate representation (Req 7.8) ------------------------------- #
     def to_intermediate(self, prof) -> dict:

@@ -189,11 +189,14 @@ def _panels_at_target_density(root, scale: float):
 
 def _composition_colours(widget, theme: str):
     """Resolve the margin/caption colours without changing the live palette."""
+    import sharpmod_rs
+
     requested = str(theme or "current").strip().lower()
-    if requested == "light":
-        return QtGui.QColor("#f4f1eb"), QtGui.QColor("#ffffff"), QtGui.QColor("#1a1815")
-    if requested == "dark":
-        return QtGui.QColor("#0d0d0c"), QtGui.QColor("#1f1e1b"), QtGui.QColor("#f1efeb")
+    if requested in ("light", "dark"):
+        return tuple(
+            QtGui.QColor(colour)
+            for colour in sharpmod_rs.export_composition_theme_hex(requested)
+        )
     try:
         palette = QtWidgets.QApplication.palette()
         background = palette.color(QtGui.QPalette.Window)
@@ -203,7 +206,10 @@ def _composition_colours(widget, theme: str):
             raise ValueError("invalid application palette")
         return background, caption, foreground
     except Exception:
-        return QtGui.QColor("#0d0d0c"), QtGui.QColor("#1f1e1b"), QtGui.QColor("#f1efeb")
+        return tuple(
+            QtGui.QColor(colour)
+            for colour in sharpmod_rs.export_composition_theme_hex("dark")
+        )
 
 
 def compose_widget_pixmap(
@@ -221,24 +227,24 @@ def compose_widget_pixmap(
     The live widget geometry and its persistent panel caches are restored before
     this function returns.
     """
-    try:
-        width, height = int(width), int(height)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("export dimensions must be integer pixels") from exc
-    if not 1 <= width <= 16_384 or not 1 <= height <= 16_384:
-        raise ValueError("export dimensions must be between 1 and 16384 pixels")
+    import sharpmod_rs
+
     logical_width = max(1, int(widget.width()))
     logical_height = max(1, int(widget.height()))
-    caption_text = str(caption or "").strip()
-    caption_height = (
-        max(40, min(72, int(round(height * 0.065)))) if caption_text else 0
+    (
+        width,
+        height,
+        content_height,
+        caption_height,
+        scale,
+        rendered_width,
+        rendered_height,
+        offset_x,
+        offset_y,
+        caption_text,
+    ) = sharpmod_rs.export_compose_layout(
+        width, height, logical_width, logical_height, caption=caption
     )
-    content_height = max(1, height - caption_height)
-    scale = min(width / logical_width, content_height / logical_height)
-    rendered_width = max(1, int(round(logical_width * scale)))
-    rendered_height = max(1, int(round(logical_height * scale)))
-    offset_x = (width - rendered_width) // 2
-    offset_y = (content_height - rendered_height) // 2
     background, caption_background, foreground = _composition_colours(widget, theme)
 
     def _compose():
@@ -300,10 +306,9 @@ def save_pixmap_png_atomic(pixmap, outfile: str, *, quality: int = 0) -> bool:
     try:
         if pixmap is None or pixmap.isNull() or not pixmap.save(candidate, "PNG", quality):
             return False
-        with open(candidate, "rb") as stream:
-            if stream.read(8) != b"\x89PNG\r\n\x1a\n":
-                return False
-        if os.path.getsize(candidate) <= 8:
+        import sharpmod_rs
+
+        if not sharpmod_rs.export_valid_png_file(candidate):
             return False
         os.replace(candidate, destination)
         candidate = ""

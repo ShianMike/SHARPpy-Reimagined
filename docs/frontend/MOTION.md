@@ -11,7 +11,10 @@ ease-out curve. No animation library or new dependency is required.
 | Forecast, parameter, search, source, calendar and health popovers | Opacity and a small translation on entry and exit |
 | Layers / Point drawer | A short horizontal entrance and exit; contents retain their last view while closing |
 | Workspace navigation | Workspace surfaces fade in and out; returning to Model Viewer reveals the persistent controls without rebuilding the map |
-| Sounding sources, menus and editor | Fade or small entrance on the controls, preserving the scientific image |
+| Overview outlook controls and disclosures | The selection highlight follows category, day and product. Briefing changes fade in and discussions fade open and closed |
+| Soundings sidebar and tabs | Sidebar and tab views fade in and out while their sources and controls stay mounted |
+| Layer settings and Draw Forecast | Layer settings and drawing tools have brief entrances. The drawing icon crossfades and the Areas list fades open and closed |
+| Live Tracking timeline and panel titles | Match the entrance fade of the Model Viewer controls |
 | Notices, empty states, disclosures, scales and panel titles | Brief reveal without animating dimensions |
 | Map hover cards | Fade once on appearance; position and readings update immediately |
 | Loading icon | Spins only while loading in visible, interactive map UI |
@@ -19,6 +22,8 @@ ease-out curve. No animation library or new dependency is required.
 Popovers become inert and leave the accessibility tree as soon as they close.
 Their DOM remains only until the browser's CSS transitions finish. Reopening
 cancels cleanup from the previous close, preserving live content and focus.
+Switching between forecast pickers starts the incoming picker while the
+outgoing picker completes its exit underneath.
 The platform animation promises avoid duplicated JavaScript duration timers.
 Workspace exits use the same cleanup rule: they become inert immediately and
 unmount once their fade completes. Rapid navigation cancels stale cleanup.

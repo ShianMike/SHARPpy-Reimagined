@@ -66,15 +66,19 @@ def test_export_directory_reports_creation_failure_without_fallback(
 
 
 def test_export_directory_reports_failed_write_probe(tmp_path, monkeypatch):
+    import sharpmod_rs
+
     application = tmp_path / "installed-app"
     application.mkdir()
     target = application / "rendered_soundings"
     monkeypatch.setattr(export_paths, "application_root", lambda: application)
 
-    def deny_probe(*_args, **_kwargs):
-        raise PermissionError("write denied by test")
+    def deny_probe(directory):
+        raise ExportDirectoryError(
+            f"The export folder is not writable: {directory} (write denied by test)"
+        )
 
-    monkeypatch.setattr(export_paths.tempfile, "NamedTemporaryFile", deny_probe)
+    monkeypatch.setattr(sharpmod_rs, "export_probe_writable_dir", deny_probe)
 
     with pytest.raises(ExportDirectoryError, match="not writable") as error:
         export_paths.export_directory()

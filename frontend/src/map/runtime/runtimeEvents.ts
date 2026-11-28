@@ -17,6 +17,7 @@ import type { StartupWatch } from "./startupWatch";
 import { clickFromPick, hoverFromPick } from "./stationScene";
 import type { StationScene } from "./stationScene";
 import { captureMapFrame, registerMapCapture } from "./mapCapture";
+import { registerLiquidGlassBackdrop } from "../../lib/liquidGlass/backdropRegistry";
 import { registerSoundingLocatorMap } from "./soundingLocator";
 
 /** What the handlers need from their runtime. */
@@ -32,10 +33,31 @@ export interface RuntimeEventTarget {
   styleLoaded(): void;
   runtimeError(message: string): void;
   readonly map?: MapLibreMap | null;
-  readonly scene?: Pick<StationScene, "matchesField" | "readyForCapture"> | null;
+  readonly scene?: (Pick<StationScene, "matchesField" | "readyForCapture"> & {
+    readonly needsGpuHoverPick?: StationScene["needsGpuHoverPick"];
+  }) | null;
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/** The container's viewport offset, read lazily and dropped when the layout may move it. */
+function createOriginCache(container: HTMLElement): { current(): { left: number; top: number }; dispose(): void } {
+  let origin: { left: number; top: number } | null = null;
+  const invalidate = (): void => { origin = null; };
+  const observer = typeof ResizeObserver === "function" ? new ResizeObserver(invalidate) : null;
+  observer?.observe(container);
+  window.addEventListener("resize", invalidate);
+  return {
+    current: () => {
+      if (origin === null) {
+        const box = container.getBoundingClientRect();
+        origin = { left: box.left, top: box.top };
+      }
+      return origin;
+    },
+    dispose: () => { observer?.disconnect(); window.removeEventListener("resize", invalidate); },
+  };
+}
 
 export function wireMapEvents(map: MapLibreMap, target: RuntimeEventTarget): void {
   const live = target.live.bind(target);
@@ -75,15 +97,16 @@ export function wireMapEvents(map: MapLibreMap, target: RuntimeEventTarget): voi
 export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, target: RuntimeEventTarget): MapLibreOverlay {
   const live = target.live.bind(target);
   const captures = new Set<() => void>();
+  const origin = createOriginCache(target.container);
   const overlay = createOverlay(
     { pickingRadius: tokens.lengths.pickingRadius, useDevicePixels: pixelRatio },
     {
       onHover: live((info) => {
         if (!target.dragging && (useMapStore.getState().view === "live" || useBoxSoundingStore.getState().mode === "point")) {
-          hoverFromPick(info, target.panel, target.container.getBoundingClientRect());
+          hoverFromPick(info, target.panel, origin.current());
         }
       }),
-      onClick: live((info) => { clickFromPick(info, target.panel, target.container.getBoundingClientRect()); }),
+      onClick: live((info) => { clickFromPick(info, target.panel, origin.current()); }),
       onAfterRender: live(() => {
         target.overlayReady = true;
         target.watch.afterRender();
@@ -103,11 +126,17 @@ export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, tar
     registerMapCapture(target.panel, map, overlay,
       (request) => target.scene?.matchesField(request) === true,
       onOverlayRender, () => target.overlayReady && map.isStyleLoaded() === true);
+    registerLiquidGlassBackdrop(target.panel, map, overlay, onOverlayRender);
     registerSoundingLocatorMap(target.panel, map, (signal, resolution) => captureMapFrame(map, overlay,
       () => target.overlayReady && target.scene?.readyForCapture() === true
         && !panelLayers(useMapStore.getState(), target.panel)["model-field"].visible,
       onOverlayRender, signal, resolution));
   }
+  const removeOverlay = (overlay as { onRemove?: (map: MapLibreMap) => void }).onRemove?.bind(overlay);
+  overlay.onRemove = (map) => {
+    origin.dispose();
+    removeOverlay?.(map);
+  };
   return overlay;
 }
 
@@ -115,9 +144,11 @@ export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, tar
 export function wireOverlayEvents(map: MapLibreMap, overlay: MapLibreOverlay, target: RuntimeEventTarget, radius: number): () => void {
   let pending: MapMouseEvent | null = null;
   let frame: number | null = null;
-  const pick = (event: MapMouseEvent): PickingInfo => ({
+  let hadGpuHit = false;
+  const origin = createOriginCache(target.container);
+  const pick = (event: MapMouseEvent, gpu: boolean): PickingInfo => ({
     // Deck's picking resources are initialized asynchronously, before its first render.
-    ...(target.overlayReady ? overlay.pickObject({ x: event.point.x, y: event.point.y, radius }) : null),
+    ...(target.overlayReady && gpu ? overlay.pickObject({ x: event.point.x, y: event.point.y, radius }) : null),
     x: event.point.x, y: event.point.y,
     coordinate: [event.lngLat.lng, event.lngLat.lat],
   }) as PickingInfo;
@@ -125,6 +156,7 @@ export function wireOverlayEvents(map: MapLibreMap, overlay: MapLibreOverlay, ta
     if (frame !== null) cancelAnimationFrame(frame);
     frame = null;
     pending = null;
+    hadGpuHit = false;
     useHoverStore.getState().clear(keepPinnedSpotter);
   };
   const leave = (): void => { clear(true); };
@@ -139,11 +171,17 @@ export function wireOverlayEvents(map: MapLibreMap, overlay: MapLibreOverlay, ta
       const latest = pending;
       pending = null;
       if (latest === null || target.dragging || map.isMoving() || !useHoverStore.getState().inspecting) return;
-      hoverFromPick(pick(latest), target.panel, target.container.getBoundingClientRect());
+      const scene = target.scene;
+      const gpu = target.overlayReady
+        && (scene?.needsGpuHoverPick === undefined || hadGpuHit
+          || scene.needsGpuHoverPick(map, latest.point.x, latest.point.y, radius));
+      const info = pick(latest, gpu);
+      hadGpuHit = gpu && info.object != null;
+      hoverFromPick(info, target.panel, origin.current());
     }));
   });
   const click = target.live((event: MapMouseEvent) => {
-    clickFromPick(pick(event), target.panel, target.container.getBoundingClientRect());
+    clickFromPick(pick(event, true), target.panel, origin.current());
   });
   map.on("mousemove", move);
   map.on("mouseout", leave);
@@ -151,6 +189,7 @@ export function wireOverlayEvents(map: MapLibreMap, overlay: MapLibreOverlay, ta
   map.on("click", click);
   return () => {
     clear();
+    origin.dispose();
     map.off("mousemove", move);
     map.off("mouseout", leave);
     map.off("movestart", moveStart);

@@ -25,6 +25,7 @@ mod grid_points;
 pub(crate) mod humidity;
 pub(crate) mod icon_grid;
 mod messages;
+pub(crate) mod nssl_mpas_grid;
 mod point_cache;
 #[cfg(test)]
 mod profiling;

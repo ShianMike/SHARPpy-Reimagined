@@ -6,7 +6,7 @@ import type { useFrameDownload } from "../../map/useFrameDownload";
 import { ForecastDownloads } from "../timeline/ForecastDownloads";
 import type { ForecastContext } from "../forecast/useForecast";
 import type { ForecastModel } from "../../types/soundings";
-import { addHours, compactUtc, forecastLabel, formatUtc, releaseTime, resolveModelRun, utcDate } from "../sounding/soundingTime";
+import { addHours, compactUtc, forecastLabel, formatUtc, isNsslMpas, releaseTime, resolveModelRun, utcDate } from "../sounding/soundingTime";
 import { isNamArchive, MODEL_REGIONS, modelRegion, NAM_ARCHIVE_NOTICE } from "../sounding/soundingQueries";
 import styles from "./ForecastControls.module.css";
 import { RunCalendar } from "./RunCalendar";
@@ -29,11 +29,19 @@ export function ForecastDialog({ context, step, anchor, download, onClose }: {
   const [date, setDate] = useState(context.run.slice(0, 10));
   const [calendarOpen, setCalendarOpen] = useState(false);
   const archivedModel = isNamArchive(context.model.key);
-  const showRunNotice = archivedModel || !calendarOpen;
+  const listedRunsOnly = isNsslMpas(context.model.key);
+  const archiveRun = archivedModel || listedRunsOnly;
+  const showRunNotice = archiveRun || !calendarOpen;
   const closeCalendar = (): void => { setCalendarOpen(false); document.getElementById("forecast-run-date")?.focus(); };
   const newestDate = (context.model.recentRuns[0] ?? context.model.suggestedRun).slice(0, 10);
+  const listedDates = listedRunsOnly ? context.model.recentRuns.map((run) => run.slice(0, 10)) : [];
+  const oldestDate = listedDates.at(-1) ?? "0001-01-01";
   const day = releaseTime(date, 0);
-  const validDate = day !== null && date >= "0001-01-01" && date <= newestDate;
+  const validDate = day !== null && date >= oldestDate && date <= newestDate;
+  const previousDate = listedRunsOnly ? listedDates.find((listed) => listed < date)
+    : validDate && date > oldestDate ? addHours(day, -24).slice(0, 10) : undefined;
+  const nextDate = listedRunsOnly ? listedDates.findLast((listed) => listed > date)
+    : validDate && date < newestDate ? addHours(day, 24).slice(0, 10) : undefined;
   const searching = query.trim().length > 0;
   const models = context.models.filter((model) => searching
     ? `${model.label} ${model.domain} ${modelCategory(model)}`.toLowerCase().includes(query.trim().toLowerCase())
@@ -112,14 +120,14 @@ export function ForecastDialog({ context, step, anchor, download, onClose }: {
       <div className={styles.dateSection}>
         <label className={styles.name} htmlFor="forecast-run-date">Run date · UTC</label>
         <div className={styles.dateRow}>
-          <IconAction icon={ChevronLeft} size="sm" label="Previous run date" disabled={!validDate || date === "0001-01-01"} onClick={() => { if (day !== null) setDate(addHours(day, -24).slice(0, 10)); }} />
+          <IconAction icon={ChevronLeft} size="sm" label="Previous run date" disabled={previousDate === undefined} onClick={() => { if (previousDate !== undefined) setDate(previousDate); }} />
           <button data-autofocus id="forecast-run-date" type="button" className={styles.dateButton} aria-label="Run date · UTC"
             aria-describedby={showRunNotice ? archiveNoticeId : undefined} aria-expanded={calendarOpen} onClick={() => { setCalendarOpen(!calendarOpen); }}>
             <CalendarDays className="icon-sm" aria-hidden="true" />
             <span>{day === null ? date : new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(day))}</span>
             <small>UTC</small>
           </button>
-          <IconAction icon={ChevronRight} size="sm" label="Next run date" disabled={!validDate || date >= newestDate} onClick={() => { if (day !== null) setDate(addHours(day, 24).slice(0, 10)); }} />
+          <IconAction icon={ChevronRight} size="sm" label="Next run date" disabled={nextDate === undefined} onClick={() => { if (nextDate !== undefined) setDate(nextDate); }} />
         </div>
         {calendarOpen ? null : <button className={styles.latestRun} type="button"
           aria-label={archivedModel ? "Use latest archived run" : "Use latest suggested run"} onClick={() => { chooseRun(context.model.suggestedRun); }}>
@@ -130,20 +138,21 @@ export function ForecastDialog({ context, step, anchor, download, onClose }: {
       </div>
       {calendarOpen ? null : <div className={styles.listHeading}><span>Cycle · UTC</span><span>Forecast range</span></div>}
       <div className={styles.dialogBody}>
-        {calendarOpen ? <RunCalendar key={date} value={date} max={newestDate} onChange={setDate} onClose={closeCalendar} /> : <>
+        {calendarOpen ? <RunCalendar key={date} value={date} min={oldestDate} max={newestDate} onChange={setDate} onClose={closeCalendar} /> : <>
         {!validDate ? <p className={styles.hint} role="status">Choose a valid date on or before {newestDate}.</p> : null}
+        {listedRunsOnly && validDate && !listedDates.includes(date) ? <p className={styles.hint} role="status">No published runs on this date.</p> : null}
         <div className={styles.runChoices}>{context.model.cycles.map((cycle) => {
           const run = releaseTime(date, cycle);
           const disabled = !validDate || run === null || resolveModelRun(context.model, run) !== run;
-          const publishing = !archivedModel && run !== null && run > context.model.suggestedRun;
+          const publishing = !archiveRun && run !== null && run > context.model.suggestedRun;
           return <button type="button" key={cycle} aria-label={run === null ? `${String(cycle).padStart(2, "0")}Z cycle` : `Run ${compactUtc(run)}`} className={styles.choice} aria-pressed={run === context.run} disabled={disabled}
-            title={disabled ? (archivedModel ? "Cycle unavailable" : "Cycle has not occurred") : publishing ? "May still be publishing" : formatUtc(run)} onClick={() => { if (run !== null) chooseRun(run); }}>
+            title={disabled ? (archiveRun ? "Cycle unavailable" : "Cycle has not occurred") : publishing ? "May still be publishing" : formatUtc(run)} onClick={() => { if (run !== null) chooseRun(run); }}>
             <strong>{String(cycle).padStart(2, "0")}Z</strong><small>{disabled ? "—" : publishing ? "Pending" : forecastLabel(context.model.maxForecastHours[cycle] ?? 0)}</small>
           </button>;
         })}</div></>}
       </div>
       {showRunNotice ? <footer id={archiveNoticeId} className={styles.pickerFooter}>
-        {archivedModel ? NAM_ARCHIVE_NOTICE : "Choose a cycle to load. Archive coverage varies by model and date; recent cycles may still be publishing."}
+        {archivedModel ? NAM_ARCHIVE_NOTICE : listedRunsOnly ? context.model.notes : "Choose a cycle to load. Archive coverage varies by model and date; recent cycles may still be publishing."}
       </footer> : null}
     </> : <>
       <div className={styles.selectionSummary}><span><strong>{forecastLabel(context.hour)}</strong><small>Selected hour</small></span><span><strong>{formatUtc(context.validTime)}</strong><small>Valid · UTC</small></span></div>

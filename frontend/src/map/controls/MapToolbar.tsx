@@ -47,7 +47,7 @@ export function MapToolbar({ feedbackTarget, onZoomIn, onZoomOut, onResetView, o
       </div>
       {live ? null : <>
         <span className={styles.divider} aria-hidden="true" />
-        {drawing ? <ForecastDrawingTools feedbackTarget={feedbackTarget} /> : <div className={styles.layouts} role="group" aria-label="Sounding selection" data-selection-track="vertical"
+        {drawing ? <ForecastDrawingTools feedbackTarget={feedbackTarget} /> : <div className={styles.layouts} role="group" aria-label="Sounding selection" data-motion="enter" data-selection-track="vertical"
           style={{ "--selection-index": mode === "point" ? 0 : 1 } as CSSProperties}>
           <IconAction icon={MapPin} label="Point sounding" hintSide="right" aria-pressed={mode === "point"}
             onClick={() => { useBoxSoundingStore.getState().setMode("point"); }} />

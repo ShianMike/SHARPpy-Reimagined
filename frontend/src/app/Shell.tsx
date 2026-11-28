@@ -25,6 +25,7 @@ import { useForecastStore } from "../stores/forecastStore";
 import { stationIndex } from "../stations/stationIndex";
 import { useStationCatalog } from "../stations/stationQueries";
 import { MapOverlaySlotsProvider, useSlotElements } from "./MapOverlaySlots";
+import { LiquidGlassHost } from "../lib/liquidGlass/LiquidGlassHost";
 import { useGlobalShortcuts } from "./shortcuts";
 import { useFullscreen } from "./useFullscreen";
 import { workspaceDefinition, type WorkspaceDefinition } from "./workspaces";
@@ -93,6 +94,28 @@ export function Shell(): ReactNode {
   useEffect(() => {
     if (drawing) void useForecastDrawingStore.getState().restore(backend);
   }, [drawing, drawingProduct, backend]);
+  const mapSurfaceRef = useRef<HTMLElement>(null);
+  const sidePanelRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const surface = mapSurfaceRef.current;
+    if (surface === null) return;
+    const panel = sidePanelRef.current;
+    if (!isMap || !pointDetailsOpen || panel === null) {
+      surface.style.removeProperty("--point-scale-top");
+      return;
+    }
+    const update = (): void => {
+      const bottom = Math.ceil(panel.offsetTop + panel.offsetHeight);
+      surface.style.setProperty("--point-scale-top", `calc(${String(bottom)}px + var(--space-3))`);
+    };
+    update();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(panel);
+    return () => {
+      observer?.disconnect();
+      surface.style.removeProperty("--point-scale-top");
+    };
+  }, [isMap, pointDetailsOpen]);
   const [panelWorkspace, setPanelWorkspace] = useState<WorkspaceDefinition | null>(isMap ? null : workspace);
   const workspacePanel = useRef<HTMLElement>(null);
   if (!isMap && panelWorkspace?.id !== workspace.id) setPanelWorkspace(workspace);
@@ -132,7 +155,7 @@ export function Shell(): ReactNode {
           <div ref={attachLeft} className={styles.mapTools} data-motion="fade" inert={!isMap} hidden={!isMap} />
         </div>
         <main className={styles.main}>
-          <section className={styles.mapSurface} aria-label={isLive ? "Live tracking map" : "Model map"} inert={!isMap}>
+          <section ref={mapSurfaceRef} className={styles.mapSurface} aria-label={isLive ? "Live tracking map" : "Model map"} inert={!isMap}>
             {mode === "full" && renderer !== "failed"
               ? <Suspense fallback={null}><WeatherMap /></Suspense>
               : <ReducedRenderingView />}
@@ -142,11 +165,12 @@ export function Shell(): ReactNode {
               <p><LoaderCircle className="icon icon-sm" data-loading="true" aria-hidden="true" />Preparing your weather workspace…</p>
             </Surface> : null}
           </section>
+          <LiquidGlassHost />
           <div className={styles.viewer} data-motion="fade" inert={!isMap} hidden={!isMap}>
             <div className={styles.overlay} data-testid="map-overlay">
               <div ref={attachCentre} className={styles.centre} />
             </div>
-            <Surface as="aside" id="map-details" className={styles.sidePanel} data-motion="panel" data-view="point" aria-label="Map details" inert={!pointDetailsOpen} hidden={!pointDetailsOpen}
+            <Surface ref={sidePanelRef} as="aside" id="map-details" className={styles.sidePanel} data-motion="panel" data-view="point" aria-label="Map details" inert={!pointDetailsOpen} hidden={!pointDetailsOpen}
               onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeDetails(); } }}>
               <div className={styles.sideHeader} role="group" aria-label="Detail panel">
                 <h2>{boxMode && !isLive ? "Region" : "Point"}</h2>

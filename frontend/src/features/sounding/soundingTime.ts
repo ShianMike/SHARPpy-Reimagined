@@ -10,6 +10,7 @@ const MAIN_HOURS = [0, 12];
 const ARRIVAL_LAG_HOURS = 2;
 
 const pad = (value: number): string => String(value).padStart(2, "0");
+const utcWeekday = new Intl.DateTimeFormat("en", { weekday: "short", timeZone: "UTC" });
 
 /** "2026-10-04" in UTC. */
 export function utcDate(moment: Date): string {
@@ -32,9 +33,12 @@ export function releaseTime(date: string, hour: number): string | null {
   return Number.isNaN(Date.parse(iso)) || utcDate(new Date(iso)) !== date ? null : iso;
 }
 
-/** Accept scheduled historical cycles; the provider decides archive availability. */
+export const isNsslMpas = (modelKey: string): boolean => modelKey === "nssl-mpas-htpo" || modelKey === "nssl-mpas-rn";
+
+/** MPAS takes runs from its archive listing; other models accept scheduled historical cycles. */
 export function resolveModelRun(model: ForecastModel, requested: string | null): string {
   if (requested === null) return model.suggestedRun;
+  if (isNsslMpas(model.key)) return model.recentRuns.includes(requested) ? requested : model.suggestedRun;
   const hour = new Date(requested).getUTCHours();
   const newest = model.recentRuns[0] ?? model.suggestedRun;
   return releaseTime(requested.slice(0, 10), hour) === requested && model.cycles.includes(hour) && requested >= "0001-01-01T00:00:00Z" && requested <= newest
@@ -56,13 +60,14 @@ export function formatUtc(iso: string | null, { includeYear = true } = {}): stri
   return `${includeYear ? date : date.slice(5)} ${time}Z`;
 }
 
-/** "10-04 16Z", for the toolbar and the timeline, where width is short. */
-export function compactUtc(iso: string): string {
+/** "10-04 16Z" or "Sun 10-04 16Z" for compact forecast controls. */
+export function compactUtc(iso: string, { includeWeekday = false } = {}): string {
   const moment = new Date(iso);
   if (Number.isNaN(moment.getTime())) {
     return iso;
   }
-  return `${pad(moment.getUTCMonth() + 1)}-${pad(moment.getUTCDate())} ${pad(moment.getUTCHours())}Z`;
+  const stamp = `${pad(moment.getUTCMonth() + 1)}-${pad(moment.getUTCDate())} ${pad(moment.getUTCHours())}Z`;
+  return includeWeekday ? `${utcWeekday.format(moment)} ${stamp}` : stamp;
 }
 
 /** The time `hours` after `iso` (a run plus its forecast hour), as RFC 3339 UTC. */

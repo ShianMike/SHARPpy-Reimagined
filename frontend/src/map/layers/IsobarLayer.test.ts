@@ -40,18 +40,20 @@ describe("independent isobars", () => {
       expect(layer).toBeInstanceOf(PathLayer);
       if (!(layer instanceof PathLayer)) throw new Error("Expected pressure lines without inferred labels");
       expect(layer.props.data).toBe(pressure.segments);
-      expect(layer.props).toMatchObject({ visible: true, opacity: 0.65, pickable: false, widthUnits: "pixels" });
+      expect(layer.props).toMatchObject({ visible: true, opacity: 0.65, pickable: false, widthUnits: "pixels", antialiasing: true });
       const getPath = layer.props.getPath;
       if (typeof getPath !== "function") throw new Error("Expected an isobar path accessor");
       for (const [index, segment] of pressure.segments.entries()) {
         expect(getPath(segment, { index, data: pressure.segments, target: [] })).toEqual(segment);
       }
     }
-    expect(layers[0]?.props.getColor).toEqual(ctx.tokens.colours.labelHalo);
-    expect(layers[1]?.props.getColor).toEqual(ctx.tokens.colours.labelText);
+    expect(layers[0]?.props.getColor).toEqual(ctx.tokens.colours.isobarHalo);
+    expect(layers[1]?.props.getColor).toEqual(ctx.tokens.colours.isobar);
     expect(layers[0]?.props.getColor).not.toEqual(layers[1]?.props.getColor);
     const [halo, line] = layers;
     if (!(halo instanceof PathLayer) || !(line instanceof PathLayer)) throw new Error("Expected outlined pressure paths");
+    expect(line.props.getWidth).toBe(1.5);
+    expect(halo.props.getWidth).toBe(3);
     expect(halo.props.getWidth).toBeGreaterThan(Number(line.props.getWidth));
   });
 
@@ -62,8 +64,8 @@ describe("independent isobars", () => {
     expect(layers.map(({ id }) => id)).toEqual(["isobars-halo", ISOBARS_LAYER_ID, "isobars-labels"]);
     expect(text?.props.data).toBe(labels);
     expect(text?.props).toMatchObject({ visible: true, opacity: 0.65, pickable: false, sizeUnits: "pixels",
-      getColor: ctx.tokens.colours.labelText, outlineColor: ctx.tokens.colours.labelHalo,
-      outlineWidth: ctx.tokens.lengths.labelHaloWidth, fontFamily: ctx.labelFont });
+      getColor: ctx.tokens.colours.isobarLabel, outlineColor: ctx.tokens.colours.isobarLabelHalo,
+      outlineWidth: 3.5, getSize: ctx.tokens.lengths.labelSize, fontWeight: 700, fontFamily: ctx.labelFont });
     if (text === undefined || typeof text.props.getText !== "function" || typeof text.props.getPosition !== "function") throw new Error("Expected native pressure label accessors");
     for (const [index, label] of labels.entries()) {
       const info = { index, data: labels, target: [] };
@@ -99,11 +101,12 @@ describe("independent isobars", () => {
     states["model-field"] = { visible: true, opacity: 0.8 };
     const layers = buildDeckLayers(LAYER_REGISTRY, states, context);
     expect(layers.find(({ id }) => id === `${CONTOURS_LAYER_ID}-halo`)?.props)
-      .toMatchObject({ data: paths, visible: true, opacity: 0.8, getColor: ctx.tokens.colours.labelHalo });
+      .toMatchObject({ data: paths, visible: true, opacity: 0.8, getColor: ctx.tokens.colours.isobarHalo, getWidth: 3 });
     expect(layers.find(({ id }) => id === CONTOURS_LAYER_ID)?.props)
-      .toMatchObject({ data: paths, visible: true, opacity: 0.8, getColor: ctx.tokens.colours.labelText });
+      .toMatchObject({ data: paths, visible: true, opacity: 0.8, getColor: ctx.tokens.colours.isobar, getWidth: 1.5 });
     expect(layers.find(({ id }) => id === `${CONTOURS_LAYER_ID}-labels`)?.props)
-      .toMatchObject({ data: labels, visible: true, opacity: 0.8 });
+      .toMatchObject({ data: labels, visible: true, opacity: 0.8, getColor: ctx.tokens.colours.isobarLabel,
+        getSize: ctx.tokens.lengths.labelSize, fontWeight: 700, outlineColor: ctx.tokens.colours.isobarLabelHalo, outlineWidth: 3.5 });
     const wind = layers.filter((layer): layer is IconLayer<WindBarb> => layer instanceof IconLayer);
     expect(wind).toHaveLength(2);
     expect(wind.every((layer) => layer.props.visible)).toBe(true);
@@ -112,8 +115,10 @@ describe("independent isobars", () => {
   it("declutters native anchors in screen space and avoids occupied readings and clipped edges", () => {
     const labels = [
       { position: [-100, 35], value: 1000 }, { position: [-99.9, 35.1], value: 1004 },
-      { position: [-96, 38], value: 1008 }, { position: [-90, 40], value: 1012 },
-      { position: [-104, 35], value: 1016 }, { position: [-80, 40], value: 1020 },
+      // 80 px from the first anchor, beyond the existing 72 px spacing.
+      { position: [-96, 34], value: 1008 }, { position: [-96, 38], value: 1012 },
+      { position: [-90, 40], value: 1016 }, { position: [-104, 35], value: 1020 },
+      { position: [-80, 40], value: 1024 },
     ] as const;
     const context = { ...ctx, isobars: { ...pressure, labels }, outlookLabelLayout: {
       width: 360, height: 240, occupied: [{ x: 160, y: 140, width: 60, height: 30 }],
@@ -122,7 +127,7 @@ describe("independent isobars", () => {
     const states = defaultLayerStates(); states.isobars.visible = true;
     const layers = buildDeckLayers(LAYER_REGISTRY, states, context);
     const text = layers.find((layer): layer is TextLayer => layer instanceof TextLayer && layer.id === "isobars-labels");
-    expect(text?.props.data).toEqual([labels[0], labels[3]]);
+    expect(text?.props.data).toEqual([labels[0], labels[2], labels[4]]);
     expect(layers.at(-1)?.id).toBe("isobars-labels");
     expect(context.outlookLabelLayout.occupied).toHaveLength(1);
     states.isobars = { visible: false, opacity: 0.4 };

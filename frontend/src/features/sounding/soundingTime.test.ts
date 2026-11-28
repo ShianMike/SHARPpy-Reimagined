@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import modelCatalog from "@contracts/public/soundings/models.catalog.json";
 import { parseModelCatalog } from "../../lib/contracts/soundings";
-import { addHours, forecastLabel, formatUtc, latestRelease, releaseTime, resolveModelRun } from "./soundingTime";
+import { addHours, compactUtc, forecastLabel, formatUtc, latestRelease, releaseTime, resolveModelRun } from "./soundingTime";
 
 describe("soundingTime", () => {
   it("preserves historical model cycles while rejecting invalid and future runs", () => {
@@ -31,6 +31,9 @@ describe("soundingTime", () => {
     expect(formatUtc("2026-06-26T00:00:00Z")).toBe("2026-06-26 00Z");
     expect(formatUtc("2026-06-26T00:30:00Z")).toBe("2026-06-26 00:30Z");
     expect(formatUtc(null)).toBe("\u2014");
+    expect(compactUtc("2026-11-27T02:00:00Z")).toBe("11-27 02Z");
+    expect(compactUtc("2026-11-27T02:00:00Z", { includeWeekday: true })).toBe("Fri 11-27 02Z");
+    expect(compactUtc("2026-11-27T07:00:00+08:00", { includeWeekday: true })).toBe("Thu 11-26 23Z");
     expect(addHours("2026-06-25T06:00:00Z", 18)).toBe("2026-06-26T00:00:00Z");
     expect(forecastLabel(7)).toBe("F007");
   });

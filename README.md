@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.10.0
+# SHARPpy Reimagined · v3.11.0
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,25 +10,31 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v3100---2026-11-25)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v3110---2026-11-28)
 
 If SHARPpy Reimagined helps your weather analysis, select **Star** at the top of this GitHub page to support the project.
 
 </div>
 
-## What's new in 3.10.0
+## What's new in 3.11.0
 
-- **More forecast models.** Explore DWD ICON Global and Canadian HRDPS maps.
-  Find NAM and NAM 3 km CONUS in the archive, with runs through 3 November 2026
-  at 06 UTC.
-- **REFS ensemble guidance.** Open the Ensemble category in Model Viewer to
-  find REFS Mean and all five members. REFS Mean also includes SPC tornado,
-  hail, and damaging-wind probabilities under Guidance.
-- **Outlook briefings and exports.** View NOAA excessive rainfall and winter
-  outlooks alongside the convective briefing. Forecast exports show the app
-  version and group REFS rain, snow, freezing rain, and mix scales in one column.
-- **Soundings and playback.** Switch between Sources and Sounding controls in
-  the sidebar. Model Viewer and Live Tracking support 5× and 6× playback.
+- **Liquid Glass interface and shared motion.** Floating toolbars, timelines,
+  panels, and popovers use the WebGL2 QuartzCore Liquid Glass pipeline with
+  calibrated dark and light theme legibility while keeping Low graphics and
+  reduced-transparency modes opaque, alongside background Overview outlook
+  preloading and shared workspace transitions.
+- **Global height anomalies, NSSL MPAS archives, and organized parameters.**
+  Adds global `500 mb Height Anomaly` maps against 1990–2019 ERA5 climatology,
+  archive-backed NSSL MPAS-HTPO and MPAS-RN CONUS maps, precipitation-type
+  composites with automated `H`/`L` pressure centers and 1000–500 mb thickness,
+  unified category ordering across models, and retirement of NOAA HiResW
+  selectors.
+- **Smoother fields, contours, and expanded Rust backend (`sharpmod-rs`, M15–M44).**
+  Upgrades map reprojection and Smooth WebGL shading to monotone cubic
+  interpolation, smooths pressure, thickness, and height contours with bolder
+  labels, and moves map overlay geometry, geography decluttering, locator
+  tiles, Skew-T layout and buoyancy fills, provider rules, cache pruning, and
+  bridge protocol validation into tested native Rust modules.
 
 ## Sounding and forecast tools
 
@@ -74,7 +80,7 @@ can restore profiles, edits and history after reopening the app.
 
 ## Screenshots
 
-Select any v3.10.0 screenshot to view it at full resolution.
+Select any screenshot to view it at full resolution.
 
 [![Overview showing the SPC convective risk and forecast discussion over a REFS precipitation map](docs/images/v3.10.0/overview.png)](docs/images/v3.10.0/overview.png)
 

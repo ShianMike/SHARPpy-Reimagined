@@ -188,43 +188,20 @@ class IGRA_Decoder:
         if not requested:
             raise _api.IGRAStationLookupError("no station query given")
         stations = self.stations()
-        normalized = requested.upper()
 
-        exact = [item for item in stations if item.id == normalized]
-        if len(exact) == 1:
-            return exact[0]
+        import sharpmod_rs
 
-        if normalized.isdigit():
-            padded = normalized.zfill(5)
-            by_wmo = [item for item in stations if item.wmo_id == padded]
-            if len(by_wmo) == 1:
-                return by_wmo[0]
-            if len(by_wmo) > 1:
-                raise _api.IGRAStationLookupError(
-                    self._ambiguous(requested, by_wmo)
-                )
-
-        if normalized.isalnum() and 3 <= len(normalized) <= 4:
-            tail = normalized[-4:]
-            by_icao = [item for item in stations if item.icao_id == tail]
-            if len(by_icao) == 1:
-                return by_icao[0]
-            if len(by_icao) > 1:
-                raise _api.IGRAStationLookupError(
-                    self._ambiguous(requested, by_icao)
-                )
-
-        folded = requested.casefold()
-        by_name = [
-            item for item in stations if folded in item.name.casefold()
-        ]
-        if len(by_name) == 1:
-            return by_name[0]
-        if len(by_name) > 1:
-            raise _api.IGRAStationLookupError(self._ambiguous(requested, by_name))
-        raise _api.IGRAStationLookupError(
-            f"station query {requested!r} matched no IGRA station"
-        )
+        try:
+            index = sharpmod_rs.igra2_resolve_station_index(
+                requested,
+                [item.id for item in stations],
+                [item.wmo_id or "" for item in stations],
+                [item.icao_id or "" for item in stations],
+                [item.name or "" for item in stations],
+            )
+        except ValueError as exc:
+            raise _api.IGRAStationLookupError(str(exc)) from None
+        return stations[index]
 
     @staticmethod
     def _ambiguous(query: str, matches: Sequence[_api.IGRAStation]) -> str:
@@ -248,12 +225,11 @@ class IGRA_Decoder:
         existing. Candidate years are probed newest first and the winner is
         remembered, because the answer is the same for every station.
         """
+        import sharpmod_rs
+
         current = self._now().year
         remembered = self._remembered_y2d_year()
-        candidates = []
-        for year in (remembered, current, current - 1):
-            if year and year not in candidates:
-                candidates.append(year)
+        candidates = sharpmod_rs.igra2_y2d_candidate_years(remembered, current)
         for year in candidates:
             url = f"{_api.DATA_Y2D_URL}/{station_id}-data-beg{year}.txt.zip"
             if self._http_exists(url):
@@ -371,19 +347,22 @@ class IGRA_Decoder:
         choice = self._choose_archive(station, when)
         text = self._archive_text(choice)
 
-        best: _api.IGRAHeader | None = None
-        best_delta: timedelta | None = None
-        for header in _api.iter_headers(text):
-            valid = header.nominal_valid
-            if valid is None:
-                continue
-            delta = abs(valid - when)
-            if delta > window:
-                continue
-            if best_delta is None or delta < best_delta:
-                best, best_delta = header, delta
-                if delta == timedelta(0):
-                    break
+        import sharpmod_rs
+
+        headers = list(_api.iter_headers(text))
+        selected = sharpmod_rs.igra2_select_nearest_header_index(
+            [
+                None if header.nominal_valid is None
+                else header.nominal_valid.timestamp()
+                for header in headers
+            ],
+            when.timestamp(),
+            window.total_seconds(),
+        )
+        best = None if selected is None else headers[selected[0]]
+        best_delta = (
+            None if selected is None else timedelta(seconds=selected[1])
+        )
 
         if best is None:
             raise _api.IGRAStationTimeUnavailableError(

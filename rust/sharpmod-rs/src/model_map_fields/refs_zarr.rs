@@ -255,6 +255,37 @@ fn encode_qpf_ptype(qpf: &Array2<f32>, ptype: &Array2<f32>) -> Array2<f32> {
     out
 }
 
+/// Ensemble-mean sea-level pressure (hPa) and 1000-500 mb thickness (dam).
+///
+/// SPC's REFS mean omits the 1000 mb height, so the base of the thickness is a
+/// hydrostatic 1000 mb height derived from the mean sea-level pressure and the
+/// 2-m mean temperature, the two mean fields the Zarr archive publishes.
+fn refs_mean_thickness(
+    pmsl_pa: &Array2<f32>,
+    z500_m: &Array2<f32>,
+    t2m_f: &Array2<f32>,
+) -> (Array2<f32>, Array2<f32>) {
+    let mut mslp = Vec::with_capacity(NY * NX);
+    let mut thickness = Vec::with_capacity(NY * NX);
+    for ((&pressure, &z500), &t2m) in pmsl_pa.iter().zip(z500_m.iter()).zip(t2m_f.iter()) {
+        let pressure_hpa = f64::from(pressure) / 100.0;
+        mslp.push(pressure_hpa as f32);
+        let temperature_k = (f64::from(t2m) - 32.0) * 5.0 / 9.0 + 273.15;
+        if pressure_hpa > 0.0 && temperature_k.is_finite() && z500.is_finite() {
+            let hgt1000_m = (287.05 * temperature_k / 9.80665) * (pressure_hpa / 1000.0).ln();
+            thickness
+                .push(crate::map_products::ptype::thickness_dam(f64::from(z500), hgt1000_m) as f32);
+        } else {
+            thickness.push(f32::NAN);
+        }
+    }
+    (
+        Array2::from_shape_vec((NY, NX), mslp).expect("MSLP keeps the decoded chunk shape"),
+        Array2::from_shape_vec((NY, NX), thickness)
+            .expect("thickness keeps the decoded chunk shape"),
+    )
+}
+
 fn decode_blosc_f32(
     py: Python<'_>,
     blosc: &Bound<'_, PyAny>,
@@ -320,7 +351,7 @@ fn refs_zarr_map_fields<'py>(
         Shear(Vec<u8>, Vec<u8>),
         Srh(&'static str, Vec<u8>),
         Srh03Shear(Vec<u8>, Vec<u8>, Vec<u8>),
-        Ptype(Vec<u8>),
+        Ptype(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>),
     }
     let (step_bytes, scalar_bytes, aux_bytes) = match spec.aux {
         ZarrAux::Shear06 => {
@@ -376,18 +407,26 @@ fn refs_zarr_map_fields<'py>(
         }
         ZarrAux::PtypeConsensus => {
             let ptype_url = format!("{root}/ptype_consensus/{chunk}.0.0");
-            let (step, scalar, ptype) = py
+            // The REFS mean omits HGT:1000 mb, so the thickness pairs z500_mean
+            // with a hydrostatic 1000 mb height from pmsl_mean and t2m_mean.
+            let pmsl_url = format!("{root}/pmsl_mean/{chunk}.0.0");
+            let z500_url = format!("{root}/z500_mean/{chunk}.0.0");
+            let t2m_url = format!("{root}/t2m_mean/{chunk}.0.0");
+            let (step, scalar, ptype, pmsl, z500, t2m) = py
                 .detach(|| {
                     runtime.block_on(async {
                         tokio::try_join!(
                             client.fetch(&step_url, timeout, 4096, None, &stop),
                             client.fetch(&scalar_url, timeout, MAX_CHUNK_BYTES, None, &stop),
                             client.fetch(&ptype_url, timeout, MAX_CHUNK_BYTES, None, &stop),
+                            client.fetch(&pmsl_url, timeout, MAX_CHUNK_BYTES, None, &stop),
+                            client.fetch(&z500_url, timeout, MAX_CHUNK_BYTES, None, &stop),
+                            client.fetch(&t2m_url, timeout, MAX_CHUNK_BYTES, None, &stop),
                         )
                     })
                 })
                 .map_err(|error| field_error(py, error))?;
-            (step, scalar, FetchedAux::Ptype(ptype))
+            (step, scalar, FetchedAux::Ptype(ptype, pmsl, z500, t2m))
         }
         ZarrAux::None => {
             let (step, scalar) = py
@@ -421,11 +460,21 @@ fn refs_zarr_map_fields<'py>(
         .map_err(|error| field_error(py, Error::Invalid(error.to_string())))?;
     let decoded = PyDict::new(py);
     match aux_bytes {
-        FetchedAux::Ptype(ptype_bytes) => {
+        FetchedAux::Ptype(ptype_bytes, pmsl_bytes, z500_bytes, t2m_bytes) => {
             let ptype = decode_blosc_f32(py, &blosc, &np, &ptype_bytes, "|u1", 1.0)
                 .map_err(|error| field_error(py, Error::Invalid(error.to_string())))?;
             let encoded = encode_qpf_ptype(&scalar, &ptype);
             decoded.set_item(spec.field, encoded.into_pyarray(py))?;
+            // pmsl_mean publishes pascals; the isobars are drawn in hectopascals.
+            let pmsl = decode_blosc_f32(py, &blosc, &np, &pmsl_bytes, "<f4", 1.0)
+                .map_err(|error| field_error(py, Error::Invalid(error.to_string())))?;
+            let z500 = decode_blosc_f32(py, &blosc, &np, &z500_bytes, "<f4", 1.0)
+                .map_err(|error| field_error(py, Error::Invalid(error.to_string())))?;
+            let t2m = decode_blosc_f32(py, &blosc, &np, &t2m_bytes, "<f2", 1.0)
+                .map_err(|error| field_error(py, Error::Invalid(error.to_string())))?;
+            let (mslp, thickness) = py.detach(|| refs_mean_thickness(&pmsl, &z500, &t2m));
+            decoded.set_item("mslp", mslp.into_pyarray(py))?;
+            decoded.set_item("thickness", thickness.into_pyarray(py))?;
         }
         FetchedAux::Shear(u_bytes, v_bytes) => {
             decoded.set_item(spec.field, scalar.into_pyarray(py))?;
@@ -714,6 +763,28 @@ mod tests {
         assert!(encoded[[0, 4]].is_nan());
         assert!(encoded[[0, 5]].is_nan());
         assert!(encoded[[0, 6]].is_nan());
+    }
+
+    #[test]
+    fn refs_mean_thickness_pairs_pmsl_z500_and_hydrostatic_1000_mb() {
+        let mut pmsl = Array2::<f32>::from_elem((NY, NX), 101_300.0);
+        let z500 = Array2::<f32>::from_elem((NY, NX), 5500.0);
+        let mut t2m = Array2::<f32>::from_elem((NY, NX), 32.0);
+        pmsl[[0, 1]] = f32::NAN;
+        t2m[[0, 2]] = f32::NAN;
+        pmsl[[0, 3]] = f32::NEG_INFINITY;
+        let (mslp, thickness) = refs_mean_thickness(&pmsl, &z500, &t2m);
+        // 32 F is 273.15 K: a 103 m hydrostatic 1000 mb height at 1013 hPa.
+        let hgt1000 = 287.05 * 273.15 / 9.80665 * (1013.0_f64 / 1000.0).ln();
+        assert!((mslp[[0, 0]] - 1013.0).abs() < 1e-2);
+        assert!(
+            (f64::from(thickness[[0, 0]]) - (5500.0 - hgt1000) / 10.0).abs() < 5e-2,
+            "dam: {}",
+            thickness[[0, 0]]
+        );
+        assert!(mslp[[0, 1]].is_nan() && thickness[[0, 1]].is_nan());
+        assert!(mslp[[0, 2]] == 1013.0 && thickness[[0, 2]].is_nan());
+        assert!(thickness[[0, 3]].is_nan());
     }
 
     #[test]

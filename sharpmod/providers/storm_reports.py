@@ -32,14 +32,11 @@ point symbol at a fixed size as the view zooms.
 
 from __future__ import annotations
 
-import hashlib
 import logging
-import math
 import os
 import tempfile
 import threading
 import time
-import urllib.parse
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
@@ -53,8 +50,6 @@ _LOGGER = logging.getLogger(__name__)
 OVERLAY_KEY = "storm_reports"
 OVERLAY_TITLE = "Storm reports"
 ATTRIBUTION = "NWS Local Storm Reports via Iowa Environmental Mesonet"
-
-_BASE = "https://mesonet.agron.iastate.edu/cgi-bin/request/gis/lsr.py"
 
 
 @dataclass(frozen=True)
@@ -184,10 +179,6 @@ _CACHE_MAX_ENTRIES = 32
 #: :mod:`sharpmod.providers.hrrr_field` makes about a finished model run.
 ARCHIVE_SETTLED_AFTER = timedelta(hours=6)
 
-#: Vertices in the retained geographic ring. The GUI paints from the report's
-#: centre and fixed pixel radius rather than drawing these vertices.
-_MARKER_VERTICES = 16
-
 
 class StormReportsError(RuntimeError):
     """Reports could not be fetched. Cancellation is not one of these."""
@@ -211,15 +202,10 @@ class StormReport:
 
     def magnitude_text(self) -> str:
         """Return the magnitude the way a forecaster would say it."""
-        if self.magnitude is None:
-            return ""
-        if self.hazard.units == "in":
-            # Bare units: :meth:`label` already names the hazard, and "Hail
-            # 1.75 in hail" says it twice.
-            return f"{self.magnitude:.2f} in"
-        if self.hazard.units == "mph":
-            return f"{self.magnitude:.0f} mph"
-        return f"{self.magnitude:g}"
+        import sharpmod_rs
+
+        return sharpmod_rs.report_magnitude_text(
+            self.magnitude, self.hazard.units)
 
     def is_significant(self) -> bool:
         """Whether SPC would plot this as significant severe.
@@ -228,9 +214,10 @@ class StormReport:
         carry none, and treating an unknown as significant would promote the
         vaguest reports in the feed to the most prominent marks on the map.
         """
-        threshold = self.hazard.significant_at
-        return (threshold is not None and self.magnitude is not None
-                and self.magnitude >= threshold)
+        import sharpmod_rs
+
+        return sharpmod_rs.report_is_significant(
+            self.magnitude, self.hazard.significant_at)
 
     def label(self) -> str:
         """Give the marker a compact SPC-style label for click details."""
@@ -281,18 +268,9 @@ def parse_reports(text: str) -> tuple[StormReport, ...]:
 
 def normalise_report_filter(value: str | None) -> str:
     """Return a supported hazard-filter key, defaulting safely to ``all``."""
+    import sharpmod_rs
 
-    key = str(value or "all").strip().lower().replace("_", "-")
-    aliases = {
-        "t": "tornado",
-        "h": "hail",
-        "g": "wind",
-        "d": "wind",
-        "sig": "significant",
-        "significant-severe": "significant",
-    }
-    key = aliases.get(key, key)
-    return key if key in REPORT_FILTER_LABELS else "all"
+    return sharpmod_rs.report_normalise_filter(value)
 
 
 def filter_reports(reports, hazard_filter: str | None = "all") -> tuple[StormReport, ...]:
@@ -313,29 +291,24 @@ def filter_reports(reports, hazard_filter: str | None = "all") -> tuple[StormRep
 
 def report_window_label(window: timedelta | None) -> str:
     """Describe a symmetric total query span as a compact half-window."""
+    import sharpmod_rs
 
-    span = max(timedelta(minutes=15), window or DEFAULT_WINDOW)
-    half_minutes = int(round(span.total_seconds() / 120.0))
-    if half_minutes % 60 == 0:
-        hours = half_minutes // 60
-        return f"±{hours} hour{'s' if hours != 1 else ''}"
-    return f"±{half_minutes} min"
+    return sharpmod_rs.report_window_label(
+        window.total_seconds() if window is not None else None)
 
 
 def _report_count_label(filter_key: str, count: int) -> str:
     """Name a count and its optional filter in one compact caption unit."""
-    noun = f"storm report{'s' if count != 1 else ''}"
-    if filter_key == "all":
-        return noun
-    return f"{noun} ({REPORT_FILTER_LABELS[filter_key]})"
+    import sharpmod_rs
+
+    return sharpmod_rs.report_count_label(filter_key, count)
 
 
 def marker_radius(span_deg: float | None) -> float:
     """Return a geographic query radius; visible symbols use screen pixels."""
-    if span_deg is None or not math.isfinite(span_deg) or span_deg <= 0.0:
-        span_deg = 60.0  # a continental view, the common default
-    scaled = float(span_deg) * MARKER_SPAN_FRACTION
-    return max(MIN_MARKER_DEG, min(MAX_MARKER_DEG, scaled))
+    import sharpmod_rs
+
+    return sharpmod_rs.report_marker_radius(span_deg)
 
 
 def _marker_ring(report: StormReport, radius: float):
@@ -344,16 +317,10 @@ def _marker_ring(report: StormReport, radius: float):
     Longitude is stretched by ``1/cos(latitude)`` so the marker stays visibly
     round on a plate-carree map instead of flattening towards the poles.
     """
-    stretch = 1.0 / max(0.2, math.cos(math.radians(report.lat)))
-    points = []
-    for index in range(_MARKER_VERTICES):
-        angle = 2.0 * math.pi * index / _MARKER_VERTICES
-        points.append((
-            report.lon + radius * stretch * math.cos(angle),
-            report.lat + radius * math.sin(angle),
-        ))
-    points.append(points[0])
-    return tuple(points)
+    import sharpmod_rs
+
+    return tuple(
+        sharpmod_rs.report_marker_ring(report.lat, report.lon, radius))
 
 
 #: Draw order within the layer, by hazard code.
@@ -454,23 +421,16 @@ def filter_report_layer(layer, hazard_filter: str | None = "all"):
 
     if layer is None:
         return None
+    import sharpmod_rs
+
     key = normalise_report_filter(hazard_filter)
 
     def keep(shape):
-        category = str(getattr(shape, "marker_category", "") or "").lower()
-        if key == "all":
-            return True
-        if key == "significant":
-            return bool(getattr(shape, "marker_significant", False))
-        if key == "tornado":
-            return category == "t"
-        if key == "hail":
-            return category in {"h", "significant"} and "hail" in str(
-                getattr(shape, "label", "")
-            ).lower()
-        return category in {"g", "d", "significant"} and any(
-            word in str(getattr(shape, "label", "")).lower()
-            for word in ("wind", "gust")
+        return sharpmod_rs.report_layer_shape_matches(
+            key,
+            str(getattr(shape, "marker_category", "") or ""),
+            str(getattr(shape, "label", "")),
+            bool(getattr(shape, "marker_significant", False)),
         )
 
     shapes = tuple(shape for shape in layer.shapes if keep(shape))
@@ -483,6 +443,22 @@ def filter_report_layer(layer, hazard_filter: str | None = "all"):
     return replace(layer, shapes=shapes, subtitle=" · ".join(parts))
 
 
+def _view_floats(view):
+    """The four floats of a ``view`` extent, or ``None`` when unusable.
+
+    Python owns the float conversion so any value accepting ``float()`` keeps
+    working across the native boundary; the geometry checks live in Rust.
+    """
+    if view is None:
+        return None
+    try:
+        if len(view) != 4:
+            return None
+        return [float(value) for value in view]
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _normalise_view(view) -> tuple[str, str, str, str] | None:
     """Return a service-safe bounding box, or omit an unusable view.
 
@@ -492,28 +468,12 @@ def _normalise_view(view) -> tuple[str, str, str, str] | None:
     failed. The box is only an optimization, so an unusable one falls back to
     the provider's normal time-window query.
     """
-    if view is None:
+    values = _view_floats(view)
+    if values is None:
         return None
-    try:
-        if len(view) != 4:
-            return None
-        lon0, lon1, lat0, lat1 = (float(value) for value in view)
-    except (TypeError, ValueError, OverflowError):
-        return None
+    import sharpmod_rs
 
-    if not all(math.isfinite(value) for value in (lon0, lon1, lat0, lat1)):
-        return None
-    west, east = sorted((lon0, lon1))
-    south, north = sorted((lat0, lat1))
-    if not (-180.0 <= west < east <= 180.0
-            and -90.0 <= south < north <= 90.0):
-        return None
-
-    formatted = tuple(f"{value:.4f}" for value in (west, east, south, north))
-    if not (float(formatted[0]) < float(formatted[1])
-            and float(formatted[2]) < float(formatted[3])):
-        return None
-    return formatted
+    return sharpmod_rs.report_normalise_view(values)
 
 
 def build_url(*, window: timedelta = DEFAULT_WINDOW, view=None,
@@ -544,34 +504,21 @@ def build_url(*, window: timedelta = DEFAULT_WINDOW, view=None,
     Invalid or zero-area bounds are omitted: a map can briefly report one while
     laying out, and the service rejects it with HTTP 422.
     """
-    span = max(timedelta(minutes=15), window)
-    params: list[tuple[str, str]] = [("justcsv", "1")]
+    import sharpmod_rs
+
     if around is None:
-        params.append(("recent", str(min(int(span.total_seconds()), 999_999))))
+        around_epoch = None
     else:
         # Centred on the moment asked about, so reports both leading up to and
         # following the sounding are included.
-        moment = around if around.tzinfo else around.replace(tzinfo=timezone.utc)
-        start = (moment - span / 2).astimezone(timezone.utc)
-        end = (moment + span / 2).astimezone(timezone.utc)
-        for index, edge in ((1, start), (2, end)):
-            params.extend((
-                (f"year{index}", str(edge.year)),
-                (f"month{index}", str(edge.month)),
-                (f"day{index}", str(edge.day)),
-                (f"hour{index}", str(edge.hour)),
-                (f"minute{index}", str(edge.minute)),
-            ))
-    bbox = _normalise_view(view)
-    if bbox is not None:
-        west, east, south, north = bbox
-        params.extend((
-            ("west", west),
-            ("east", east),
-            ("south", south),
-            ("north", north),
-        ))
-    return f"{_BASE}?{urllib.parse.urlencode(params)}"
+        moment = (around if around.tzinfo
+                  else around.replace(tzinfo=timezone.utc))
+        around_epoch = moment.timestamp()
+    return sharpmod_rs.report_build_url(
+        window.total_seconds(),
+        _view_floats(view),
+        around_epoch,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -604,7 +551,9 @@ def _cache_key(url: str) -> str:
     is hashed rather than transcribed: it would otherwise make a long and
     punctuation-heavy filename.
     """
-    return hashlib.sha256(url.encode("utf-8")).hexdigest()[:32]
+    import sharpmod_rs
+
+    return sharpmod_rs.report_cache_key(url)
 
 
 def window_is_settled(*, window: timedelta, around: datetime | None,
@@ -616,12 +565,18 @@ def window_is_settled(*, window: timedelta, around: datetime | None,
     """
     if around is None:
         return False
-    moment = around if around.tzinfo else around.replace(tzinfo=timezone.utc)
-    ends = moment + max(timedelta(minutes=15), window) / 2
+    import sharpmod_rs
+
+    moment = (around if around.tzinfo
+              else around.replace(tzinfo=timezone.utc))
     reference = now or datetime.now(timezone.utc)
     if reference.tzinfo is None:
         reference = reference.replace(tzinfo=timezone.utc)
-    return (reference - ends) >= ARCHIVE_SETTLED_AFTER
+    return sharpmod_rs.report_window_is_settled(
+        window.total_seconds(),
+        moment.timestamp(),
+        reference.timestamp(),
+    )
 
 
 def _disk_read(path: Path) -> str | None:

@@ -72,17 +72,20 @@ def _draw_overlay_rasters(painter, rasters, rect, bounds, qtcore, qtgui) -> None
         if not image.loadFromData(payload):
             continue
         try:
-            raster_west, raster_east = raster.bounds[:2]
-            west, _south, east, _north = bounds
-            first_copy = math.floor((west - raster_east) / 360.0) + 1
-            last_copy = math.ceil((east - raster_west) / 360.0) - 1
+            raster_west, raster_east = (float(v) for v in raster.bounds[:2])
+            west, _south, east, _north = (float(v) for v in bounds)
         except (AttributeError, TypeError, ValueError, OverflowError):
             continue
-        opacity = getattr(raster, "opacity", 1.0)
-        try:
-            opacity = min(1.0, max(0.0, float(opacity)))
-        except (TypeError, ValueError):
-            opacity = 1.0
+        import sharpmod_rs
+
+        usable, first_copy, last_copy = sharpmod_rs.hodo_overlay_raster_copy_range(
+            raster_west, raster_east, west, east
+        )
+        if not usable:
+            continue
+        opacity = sharpmod_rs.hodo_overlay_clamp_opacity(
+            getattr(raster, "opacity", 1.0), 1.0
+        )
         painter.save()
         try:
             painter.setOpacity(opacity)
@@ -162,6 +165,15 @@ def _draw_overlay_layers(
     """
     west, south, east, north = bounds
     center = (west + east) / 2.0
+    import sharpmod_rs
+
+    bounds_tuple = tuple(float(value) for value in bounds)
+    map_rect = (
+        float(rect.left()),
+        float(rect.top()),
+        float(rect.width()),
+        float(rect.height()),
+    )
     point_symbols = []
     for layer in layers:
         for shape in getattr(layer, "shapes", ()):
@@ -169,9 +181,11 @@ def _draw_overlay_layers(
             marker_lon = getattr(shape, "marker_lon", None)
             marker_lat = getattr(shape, "marker_lat", None)
             if radius > 0.0 and marker_lon is not None and marker_lat is not None:
-                near_lon = _api._longitude_near(marker_lon, center)
-                if west <= near_lon <= east and south <= marker_lat <= north:
-                    x, y = _api._map_point(rect, bounds, marker_lat, near_lon)
+                x, y, inside = sharpmod_rs.hodo_overlay_project_marker_point(
+                    float(marker_lat), float(marker_lon),
+                    bounds_tuple, map_rect,
+                )
+                if inside:
                     point_symbols.append((x, y, radius, shape))
                 continue
             try:
@@ -204,23 +218,21 @@ def _draw_overlay_layers(
                     for ring_lon, ring_lat in ring
                 ) for ring in shape.rings)
 
+            projected_rings = sharpmod_rs.hodo_overlay_project_shape_rings(
+                [list(ring) for ring in rings], bounds_tuple, map_rect
+            )
             path = qtgui.QPainterPath()
             # Odd-even filling makes an interior ring a hole whichever way it is
             # wound, which is what keeps each risk category filled exactly once.
             path.setFillRule(qtcore.Qt.OddEvenFill)
-            for ring in rings:
-                if len(ring) < 3:
+            for ring in projected_rings:
+                if not ring:
                     continue
-                started = False
-                for ring_lon, ring_lat in ring:
-                    x, y = _api._map_point(rect, bounds, ring_lat, ring_lon)
-                    if started:
-                        path.lineTo(x, y)
-                    else:
-                        path.moveTo(x, y)
-                        started = True
-                if started:
-                    path.closeSubpath()
+                first_x, first_y = ring[0]
+                path.moveTo(first_x, first_y)
+                for x, y in ring[1:]:
+                    path.lineTo(x, y)
+                path.closeSubpath()
             if path.isEmpty():
                 continue
 

@@ -6,6 +6,7 @@ pub mod australian_radar;
 pub mod bridge_cache;
 pub mod dwd_radar;
 pub mod github_star;
+pub mod hgt500_climatology;
 mod http;
 pub mod map_fields;
 pub mod model_http;

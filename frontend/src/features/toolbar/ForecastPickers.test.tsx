@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
 import { parseMapCatalog } from "../../lib/contracts/map";
+import { nameMapParameter } from "../../map/mapParameters";
 import { useAppStore } from "../../stores/appStore";
 import { useForecastStore } from "../../stores/forecastStore";
 import { panelProduct, useMapStore } from "../../stores/mapStore";
@@ -28,7 +29,76 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it("keeps Winter Weather last and separates the description into a second glass card", async () => {
+it.each([
+  ["hrrr", "refd-1km-ptype", 1],
+  ["gfs", "prate-ptype", 1],
+  ["ecmwf-ifs-9km", "prate-ptype", 3],
+  ["hrdps", "prate-ptype", 6],
+  ["refs-m2", "qpf-1h-ptype", 1],
+] as const)("starts the %s precipitation-type product at its first supported hour", async (model, key, firstHour) => {
+  useForecastStore.setState({ modelKey: model, forecastHour: 0 });
+  useMapStore.getState().setProduct("tmp-2m");
+  useMapStore.getState().setLayerVisible("model-field", true);
+  const base = createTransport("field-error");
+  const requests: unknown[] = [];
+  const raw = model === "hrrr" ? mapCatalog : modelCatalogs[model];
+  const parsed = parseMapCatalog(raw);
+  const product = parsed.products.find((item) => item.key === key);
+  if (product === undefined) throw new Error(`Missing ${model} ${key} fixture`);
+  const name = nameMapParameter(product, model).label;
+  const { queryClient } = renderWithBackend(<><ForecastControls /><TimelineRegion /></>, {
+    ...base, call: (command, args) => {
+      if (command === "get_weather_field") requests.push(args);
+      return base.call(command, args);
+    },
+  });
+  const chooseHour = await screen.findByRole("button", { name: "Choose forecast hour" });
+  await waitFor(() => { expect(chooseHour.textContent).toContain("F000"); });
+  const pick = await screen.findByRole<HTMLButtonElement>("button", { name: "Choose parameter" });
+  await waitFor(() => { expect(pick.disabled).toBe(false); });
+  await userEvent.click(pick);
+  await userEvent.click(await screen.findByRole("button", { name: `${name}, ${product.palette.units}` }));
+  await waitFor(() => {
+    expect(requests).toContainEqual(expect.objectContaining({ model, product: key, forecastHour: firstHour }));
+  });
+  expect(requests).not.toContainEqual(expect.objectContaining({ product: key, forecastHour: 0 }));
+  expect(chooseHour.textContent).toContain(`F${String(firstHour).padStart(3, "0")}`);
+  expect((await screen.findByRole("slider", { name: "Forecast hour" })).getAttribute("aria-valuetext"))
+    .toContain(`F${String(firstHour).padStart(3, "0")}`);
+  await userEvent.click(chooseHour);
+  expect(screen.queryByRole("button", { name: "Select forecast hour 0" })).toBeNull();
+  expect(screen.getByRole("button", { name: `Select forecast hour ${String(firstHour)}`, pressed: true })).toBeTruthy();
+  queryClient.clear();
+});
+
+it("finishes outgoing picker motion without disturbing a new or reopened picker", async () => {
+  const { queryClient } = renderWithBackend(<ForecastControls />, createTransport("field-error"));
+  const user = userEvent.setup();
+  const model = screen.getByRole<HTMLButtonElement>("button", { name: "Choose model" });
+  const parameter = screen.getByRole<HTMLButtonElement>("button", { name: "Choose parameter" });
+  await waitFor(() => { expect(parameter.disabled).toBe(false); });
+  await user.click(model);
+  const outgoing = screen.getByRole("dialog", { name: "Forecast model" });
+  let finish = (): void => undefined;
+  const finished = new Promise<void>((resolve) => { finish = resolve; });
+  Object.defineProperty(outgoing, "getAnimations", { value: () => [{ finished }] });
+
+  await user.click(parameter);
+  expect(screen.queryByRole("dialog", { name: "Forecast model" })).toBeNull();
+  expect(outgoing.isConnected).toBe(true);
+  expect(outgoing.hasAttribute("inert")).toBe(true);
+  expect(outgoing.getAttribute("data-open")).toBe("false");
+  expect(document.activeElement).toBe(screen.getByRole("searchbox", { name: "Search parameters" }));
+  await user.click(model);
+  await act(async () => { finish(); await finished; });
+  expect(screen.getByRole("dialog", { name: "Forecast model" })).toBe(outgoing);
+  expect(outgoing.hasAttribute("inert")).toBe(false);
+  await user.keyboard("{Escape}");
+  expect(document.activeElement).toBe(model);
+  queryClient.clear();
+});
+
+it("groups All parameters in category order and keeps the preview in a separate card", async () => {
   useForecastStore.getState().setHour(3);
   renderWithBackend(<ForecastControls />, createTransport("field-error"));
   const trigger = screen.getByRole<HTMLButtonElement>("button", { name: "Choose parameter" });
@@ -41,6 +111,14 @@ it("keeps Winter Weather last and separates the description into a second glass 
   const buttons = within(categories).getAllByRole("button");
   expect(buttons).toHaveLength(10);
   expect(buttons.at(-1)?.textContent).toBe("Winter Weather4");
+  const results = within(browser).getByRole("region", { name: "Parameter results" });
+  expect(within(results).getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
+    ...mapCatalog.categories.filter((category) => category !== "Winter Weather"),
+    "Winter Weather",
+  ]);
+  expect(within(results).getAllByRole("button").slice(0, 3).map((button) => button.getAttribute("aria-label"))).toEqual([
+    "200 mb Height, Wind, kt", "300 mb Height, Wind, kt", "500 mb Height, Wind, kt",
+  ]);
   expect(browser.contains(description)).toBe(false);
   expect(browser.parentElement).toBe(description.parentElement);
   expect(browser.getAttribute("data-surface")).toBe("glass");
@@ -157,8 +235,9 @@ it("disables future dates and cycles, crosses day boundaries, and returns to the
 
 const exponentProducts = parseMapCatalog(mapCatalog).products.filter((product) => product.palette.units.includes("^"));
 it.each(["tmp-2m", "rh-2m", "ltng", ...exponentProducts.map((product) => product.key)])("filters %s, previews keyboard-focused descriptions, and changes only the active panel", async (key) => {
-  const product = parseMapCatalog(mapCatalog).products.find((item) => item.key === key);
-  if (product === undefined) throw new Error("Missing parameter fixture");
+  const source = parseMapCatalog(mapCatalog).products.find((item) => item.key === key);
+  if (source === undefined) throw new Error("Missing parameter fixture");
+  const product = nameMapParameter(source, mapCatalog.fieldModel);
   useForecastStore.getState().setHour(3);
   useMapStore.setState({ panelLayout: 2, activePanel: 1 });
   const firstPanel = panelProduct(useMapStore.getState(), 0);

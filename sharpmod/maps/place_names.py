@@ -162,24 +162,22 @@ def _place_from_payload(payload: Any) -> str:
     address = payload.get("address")
     if not isinstance(address, dict):
         return ""
-    settlement = next((
-        str(address[key]).strip()
-        for key in (
-            "city", "town", "village", "municipality", "hamlet",
-        )
-        if str(address.get(key, "")).strip()
-    ), "")
-    if not settlement:
-        return ""
-    region = str(
-        address.get("state")
-        or address.get("region")
-        or address.get("country")
-        or ""
-    ).strip()
-    if region and region.casefold() != settlement.casefold():
-        return f"{settlement}, {region}"
-    return settlement
+    import sharpmod_rs
+
+    def field(key: str) -> str | None:
+        value = address.get(key)
+        return None if value is None else str(value)
+
+    return sharpmod_rs.place_from_address_fields(
+        field("city"),
+        field("town"),
+        field("village"),
+        field("municipality"),
+        field("hamlet"),
+        field("state"),
+        field("region"),
+        field("country"),
+    )
 
 
 def _payload_is_us(payload: Any) -> bool:
@@ -190,39 +188,26 @@ def _payload_is_us(payload: Any) -> bool:
     address = payload.get("address")
     if not isinstance(address, dict):
         return False
-    country_code = str(address.get("country_code", "")).strip().casefold()
-    if country_code:
-        return country_code == "us"
-    country = str(address.get("country", "")).strip().casefold()
-    if not country:
-        return True
-    return country in {
-        "united states",
-        "united states of america",
-        "u.s.",
-        "u.s.a.",
-        "us",
-        "usa",
-    }
+    import sharpmod_rs
+
+    code = address.get("country_code")
+    country = address.get("country")
+    return bool(
+        sharpmod_rs.place_is_us_address(
+            None if code is None else str(code),
+            None if country is None else str(country),
+        )
+    )
 
 
 def needs_town_name(label: Any, model: Any = "") -> bool:
     """Return whether ``label`` is only a generic model/coordinate fallback."""
 
-    text = " ".join(str(label or "").split())
-    if not text or _COORDINATE_LABEL_RE.search(text):
-        return True
+    import sharpmod_rs
 
-    model_text = " ".join(str(model or "").split())
-    if not model_text:
-        return False
-    folded = text.casefold()
-    model_folded = model_text.casefold()
-    return folded in {
-        model_folded,
-        f"{model_folded}pt",
-        f"{model_folded} point",
-    }
+    return bool(
+        sharpmod_rs.place_needs_town_name(str(label or ""), str(model or ""))
+    )
 
 
 def _place_record_from_fields(
@@ -230,23 +215,9 @@ def _place_record_from_fields(
 ) -> tuple[str, float, float, str, float] | None:
     """Parse current six-column and legacy five-column place records."""
 
-    if len(fields) < 5:
-        return None
-    label, lat_text, lon_text, kind, _geoid = fields[:5]
-    area_text = fields[5] if len(fields) >= 6 else ""
-    try:
-        lat = float(lat_text)
-        lon = float(lon_text)
-        land_area_sqmi = float(area_text) if area_text else 0.0
-    except (TypeError, ValueError):
-        return None
-    if not label or kind not in {"place", "subdivision"} \
-            or not all(math.isfinite(value) for value in (
-                lat, lon, land_area_sqmi,
-            )) \
-            or land_area_sqmi < 0.0:
-        return None
-    return label, lat, lon, kind, land_area_sqmi
+    import sharpmod_rs
+
+    return sharpmod_rs.place_parse_record_fields(fields)
 
 
 @lru_cache(maxsize=1)
@@ -370,21 +341,11 @@ def _point_in_polygon(
 ) -> bool:
     """Ray-cast a longitude/latitude point against one closed ring."""
 
-    x = float(lon)
-    y = float(lat)
-    inside = False
-    previous = points[-1]
-    for current in points:
-        x1, y1 = previous
-        x2, y2 = current
-        if _point_on_segment(x, y, x1, y1, x2, y2):
-            return True
-        if (y1 > y) != (y2 > y):
-            crossing = x1 + (y - y1) * (x2 - x1) / (y2 - y1)
-            if x < crossing:
-                inside = not inside
-        previous = current
-    return inside
+    import sharpmod_rs
+
+    return bool(
+        sharpmod_rs.place_point_in_polygon(float(lat), float(lon), points)
+    )
 
 
 def is_conus_point(lat: float, lon: float) -> bool:
@@ -426,18 +387,13 @@ def _distance_km(
 def _area_proxy_radius_km(land_area_sqmi: float) -> float:
     """Return a conservative circular-footprint radius for a Census entity."""
 
+    import sharpmod_rs
+
     try:
         area = float(land_area_sqmi)
     except (TypeError, ValueError, OverflowError):
         return 0.0
-    if not math.isfinite(area) or area <= 0.0:
-        return 0.0
-    equivalent_radius_miles = math.sqrt(area / math.pi)
-    return (
-        equivalent_radius_miles
-        * _KM_PER_MILE
-        * _AREA_PROXY_RADIUS_SCALE
-    )
+    return sharpmod_rs.place_area_proxy_radius_km(area)
 
 
 def offline_conus_town_name(

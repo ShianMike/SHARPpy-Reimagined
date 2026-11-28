@@ -21,43 +21,27 @@ _PIXMAP_DENSITY_LOCK = threading.RLock()
 
 def _bounded_float_env(name: str, default: float, lower: float,
                        upper: float) -> float:
-    try:
-        value = float(os.environ.get(name, str(default)))
-    except ValueError:
-        value = default
-    return max(lower, min(upper, value))
+    import sharpmod_rs
+
+    return sharpmod_rs.render_bounded_float(
+        os.environ.get(name), float(default), float(lower), float(upper)
+    )
 
 
 def _bounded_int_env(name: str, default: int, lower: int,
                      upper: int) -> int:
-    try:
-        value = int(os.environ.get(name, str(default)))
-    except ValueError:
-        value = default
-    return max(lower, min(upper, value))
+    import sharpmod_rs
+
+    return sharpmod_rs.render_bounded_int(
+        os.environ.get(name), int(default), int(lower), int(upper)
+    )
 
 
 def _normalise_png_image_mode(mode: str | None) -> str:
     """Return a canonical PNG export mode name."""
-    value = (mode or PNG_IMAGE_HD).strip().lower().replace("_", "-")
-    aliases = {
-        "hires": PNG_IMAGE_HD,
-        "hi-res": PNG_IMAGE_HD,
-        "high-resolution": PNG_IMAGE_HD,
-        "high-definition": PNG_IMAGE_HD,
-        "ultra": PNG_IMAGE_UHD,
-        "ultrahd": PNG_IMAGE_UHD,
-        "ultra-hd": PNG_IMAGE_UHD,
-        "ultra-high-definition": PNG_IMAGE_UHD,
-        "compact": PNG_IMAGE_LOSSLESS,
-        "original": PNG_IMAGE_LOSSLESS,
-        "original-size": PNG_IMAGE_LOSSLESS,
-    }
-    value = aliases.get(value, value)
-    if value not in PNG_IMAGE_MODES:
-        valid = ", ".join(PNG_IMAGE_MODES)
-        raise ValueError(f"unknown PNG image mode {mode!r}; expected {valid}")
-    return value
+    import sharpmod_rs
+
+    return sharpmod_rs.render_normalise_png_mode(mode)
 
 
 def _png_lossless_compression_quality() -> int:
@@ -126,20 +110,24 @@ def _make_density_pixmap_type(scale: float):
         _sharpmod_density_scale = density
 
         def __init__(self, *args, **kwargs):
+            import sharpmod_rs
+
             scaled = False
             if not kwargs and len(args) == 2 and all(
                     isinstance(value, int) for value in args):
                 super().__init__(
-                    max(0, int(round(args[0] * density))),
-                    max(0, int(round(args[1] * density))),
+                    *sharpmod_rs.render_scale_dimensions(
+                        int(args[0]), int(args[1]), density
+                    )
                 )
                 scaled = True
             elif not kwargs and len(args) == 1 \
                     and isinstance(args[0], QtCore.QSize):
                 size = args[0]
                 super().__init__(
-                    max(0, int(round(size.width() * density))),
-                    max(0, int(round(size.height() * density))),
+                    *sharpmod_rs.render_scale_dimensions(
+                        int(size.width()), int(size.height()), density
+                    )
                 )
                 scaled = True
             else:
@@ -150,14 +138,18 @@ def _make_density_pixmap_type(scale: float):
                 self.setDevicePixelRatio(density)
 
         def width(self):
-            raw = super().width()
-            dpr = self.devicePixelRatioF()
-            return int(round(raw / dpr)) if dpr > 1.0 else raw
+            import sharpmod_rs
+
+            return sharpmod_rs.render_logical_extent(
+                super().width(), self.devicePixelRatioF()
+            )
 
         def height(self):
-            raw = super().height()
-            dpr = self.devicePixelRatioF()
-            return int(round(raw / dpr)) if dpr > 1.0 else raw
+            import sharpmod_rs
+
+            return sharpmod_rs.render_logical_extent(
+                super().height(), self.devicePixelRatioF()
+            )
 
         def size(self):
             return QtCore.QSize(self.width(), self.height())
@@ -167,15 +159,11 @@ def _make_density_pixmap_type(scale: float):
 
         @staticmethod
         def _map_copy_axis(start, length, dpr, physical_extent):
-            physical_start = int(round(start * dpr))
-            if length < 0:
-                # Resolve Qt's -1 "through the edge" sentinel explicitly.
-                # Passing -1 with physical x/y through PySide can be treated
-                # as a null QRect and copy the entire pixmap instead.
-                return physical_start, max(
-                    0, int(physical_extent) - physical_start)
-            physical_end = int(round((start + length) * dpr))
-            return physical_start, max(0, physical_end - physical_start)
+            import sharpmod_rs
+
+            return sharpmod_rs.render_map_copy_axis(
+                int(start), int(length), float(dpr), int(physical_extent)
+            )
 
         def copy(self, *args):
             dpr = self.devicePixelRatioF()

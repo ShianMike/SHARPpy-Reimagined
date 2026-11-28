@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import io
 import json
 import os
@@ -70,64 +70,19 @@ def _temporary(destination: Path, suffix: str) -> Path:
 
 
 def _frame_caption(frame: AnimationFrame, mode: str) -> str:
-    if mode == "forecast-timeline":
-        lead = (
-            f" · F{int(frame.forecast_hour):03d}"
-            if frame.forecast_hour is not None
-            and str(frame.label).strip().upper() != f"F{int(frame.forecast_hour):03d}"
-            else ""
-        )
-        return f"{frame.label} · valid {_time(frame.valid_time)}{lead}"
-    return (
-        f"{frame.label} · run {_time(frame.run_time)} · "
-        f"valid {_time(frame.valid_time)}"
+    import sharpmod_rs
+
+    return sharpmod_rs.animation_frame_caption(
+        mode,
+        frame.label,
+        _time(frame.valid_time),
+        _time(frame.run_time),
+        None if frame.forecast_hour is None else int(frame.forecast_hour),
     )
 
 
 def _continuity_time(frame: AnimationFrame, mode: str) -> datetime | None:
     return _utc(frame.valid_time if mode == "forecast-timeline" else frame.run_time)
-
-
-def _gap_frame(
-    previous: AnimationFrame,
-    following: AnimationFrame,
-    *,
-    mode: str,
-    expected_interval_seconds: float,
-) -> AnimationFrame:
-    before = _continuity_time(previous, mode)
-    after = _continuity_time(following, mode)
-    missing_time = before + timedelta(seconds=expected_interval_seconds)
-    reason = (
-        f"time discontinuity from {_time(before)} to {_time(after)}; "
-        "the displayed step exceeds the smallest source interval; "
-        "cadence may change or intermediate times may be unselected"
-    )
-    if mode == "forecast-timeline":
-        lead = None
-        if previous.forecast_hour is not None:
-            lead = int(
-                round(
-                    previous.forecast_hour
-                    + expected_interval_seconds / 3600.0
-                )
-            )
-        return AnimationFrame(
-            "Time gap",
-            None,
-            missing_time,
-            previous.run_time,
-            lead,
-            reason,
-        )
-    return AnimationFrame(
-        "Run gap",
-        None,
-        following.valid_time,
-        missing_time,
-        None,
-        reason,
-    )
 
 
 def prepare_animation_frames(
@@ -143,68 +98,65 @@ def prepare_animation_frames(
     of a gap without a visible marker would imply continuity that is not in the
     source data.
     """
-    if mode not in ANIMATION_MODES:
-        raise AnimationExportError(f"unsupported animation mode {mode!r}")
-    policy = str(gap_policy or "cards").strip().lower()
-    if policy not in GAP_POLICIES:
-        raise AnimationExportError(
-            f"unsupported gap policy {gap_policy!r}; expected cards, stop, or error"
-        )
+    import sharpmod_rs
+
     source = tuple(frames)
-    if not source:
-        raise AnimationExportError("animation needs at least one selected frame")
     expected = None
     if expected_interval_seconds is not None:
         try:
             expected = float(expected_interval_seconds)
         except (TypeError, ValueError) as exc:
             raise AnimationExportError("expected frame interval must be seconds") from exc
-        if expected <= 0:
-            raise AnimationExportError("expected frame interval must be positive")
-
-    expanded: list[AnimationFrame] = []
-    previous = None
-    for frame in source:
-        if previous is not None and expected is not None:
-            before = _continuity_time(previous, mode)
-            after = _continuity_time(frame, mode)
-            if (
-                before is not None
-                and after is not None
-                and (after - before).total_seconds() > expected * 1.5
-            ):
-                expanded.append(
-                    _gap_frame(
-                        previous,
-                        frame,
-                        mode=mode,
-                        expected_interval_seconds=expected,
-                    )
-                )
-        expanded.append(frame)
-        previous = frame
-
-    missing = [item for item in expanded if item.png_bytes is None]
-    if policy == "error" and missing:
-        first = missing[0]
-        raise AnimationExportError(
-            f"gap policy is Fail export and frame {first.label!r} is missing: "
-            f"{first.missing_reason}"
+    try:
+        plan = sharpmod_rs.animation_plan_frames(
+            mode,
+            str(gap_policy or "cards"),
+            expected,
+            [frame.label for frame in source],
+            [frame.png_bytes is not None for frame in source],
+            [
+                None if (stamp := _continuity_time(frame, mode)) is None else stamp.timestamp()
+                for frame in source
+            ],
+            [
+                None if frame.forecast_hour is None else int(frame.forecast_hour)
+                for frame in source
+            ],
+            [frame.missing_reason for frame in source],
         )
-    if policy == "stop":
-        result = []
-        for item in expanded:
-            if item.png_bytes is None:
-                break
-            result.append(item)
-        if not result:
-            first = expanded[0]
-            raise AnimationExportError(
-                "gap policy is Stop before first gap, but the first frame is "
-                f"missing: {first.missing_reason}"
+    except ValueError as exc:
+        raise AnimationExportError(str(exc)) from None
+    result: list[AnimationFrame] = []
+    for pos, (is_gap, src_idx, gap_label, missing_epoch, gap_lead, gap_reason) in enumerate(plan):
+        if not is_gap:
+            result.append(source[src_idx])
+            continue
+        prev_frame = source[plan[pos - 1][1]]
+        next_frame = source[plan[pos + 1][1]]
+        missing_time = datetime.fromtimestamp(missing_epoch, tz=timezone.utc)
+        if mode == "forecast-timeline":
+            result.append(
+                AnimationFrame(
+                    gap_label,
+                    None,
+                    missing_time,
+                    prev_frame.run_time,
+                    gap_lead,
+                    gap_reason,
+                )
             )
-        return tuple(result)
-    return tuple(expanded)
+        else:
+            result.append(
+                AnimationFrame(
+                    gap_label,
+                    None,
+                    next_frame.valid_time,
+                    missing_time,
+                    None,
+                    gap_reason,
+                )
+            )
+    return tuple(result)
 
 
 def _palette(theme: str) -> tuple[str, str, str, str, str]:

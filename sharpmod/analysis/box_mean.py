@@ -89,14 +89,14 @@ def mean_model_label(model, members) -> str:
     and hodograph on the page belongs to an average, and the reader has to be
     able to see that without checking where the window came from.
     """
-    label = str(model or "").strip() or "MODEL"
+    import sharpmod_rs
+
     try:
         count = int(members)
     except (TypeError, ValueError):
         count = 0
-    if count <= 0:
-        return f"{label} box mean"
-    return f"{label} box mean of {count}"
+    return sharpmod_rs.box_mean_model_label(
+        str(model) if model else None, count)
 
 
 def box_mean_badge_lines(box_mean, members) -> tuple[str, ...]:
@@ -113,15 +113,13 @@ def box_mean_badge_lines(box_mean, members) -> tuple[str, ...]:
     Qt-independent on purpose -- the wording is a product decision and belongs
     beside :func:`mean_model_label`, while drawing it belongs to the renderer.
     """
-    if not box_mean:
-        return ()
+    import sharpmod_rs
+
     try:
         count = int(members)
     except (TypeError, ValueError):
         count = 0
-    headline = (f"BOX MEAN \u00b7 {count} SOUNDINGS" if count > 0
-                else "BOX MEAN")
-    return (headline, "indices of the mean, not mean indices")
+    return tuple(sharpmod_rs.box_mean_badge_lines(bool(box_mean), count))
 
 
 @dataclass(frozen=True)
@@ -182,20 +180,17 @@ class BoxMeanProfile:
 
     def describe(self) -> str:
         """Return a reader-facing one-line summary."""
-        text = (
-            f"mean of {self.members} soundings, {self.levels} levels, "
-            f"surface {self.surface_pressure_hpa:.0f} hPa"
+        import sharpmod_rs
+
+        return sharpmod_rs.box_mean_describe(
+            int(self.members),
+            int(self.levels),
+            float(self.surface_pressure_hpa),
+            int(self.requested),
+            int(self.trimmed_below),
+            int(self.trimmed_above),
+            int(self.clamped_dewpoints),
         )
-        if self.requested > self.members:
-            text += f"; {self.requested - self.members} unreadable"
-        trimmed = self.trimmed_below + self.trimmed_above
-        if trimmed:
-            text += (
-                f"; {trimmed} level(s) outside the layer every sounding shares"
-            )
-        if self.clamped_dewpoints:
-            text += f"; {self.clamped_dewpoints} dewpoint(s) clamped"
-        return text
 
 
 def _finite(values) -> np.ndarray:
@@ -281,30 +276,25 @@ def _interpolate(target_log, source_log, values) -> np.ndarray:
     Levels outside the member's own range become ``NaN`` rather than being
     extrapolated: a member that does not reach a level must not vote on it.
     """
-    usable = np.isfinite(source_log) & np.isfinite(values)
-    if int(np.count_nonzero(usable)) < 2:
-        return np.full(target_log.size, np.nan)
-    source = source_log[usable]
-    column = values[usable]
-    # ``np.interp`` needs an increasing coordinate; log-pressure decreases
-    # upward, so both are reversed together.
-    order = np.argsort(source)
-    result = np.interp(
-        target_log, source[order], column[order],
-        left=np.nan, right=np.nan,
+    import sharpmod_rs
+
+    return np.asarray(
+        sharpmod_rs.box_mean_interpolate_log_pressure(
+            np.asarray(target_log, dtype=float),
+            np.asarray(source_log, dtype=float),
+            np.asarray(values, dtype=float),
+        ),
+        dtype=float,
     )
-    return np.asarray(result, dtype=float)
 
 
 def _nanmean(stack) -> tuple[np.ndarray, np.ndarray]:
     """Return ``(mean, count)`` down a stack of columns, ignoring ``NaN``."""
-    array = np.asarray(stack, dtype=float)
-    present = np.isfinite(array)
-    counts = present.sum(axis=0).astype(int)
-    totals = np.where(present, array, 0.0).sum(axis=0)
-    with np.errstate(invalid="ignore"):
-        mean = np.where(counts > 0, totals / np.maximum(counts, 1), np.nan)
-    return mean, counts
+    import sharpmod_rs
+
+    mean, counts = sharpmod_rs.box_mean_nanmean_stack(
+        np.asarray(stack, dtype=float))
+    return np.asarray(mean, dtype=float), np.asarray(counts, dtype=int)
 
 
 def _reference_member(members, lat, lon):
@@ -320,24 +310,24 @@ def _reference_member(members, lat, lon):
     Ties break toward the centre, which is the member that best represents the
     area if the ladders really do differ.
     """
-    scale = (
-        float(np.cos(np.radians(float(lat)))) if lat is not None else 1.0
+    import sharpmod_rs
+
+    meta = [
+        (int(member["pres"].size),
+         float(member["lat"]) if member.get("lat") is not None else None,
+         float(member["lon"]) if member.get("lon") is not None else None)
+        for member in members
+    ]
+    index = sharpmod_rs.box_mean_reference_member_index(
+        meta,
+        None if lat is None else float(lat),
+        None if lon is None else float(lon),
     )
-
-    def rank(member):
-        levels = int(member["pres"].size)
-        mlat = member.get("lat")
-        mlon = member.get("lon")
-        if lat is None or lon is None or mlat is None or mlon is None:
-            distance = 0.0
-        else:
-            # Plain squared degrees with a cosine weight on longitude: the
-            # members are a few grid spacings apart, so a great-circle distance
-            # would not change the ordering.
-            distance = (mlat - lat) ** 2 + ((mlon - lon) * scale) ** 2
-        return (-levels, distance)
-
-    return min(members, key=rank)
+    if index is None:
+        # The Rust ladder reports "no member" instead of raising; ``min`` over
+        # an empty sequence is a ValueError in the original too.
+        raise ValueError("min() arg is an empty sequence")
+    return members[index]
 
 
 def box_mean_profile(
@@ -476,57 +466,34 @@ def _dewpoint_from_mixing_ratio(
 
 def _speed_direction(u, v) -> tuple[np.ndarray, np.ndarray]:
     """Return ``(speed, direction)`` for averaged wind components."""
-    u = np.asarray(u, dtype=float)
-    v = np.asarray(v, dtype=float)
-    speed = np.hypot(u, v)
-    with np.errstate(invalid="ignore"):
-        direction = (np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0
-    both = np.isfinite(u) & np.isfinite(v)
-    speed = np.where(both, speed, np.nan)
-    direction = np.where(both, direction, np.nan)
-    # A calm mean -- opposing members cancelling -- has no direction to report,
-    # and 0 degrees would read as due north rather than as "no vector".
-    calm = both & (speed < 1e-6)
-    direction = np.where(calm, 0.0, direction)
-    return speed, direction
+    import sharpmod_rs
+
+    speed, direction = sharpmod_rs.box_mean_speed_direction(
+        np.asarray(u, dtype=float), np.asarray(v, dtype=float))
+    return np.asarray(speed, dtype=float), np.asarray(direction, dtype=float)
 
 
 def _strictly_stacked(pressure, height):
     """Keep the longest run with pressure falling and height rising."""
+    import sharpmod_rs
+
     pressure = np.asarray(pressure, dtype=float)
     height = np.asarray(height, dtype=float)
-    keep = np.zeros(pressure.size, dtype=bool)
-    last_p = None
-    last_h = None
-    for index in range(pressure.size):
-        p = float(pressure[index])
-        h = float(height[index])
-        if last_p is not None and not (p < last_p and h > last_h):
-            continue
-        keep[index] = True
-        last_p, last_h = p, h
+    keep = np.asarray(
+        sharpmod_rs.box_mean_strictly_stacked_mask(pressure, height),
+        dtype=bool)
     return pressure[keep], height[keep], keep
 
 
 def _centre(members, lat, lon) -> tuple[float, float]:
     """Return the centre the mean represents."""
+    import sharpmod_rs
+
     if lat is not None and lon is not None:
         return float(lat), float(lon)
     lats = [m["lat"] for m in members if m.get("lat") is not None]
     lons = [m["lon"] for m in members if m.get("lon") is not None]
-    if not lats or not lons:
-        raise BoxMeanError(
-            "these soundings carry no coordinates, so the centre of the "
-            "averaged area is unknown; pass lat and lon"
-        )
-    radians = np.deg2rad(np.asarray(lons, dtype=float))
-    mean_lon = np.degrees(np.arctan2(
-        np.mean(np.sin(radians)), np.mean(np.cos(radians))))
-    # Keep the portable coordinate in the application's conventional
-    # [-180, 180) range.  Unlike an arithmetic mean, this leaves a box around
-    # the antimeridian at the antimeridian rather than moving it to Greenwich.
-    mean_lon = (float(mean_lon) + 180.0) % 360.0 - 180.0
-    return float(np.mean(lats)), mean_lon
+    return sharpmod_rs.box_mean_circular_centre(lats, lons)
 
 
 def _or_missing(value) -> float:

@@ -173,6 +173,8 @@ export interface LayerBuildContext extends SceneData {
   weatherShown: boolean;
   /** Native outlines above the weather stack in interleaved maps. */
   weatherBeforeId?: string | undefined;
+  /** Pressure components supplied by their preferred visible layer in this scene. */
+  pressureOwnership?: { independentIsobars: boolean; compositeThickness: boolean };
   /** Shared screen bounds for weather labels, rebuilt once per scene update. */
   outlookLabelLayout?: (Viewport & {
     project: (position: readonly [number, number]) => ScreenPoint;
@@ -222,13 +224,32 @@ export function buildDeckLayers<Id extends string>(
 ): Layer[] {
   const out: Layer[] = [];
   const labels: Layer[] = [];
-  const context = ctx.outlookLabelLayout === undefined ? ctx : {
+  const thickness = ctx.contourSpec !== null && ctx.contours?.unit === "hPa" ? ctx.contours.thickness : undefined;
+  const isobarOverlay = ctx.isobars === null ? undefined : descriptors.find(({ id, kind, build }) =>
+    id === "isobars" && kind === "deck" && build !== undefined);
+  const composite = thickness === undefined ? undefined : descriptors.find(({ id, kind, build }) =>
+    id === "model-field" && kind === "deck" && build !== undefined);
+  const isobarState = isobarOverlay && stateFor(isobarOverlay, states);
+  const modelState = composite && stateFor(composite, states);
+  const independentIsobars = isobarState?.visible === true && isobarState.opacity > 0;
+  // A shared frame uses the independent layer's opacity for its whole pressure overlay.
+  const compositeThickness = modelState?.visible === true && modelState.opacity > 0 && thickness !== undefined
+    && (thickness.paths.length > 0 || thickness.labels.length > 0) && (!independentIsobars || ctx.contours !== ctx.isobars);
+  const layout = ctx.outlookLabelLayout;
+  const context: LayerBuildContext = {
     ...ctx,
-    outlookLabelLayout: { ...ctx.outlookLabelLayout, occupied: [...ctx.outlookLabelLayout.occupied] },
+    pressureOwnership: { independentIsobars, compositeThickness },
+    outlookLabelLayout: layout === undefined ? undefined : { ...layout, occupied: [...layout.occupied] },
   };
+  let isobarLayers: readonly Layer[] | undefined;
   for (const descriptor of byZOrder(descriptors, order)) {
     if (descriptor.kind === "deck" && descriptor.build !== undefined) {
-      const layers = descriptor.build(context, stateFor(descriptor, states));
+      // Reserve the hPa readings before thickness labels while keeping the user's drawing order.
+      if (descriptor === composite && layout !== undefined && compositeThickness && independentIsobars) {
+        isobarLayers ??= isobarOverlay?.build?.(context, isobarState);
+      }
+      const state = stateFor(descriptor, states);
+      const layers = descriptor === isobarOverlay ? (isobarLayers ??= descriptor.build(context, state)) : descriptor.build(context, state);
       for (const layer of layers) {
         // Keep readings above every weather fill, even when the user reorders overlays.
         const contourOrOutlookLabels = layer.id.endsWith("-labels")

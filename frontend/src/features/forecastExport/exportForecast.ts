@@ -55,6 +55,11 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
     const panels = options.panels ?? [{ panel: options.panel, product: options.product, ...(options.productKey === undefined ? {} : { productKey: options.productKey }) }];
     if (![1, 2, 4].includes(panels.length))
         throw new Error("Choose one panel or a complete two- or four-panel layout.");
+    for (const part of panels) {
+        const early = options.hours.find((hour) => hour < part.product.minimumForecastHour);
+        if (early !== undefined)
+            throw new Error(`Panel ${String(part.panel + 1)} does not offer ${part.product.label} at F${String(early).padStart(3, "0")}.`);
+    }
     const sources = panels.map(part => {
         const source = mapCaptureSources.get(part.panel);
         if (source === undefined)
@@ -81,7 +86,7 @@ export async function exportForecast(options: ForecastExportOptions, client: Bac
         const request: FrameRequest = { model: options.context.model.key, product: requestKey, runTime: options.run, forecastHour: hour };
         const catalog = await queryFrame(queryClient, mapCatalogQueryOptions(client, request.model, request.runTime, hour), loadSignal, { keepUntil });
         const product = productOf(catalog, requestKey, part.panel);
-        if (catalog.fieldModel !== request.model || product === null || hour < product.minimumForecastHour)
+        if (catalog.fieldModel !== request.model || product?.key !== part.product.key || hour < product.minimumForecastHour)
             throw new Error(`Panel ${String(part.panel + 1)} does not offer ${part.product.label} at F${String(hour).padStart(3, "0")}.`);
         const pressureAvailable = catalog.products.some(product => product.key === "mslp");
         if (panelLayers(originalMap, part.panel).isobars.visible && !pressureAvailable)

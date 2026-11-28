@@ -69,6 +69,25 @@ describe("readCanvasTokens over the shipped tokens.css", () => {
     });
     expect(tokens.colours.domain).toEqual([111, 168, 220, 255]);
     expect(tokens.colours.placeText).toEqual([212, 216, 213, 255]);
+    // MSLP overlays: subtle isobars, the dashed 1000-500 mb thickness split at 540 dam, and the H/L centers.
+    expect(tokens.colours.isobar).toEqual([236, 240, 244, 179]);
+    expect(tokens.colours.isobarHalo).toEqual([12, 17, 22, 184]);
+    expect(tokens.colours.isobarLabel).toEqual([244, 246, 248, 255]);
+    expect(tokens.colours.isobarLabelHalo).toEqual([12, 17, 22, 255]);
+    expect(tokens.colours.thicknessCold).toEqual([56, 189, 248, 255]);
+    expect(tokens.colours.thicknessWarm).toEqual([239, 68, 68, 255]);
+    expect(tokens.colours.centerHigh).toEqual([56, 189, 248, 255]);
+    expect(tokens.colours.centerLow).toEqual([248, 113, 113, 255]);
+  });
+
+  it("uses dark pressure strokes and numbers with pale halos in the light theme", () => {
+    const light = cssTokenReader(tokensCss.replace(':root[data-theme="light"]', ":root"));
+    expect(readCanvasTokens(light).colours).toMatchObject({
+      isobar: [28, 34, 40, 179],
+      isobarHalo: [250, 250, 250, 184],
+      isobarLabel: [28, 34, 40, 255],
+      isobarLabelHalo: [250, 250, 250, 255],
+    });
   });
 
   it("parses the layout tokens", () => {

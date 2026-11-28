@@ -1,4 +1,33 @@
 {
+  "3.11.0": {
+    "summary": "Explore Liquid Glass panels, smoother forecast maps, 500 mb height anomalies, and NSSL MPAS archives, backed by expanded native Rust processing.",
+    "highlights": [
+      {
+        "title": "Liquid Glass interface",
+        "description": "Floating toolbars, timelines, panels, and popovers use WebGL2 Liquid Glass refraction, chromatic dispersion, and specular rim highlights across dark and light themes. Low graphics and reduced transparency keep panels opaque."
+      },
+      {
+        "title": "Smoother forecast fields and overlays",
+        "description": "Smooth mode uses monotone cubic interpolation while keeping precipitation types distinct. Pressure, thickness, and height contours draw smoother lines with bolder hPa labels and outlined H and L centers, plus 2 hPa isobars on surface wind maps."
+      },
+      {
+        "title": "500 mb height anomalies and NSSL MPAS",
+        "description": "Compare global 500 mb height anomalies against 1990–2019 ERA5 climatology with 3 dam contours across GFS, AIGFS, ECMWF, GDPS, and ICON. Choose archive-backed NSSL MPAS-HTPO and MPAS-RN maps when runs are available."
+      },
+      {
+        "title": "Organized parameters and faster precipitation maps",
+        "description": "All parameters group by weather category in the same order across models, and retired HiResW choices are removed. Precipitation-type maps calculate faster, restore HRRR 1 km reflectivity from F001, and jump to their first eligible hour."
+      },
+      {
+        "title": "Faster Overview and shared motion",
+        "description": "Convective, Excessive Rainfall, and Winter Weather outlooks preload in the background when Overview opens. Outlooks, Soundings Controls, layer settings, Live Tracking, and Draw Forecast share smooth transitions and respect reduced motion."
+      },
+      {
+        "title": "Expanded native Rust backend",
+        "description": "Map overlay geometry, geography decluttering, locator tiles, Skew-T buoyancy and labels, index-board formatting, provider rules, caching, and bridge protocol validation now run natively in sharpmod-rs."
+      }
+    ]
+  },
   "3.10.0": {
     "summary": "Explore more regional and ensemble forecasts, redesigned outlooks, and clearer map exports.",
     "highlights": [

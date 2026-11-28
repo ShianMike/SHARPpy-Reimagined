@@ -31,11 +31,7 @@ pub(crate) fn quantize(values: &Buffer, count: usize) -> (Vec<u8>, f64, f64, f64
             let cell = if !value.is_finite() {
                 u16::MAX
             } else {
-                let rounded = if values.single() {
-                    f64::from(((value as f32 - low as f32) / scale as f32).round_ties_even())
-                } else {
-                    ((value - low) / scale).round_ties_even()
-                };
+                let rounded = ((value - low) / scale).round_ties_even();
                 // NumPy's float-to-uint16 assignment maps invalid arithmetic to zero.
                 if rounded.is_finite() {
                     (rounded as u64 & 65535) as u16
@@ -83,6 +79,20 @@ mod tests {
         assert_eq!(cells, [0, 0, 2, 2, 4, 65534]);
         for (i, cell) in cells.into_iter().enumerate() {
             assert!((f64::from(cell) * scale + low - values.value(i)).abs() <= scale / 2.0);
+        }
+    }
+    #[test]
+    fn single_precision_grid_reconstructs_within_half_step() {
+        let values = Buffer::Single(vec![-5.0_f32, 12.345_67_f32, 48.123_45_f32, 56.191_692_f32]);
+        let (bytes, scale, low, _) = quantize(&values, 4);
+        let cells: Vec<u16> = bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| u16::from_le_bytes([b[0], b[1]]))
+            .collect();
+        for (i, cell) in cells.into_iter().enumerate() {
+            assert!((f64::from(cell) * scale + low - values.value(i)).abs() <= scale / 2.0 + 1e-12);
         }
     }
 }

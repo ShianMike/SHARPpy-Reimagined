@@ -189,15 +189,20 @@ def great_circle_distance_km(lat1, lon1, lat2, lon2):
     the scalar request point). Longitude wrap-around is handled naturally by
     the haversine formula, so mixed 0..360 / -180..180 conventions are safe.
     """
-    r_earth = 6371.0088
-    lat1r = np.radians(lat1)
-    lat2r = np.radians(lat2)
-    dlat = np.radians(lat2 - lat1)
-    dlon = np.radians(lon2 - lon1)
-    a = (np.sin(dlat / 2.0) ** 2
-         + np.cos(lat1r) * np.cos(lat2r) * np.sin(dlon / 2.0) ** 2)
-    a = np.clip(a, 0.0, 1.0)
-    return 2.0 * r_earth * np.arcsin(np.sqrt(a))
+    import sharpmod_rs
+
+    lat2_arr, lon2_arr = np.broadcast_arrays(
+        np.asarray(lat2, dtype=float), np.asarray(lon2, dtype=float),
+    )
+    result = sharpmod_rs.era5_great_circle_distance_km(
+        float(lat1),
+        float(lon1),
+        np.ascontiguousarray(lat2_arr.reshape(-1), dtype=float),
+        np.ascontiguousarray(lon2_arr.reshape(-1), dtype=float),
+    )
+    if lat2_arr.ndim == 0:
+        return np.float64(result[0])
+    return result.reshape(lat2_arr.shape)
 
 
 def select_nearest_grid_point(lats, lons, lat0, lon0):
@@ -210,6 +215,8 @@ def select_nearest_grid_point(lats, lons, lat0, lon0):
     the data arrays (``(ilat, ilon)`` for a regular grid, ``(iy, ix)`` for a
     2-D grid).
     """
+    import sharpmod_rs
+
     lats = np.asarray(lats, dtype=float)
     lons = np.asarray(lons, dtype=float)
 
@@ -226,30 +233,20 @@ def select_nearest_grid_point(lats, lons, lat0, lon0):
         # vector. Promoting both keeps the separable search below; falling
         # through to the 2-D branch instead broadcast to a 1-D distance array
         # that cannot be unravelled into the two indices it returns.
-        lats = np.atleast_1d(lats)
-        lons = np.atleast_1d(lons)
-        # On a Cartesian product of independent latitude/longitude axes, the
-        # spherical dot product is separable.  The longitude that maximizes
-        # cos(delta_lon) is optimal for every latitude because cos(latitude)
-        # is non-negative over the geographic range.  Choosing that longitude
-        # first and then maximizing the remaining latitude score is therefore
-        # exactly equivalent to the full great-circle mesh search, without
-        # allocating several nlat-by-nlon temporary arrays.
-        lat0r = np.radians(float(lat0))
-        latr = np.radians(lats)
-        lon_delta = np.radians(lons - float(lon0))
-        ilon = int(np.argmax(np.cos(lon_delta)))
-        lon_score = float(np.cos(lon_delta[ilon]))
-        score = (
-            np.sin(lat0r) * np.sin(latr)
-            + np.cos(lat0r) * np.cos(latr) * lon_score
+        return sharpmod_rs.era5_select_nearest_grid_point_1d(
+            np.ascontiguousarray(np.atleast_1d(lats), dtype=float),
+            np.ascontiguousarray(np.atleast_1d(lons), dtype=float),
+            float(lat0),
+            float(lon0),
         )
-        ilat = int(np.argmax(score))
-        return (int(ilat), int(ilon)), float(lats[ilat]), float(lons[ilon])
 
-    dist = great_circle_distance_km(lat0, lon0, lats, lons)
-    iy, ix = np.unravel_index(np.argmin(dist), dist.shape)
-    return (int(iy), int(ix)), float(lats[iy, ix]), float(lons[iy, ix])
+    lats_2d, lons_2d = np.broadcast_arrays(lats, lons)
+    return sharpmod_rs.era5_select_nearest_grid_point_2d(
+        np.ascontiguousarray(lats_2d, dtype=float),
+        np.ascontiguousarray(lons_2d, dtype=float),
+        float(lat0),
+        float(lon0),
+    )
 
 
 def select_nearest_time(times, target):
@@ -286,23 +283,34 @@ def dewpoint_from_rh(tmpc, rh):
     Uses the Magnus-Tetens approximation. NaNs propagate as NaN so the caller
     can mark the level missing.
     """
-    a, b = 17.625, 243.04
-    rh = np.clip(np.asarray(rh, dtype=float), 1e-3, 100.0)
-    tmpc = np.asarray(tmpc, dtype=float)
-    gamma = np.log(rh / 100.0) + (a * tmpc) / (b + tmpc)
-    return (b * gamma) / (a - gamma)
+    import sharpmod_rs
+
+    tmpc_arr, rh_arr = np.broadcast_arrays(
+        np.asarray(tmpc, dtype=float), np.asarray(rh, dtype=float),
+    )
+    result = sharpmod_rs.era5_dewpoint_from_rh(
+        np.ascontiguousarray(tmpc_arr.reshape(-1), dtype=float),
+        np.ascontiguousarray(rh_arr.reshape(-1), dtype=float),
+    )
+    if tmpc_arr.ndim == 0:
+        return np.float64(result[0])
+    return result.reshape(tmpc_arr.shape)
 
 
 def dewpoint_from_specific_humidity(q, pres_hpa):
     """Dewpoint (deg C) from specific humidity (kg/kg) and pressure (hPa)."""
-    q = np.asarray(q, dtype=float)
-    pres_hpa = np.asarray(pres_hpa, dtype=float)
-    # Vapor pressure (hPa) from specific humidity.
-    e = (q * pres_hpa) / (0.622 + 0.378 * q)
-    e = np.clip(e, 1e-6, None)
-    a, b = 17.625, 243.04
-    ln = np.log(e / 6.112)
-    return (b * ln) / (a - ln)
+    import sharpmod_rs
+
+    q_arr, pres_arr = np.broadcast_arrays(
+        np.asarray(q, dtype=float), np.asarray(pres_hpa, dtype=float),
+    )
+    result = sharpmod_rs.era5_dewpoint_from_specific_humidity(
+        np.ascontiguousarray(q_arr.reshape(-1), dtype=float),
+        np.ascontiguousarray(pres_arr.reshape(-1), dtype=float),
+    )
+    if q_arr.ndim == 0:
+        return np.float64(result[0])
+    return result.reshape(q_arr.shape)
 
 
 # ---------------------------------------------------------------------------
@@ -375,28 +383,20 @@ def _promote_scalar_level_coordinate(dataset):
     return dataset.expand_dims(level_name)
 
 
-def _coriolis_parameter(latitude):
-    """Return the Coriolis parameter at ``latitude`` in s^-1."""
-    return float(2.0 * EARTH_ROTATION_RATE * np.sin(np.radians(latitude)))
-
-
-def _wrapped_lon_delta(lon1, lon2):
-    """Signed longitude delta from ``lon1`` to ``lon2`` in degrees."""
-    return ((float(lon2) - float(lon1) + 180.0) % 360.0) - 180.0
-
-
 def _east_west_distance_m(lat, lon1, lon2):
     """Approximate signed east-west distance between two longitudes."""
-    return (
-        EARTH_RADIUS_M
-        * np.cos(np.radians(float(lat)))
-        * np.radians(_wrapped_lon_delta(lon1, lon2))
+    import sharpmod_rs
+
+    return sharpmod_rs.era5_east_west_distance_m(
+        float(lat), float(lon1), float(lon2),
     )
 
 
 def _north_south_distance_m(lat1, lat2):
     """Approximate signed north-south distance between two latitudes."""
-    return EARTH_RADIUS_M * np.radians(float(lat2) - float(lat1))
+    import sharpmod_rs
+
+    return sharpmod_rs.era5_north_south_distance_m(float(lat1), float(lat2))
 
 
 def _to_epoch(dt):
@@ -590,24 +590,20 @@ def _surface_relative_vorticity_from_column(values, levels, latitude=None,
                                             absolute=False,
                                             surface_pressure=None):
     """Return the bottom-most relative-vorticity value from a level column."""
+    import sharpmod_rs
+
     if values is None:
         return None
-    arr = np.asarray(values, dtype=float)
-    if absolute:
-        if latitude is None:
-            return None
-        arr = arr - _coriolis_parameter(latitude)
-    if arr.size != np.asarray(levels).size:
-        return None
-    levels = np.asarray(levels, dtype=float)
-    order = np.argsort(-levels)
-    ordered = _mark_missing(arr, arr.size)[order]
-    if surface_pressure is not None:
-        # A pressure level exactly coincident with the verified ground is a
-        # valid near-surface vorticity sample even though the aligned sounding
-        # row is replaced by the higher-quality 2 m/10 m surface merge.
-        ordered = ordered[levels[order] <= float(surface_pressure)]
-    return _first_surface_value(ordered)
+    return sharpmod_rs.era5_surface_relative_vorticity(
+        np.ascontiguousarray(values, dtype=float).reshape(-1),
+        np.ascontiguousarray(levels, dtype=float).reshape(-1),
+        latitude=None if latitude is None else float(latitude),
+        absolute=bool(absolute),
+        surface_pressure=(
+            None if surface_pressure is None else float(surface_pressure)
+        ),
+        missing=MISSING,
+    )
 
 
 def _neighbor_pair(index, size):

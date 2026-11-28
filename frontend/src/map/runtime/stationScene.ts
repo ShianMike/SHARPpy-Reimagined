@@ -41,14 +41,11 @@ const DRAWING_HIDDEN_LAYERS = new Set<LayerId>([
 
 /** A weather layer is drawn, so the boundaries go over it. */
 function weatherShown(layers: Readonly<Record<LayerId, LayerState>>, data: SceneData): boolean {
-  return (
-    (layers["model-field"].visible && data.field !== null) ||
-    (layers.satellite.visible && data.satellite !== null) ||
-    (layers.radar.visible && data.radar !== null) ||
-    (data.alerts?.some((alert) => layers[alert.kind === "warning" ? "warnings" : "watches"].visible) ?? false) ||
-    (layers["wpc-ero"].visible && data.outlooks.ero !== undefined) ||
-    OUTLOOK_KEYS.some((key) => layers[`spc-${key}` as const].visible && data.outlooks[key] !== undefined)
-  );
+  return (layers["model-field"].visible && data.field !== null) || (layers.satellite.visible && data.satellite !== null)
+    || (layers.radar.visible && data.radar !== null)
+    || (data.alerts?.some((alert) => layers[alert.kind === "warning" ? "warnings" : "watches"].visible) ?? false)
+    || (layers["wpc-ero"].visible && data.outlooks.ero !== undefined)
+    || OUTLOOK_KEYS.some((key) => layers[`spc-${key}` as const].visible && data.outlooks[key] !== undefined);
 }
 
 export class StationScene {
@@ -71,6 +68,10 @@ export class StationScene {
   /** The ids of the deck layers last submitted visible; the fixture probe reads them. */
   shownLayerIds: readonly string[] = [];
   private renderedLayers: readonly Layer[] = [];
+  private hasComplexPickableLayer = false;
+  private stationsPickable = false;
+  private stationLabelsVisible = false;
+  private radarLabelsPickable = false;
 
   matchesField(request: FrameRequest): boolean {
     const frame = this.data.field?.frame;
@@ -81,6 +82,21 @@ export class StationScene {
 
   readyForCapture(): boolean {
     return this.data.captureReady && this.data.previousField === null && this.renderedLayers.every((layer) => layer.isLoaded);
+  }
+
+  /** False only when the pointer cannot be near any pickable station or radar label. */
+  needsGpuHoverPick(map: MapLibreMap, x: number, y: number, radius: number): boolean {
+    if (this.hasComplexPickableLayer) return true;
+    if (!this.stationsPickable && !this.radarLabelsPickable) return false;
+    const wide = this.stationLabelsVisible || this.radarLabelsPickable;
+    const padX = wide ? 56 : radius + this.tokens.lengths.stationRadius + 10;
+    const padY = wide ? 40 : radius + this.tokens.lengths.stationRadius + 10;
+    const ne = map.unproject([x + padX, y - padY]);
+    const sw = map.unproject([x - padX, y + padY]);
+    if (![ne.lng, ne.lat, sw.lng, sw.lat].every(Number.isFinite) || sw.lng > ne.lng) return true;
+    const hit = (lng: number, lat: number): boolean => lng >= sw.lng && lng <= ne.lng && lat >= sw.lat && lat <= ne.lat;
+    return (this.stationsPickable && this.stations.some((station) => hit(station.longitude, station.latitude)))
+      || (this.radarLabelsPickable && this.radarSiteLabels.some((site) => hit(site.longitude, site.latitude)));
   }
 
   constructor(
@@ -268,6 +284,12 @@ export class StationScene {
     this.overlay.setProps({ layers: rendered });
     this.shownLayerIds = built.filter((layer) => layer.props.visible).map((layer) => layer.id);
     this.renderedLayers = rendered;
+    const pickable = rendered.filter((layer) => layer.props.visible && layer.props.pickable);
+    const isPickable = (id: string): boolean => pickable.some((layer) => layer.id === id);
+    this.hasComplexPickableLayer = pickable.some((layer) => !["stations", "station-labels", "radar-site-labels"].includes(layer.id));
+    this.stationLabelsVisible = rendered.some((layer) => layer.id === "station-labels" && layer.props.visible);
+    this.stationsPickable = this.stations.length > 0 && (isPickable("stations") || isPickable("station-labels"));
+    this.radarLabelsPickable = this.radarSiteLabels.length > 0 && isPickable("radar-site-labels");
     this.onSubmitted(!drawing && this.stations.length > 0 && layers.stations.visible);
   }
 }

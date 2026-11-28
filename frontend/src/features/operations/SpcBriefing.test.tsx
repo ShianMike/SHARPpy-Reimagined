@@ -4,6 +4,7 @@ import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
+import { mapKeys } from "../../lib/backend/queryOptions";
 import type { Transport } from "../../lib/backend/transport";
 import { useAppStore } from "../../stores/appStore";
 import { useForecastStore } from "../../stores/forecastStore";
@@ -41,21 +42,43 @@ it("shows issue and valid times without an embedded map and ignores hatch rank i
   queryClient.clear();
 });
 
-it("requests only the selected product using the current clock, independent of archived forecast and live history", async () => {
+it("preloads all outlook days and hazards using the current clock before they are selected", async () => {
   useForecastStore.setState({ runTime: "2024-02-29T12:00:00Z", forecastHour: 6 });
   useLiveTrackingStore.setState({ selectedTime: Date.parse("2024-02-29T18:00:00Z") });
   const transport = transportWith();
   const { queryClient } = renderWithBackend(<SpcBriefing />, transport);
   await screen.findByRole("heading", { name: "Slight Risk" });
-  const requests = () => transport.call.mock.calls.filter(([command]) => command === "get_spc_outlook");
-  expect(requests()).toHaveLength(1);
-  expect(requests()[0]?.[1]?.product).toBe("cat");
-  expect(requests()[0]?.[1]?.day).toBe(1);
-  expect(requests()[0]?.[1]?.validTime).toBe("2026-10-04T23:58:00Z");
+  const requests = () => transport.call.mock.calls.filter(([command]) => command === "get_spc_outlook" || command === "get_wpc_outlook");
+  await waitFor(() => {
+    expect(queryClient.getQueriesData({ queryKey: ["spc-latest"] }).filter(([, reply]) => reply !== undefined)).toHaveLength(10);
+    expect(queryClient.getQueriesData({ queryKey: ["wpc-latest"] }).filter(([, reply]) => reply !== undefined)).toHaveLength(18);
+  });
+  expect(requests().map(([command, args]) => [
+    command,
+    args?.day,
+    args?.product ?? "ero",
+  ].join("/")).toSorted())
+    .toEqual([
+      "get_spc_outlook/1/cat", "get_spc_outlook/1/torn", "get_spc_outlook/1/wind", "get_spc_outlook/1/hail",
+      "get_spc_outlook/2/cat", "get_spc_outlook/2/torn", "get_spc_outlook/2/wind", "get_spc_outlook/2/hail",
+      "get_spc_outlook/3/cat", "get_spc_outlook/3/prob",
+      ...[1, 2, 3].flatMap((day) => ["ero", "winter-overall", "winter-snow", "winter-ice", "winter-snow-load", "winter-blowing-snow"]
+        .map((product) => `get_wpc_outlook/${String(day)}/${product}`)),
+    ].toSorted());
+  expect(requests().every(([, args]) => args?.validTime === "2026-10-04T23:58:00Z")).toBe(true);
+
   await userEvent.click(screen.getByRole("button", { name: "Tornado" }));
-  await waitFor(() => { expect(requests()).toHaveLength(2); });
-  expect(requests()[1]?.[1]?.product).toBe("torn");
   expect(screen.getByRole("button", { name: "Tornado" }).getAttribute("aria-pressed")).toBe("true");
+  await userEvent.click(screen.getByRole("button", { name: "Excessive Rainfall" }));
+  expect(screen.getByRole("heading", { name: "Slight (At Least 15%)" })).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Winter Weather" }));
+  await userEvent.click(screen.getByRole("button", { name: "Day 3" }));
+  await userEvent.click(screen.getByRole("button", { name: "Ice accumulation" }));
+  expect(queryClient.getQueryData(mapKeys.wpcLatest(3, "winter-ice"))).toMatchObject({ product: "winter-ice" });
+  expect(screen.getByText("Illinois, Missouri")).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Convective" }));
+  expect(screen.getByRole("button", { name: "Categorical", pressed: true })).toBeTruthy();
+  expect(requests()).toHaveLength(28);
   expect(useForecastStore.getState()).toMatchObject({ runTime: "2024-02-29T12:00:00Z", forecastHour: 6 });
   expect(useLiveTrackingStore.getState().selectedTime).toBe(Date.parse("2024-02-29T18:00:00Z"));
   queryClient.clear();
@@ -169,7 +192,7 @@ it("rechecks the current UTC clock at midnight and hides guidance once its valid
   await act(async () => { await vi.advanceTimersByTimeAsync(1); });
   expect(screen.getByRole("heading", { name: "Slight Risk" })).toBeTruthy();
   await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60_000); });
-  const requests = transport.call.mock.calls.filter(([command]) => command === "get_spc_outlook");
+  const requests = transport.call.mock.calls.filter(([command, args]) => command === "get_spc_outlook" && args?.day === 1 && args.product === "cat");
   expect(requests).toHaveLength(2);
   expect(requests[1]?.[1]?.validTime).toBe("2026-10-05T00:03:00Z");
   vi.setSystemTime(new Date("2026-10-05T12:00:00Z"));

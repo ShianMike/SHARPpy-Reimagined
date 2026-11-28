@@ -80,9 +80,11 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     eccodes = _api._load_eccodes()
     decoded: dict[str, np.ndarray] = {}
     nam_total = model in {"nam", "nam-3km-conus"} and product.key == "apcp"
-    hourly_sum = product.key.startswith("qpf-")
+    hourly_sum = product.key.startswith("qpf-") and product.key != "qpf-1h-ptype"
     hourly_diff = product.key == "snow-1h"
-    window = fxx if product.key in {"uh-0-3km-run", "uh-2-5km-run"} else product.max_hours
+    from sharpmod_rs import map_field_trailing_window
+
+    window = map_field_trailing_window(product.key, fxx, product.max_hours)
 
     # Plan every range across both files first, so they can all go out together
     # rather than one file's requests waiting on the other's.

@@ -162,6 +162,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Update dependency pins for Ruff (`0.17.4` → `0.17.5`, mirrored in
   `installation.txt`) and `sharpmod-rs` `base64` (`0.22.1` → `0.23.1`) and
   `libloading` (`0.9.0` → `0.9.1`).
+- Update GeoMet cycle selection, map label visibility, and SPC archive sorting
+  to satisfy current stable Rust lints.
 
 ### Fixed
 

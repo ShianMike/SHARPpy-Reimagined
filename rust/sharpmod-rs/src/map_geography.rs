@@ -511,10 +511,7 @@ fn geo_labels_visible_for_span(
     lon_span: &Bound<'_, PyAny>,
 ) -> PyResult<(bool, bool, bool)> {
     let density = normalise_density(density)?;
-    let span = match lon_span.extract::<f64>() {
-        Ok(value) => value,
-        Err(_) => f64::INFINITY,
-    };
+    let span = lon_span.extract::<f64>().unwrap_or(f64::INFINITY);
     Ok(labels_visible_core(&density, span))
 }
 

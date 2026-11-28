@@ -455,7 +455,7 @@ pub(crate) fn candidates_for_core(
             }
             issuances.push((stamp, parts));
         }
-        issuances.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        issuances.sort_unstable_by_key(|issuance| std::cmp::Reverse(issuance.0));
         // The outlook in force at a given hour is the newest one issued at
         // or before that hour, so try those first, newest first; issuances
         // made after the target still follow as a fallback, since their

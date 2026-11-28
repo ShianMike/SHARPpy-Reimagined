@@ -309,12 +309,7 @@ pub(crate) fn floor_cycle_epoch_core(epoch_seconds: i64, cycles: &[i64]) -> Resu
         .map_err(|_| "epoch seconds are out of range".to_string())?;
     let current_hour = i64::from(value.hour());
     let mut day = value;
-    let hour = match sorted
-        .iter()
-        .copied()
-        .filter(|cycle| *cycle <= current_hour)
-        .next_back()
-    {
+    let hour = match sorted.iter().copied().rfind(|cycle| *cycle <= current_hour) {
         Some(hour) => hour,
         None => {
             day = value
